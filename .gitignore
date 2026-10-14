@@ -11,12 +11,16 @@ venv/
 # Secrets & local data
 .env
 *.env
-data/cache/
+
 *.db
 *.sqlite
-logs/
+/logs/
 
 # OS / editors
 .DS_Store
 .idea/
 .vscode/
+
+# Personal config overrides
+config/*.local.yaml
+/data/

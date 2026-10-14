@@ -1,0 +1,109 @@
+# TradeMare settings. Every value here can be changed without touching code.
+# Personal overrides (real budgets, your email) go in config/settings.local.yaml,
+# which is git-ignored and deep-merged over this file.
+# Secrets (API keys, SMTP password) go in .env — see .env.example.
+
+database_url: sqlite:///data/trademare.db
+log_level: INFO
+
+data:
+  cache_dir: data/cache
+  history_years: 8             # daily bars kept: ~5y backtest + indicator warm-up
+  fundamentals_refresh_days: 7
+  batch_size: 50               # symbols per bulk price request
+
+markets:
+  IN:
+    enabled: true
+    broker: paper              # zerodha | dhan | paper
+    universe: nifty200
+    price_source: yfinance
+    fundamentals_source: yfinance  # filing dates estimated from SEBI reporting deadlines
+    budget: 100000             # INR — hard cap on deployed capital
+    cash_buffer_pct: 10
+
+    allow_long: true
+    allow_short: false         # India swing shorts need short_instrument: futures
+    short_instrument: cash     # cash | futures
+
+    risk_per_trade_pct: 1.0    # % of budget risked between entry and stop
+    max_position_pct: 15       # max % of budget in one position
+    max_open_positions: 8
+    max_sector_pct: 30
+
+    stop_loss:
+      method: atr              # atr | percent | swing_low | fixed_amount
+      atr_multiple: 2.0
+      atr_period: 14
+      percent: 5.0             # used when method: percent
+      fixed_amount: null       # per-share distance, used when method: fixed_amount
+      swing_lookback: 10       # used when method: swing_low
+      trailing: true
+      trail_method: atr        # atr | percent
+      trail_value: 2.5
+
+    take_profit:
+      method: r_multiple       # r_multiple | percent | none
+      value: 2.0
+
+    time_stop_days: 15         # exit if no progress after N sessions (null = off)
+    signal_expiry_sessions: 1  # unapproved signals expire after N sessions
+
+    kill_switch:
+      daily_loss_pct: 3
+      max_drawdown_pct: 10
+
+  US:
+    enabled: true
+    broker: paper              # alpaca | paper
+    universe: sp500
+    price_source: yfinance
+    fundamentals_source: edgar     # point-in-time via SEC filing dates; needs SEC_USER_AGENT in .env
+    budget: 1000               # USD
+    cash_buffer_pct: 10
+
+    allow_long: true
+    allow_short: false         # needs an Alpaca margin account (>= $2,000 equity)
+
+    risk_per_trade_pct: 1.0
+    max_position_pct: 15
+    max_open_positions: 8
+    max_sector_pct: 30
+
+    stop_loss:
+      method: atr
+      atr_multiple: 2.0
+      trailing: true
+      trail_method: atr
+      trail_value: 2.5
+
+    take_profit:
+      method: r_multiple
+      value: 2.0
+
+    time_stop_days: 15
+    signal_expiry_sessions: 1
+
+    kill_switch:
+      daily_loss_pct: 3
+      max_drawdown_pct: 10
+
+strategy:
+  weights:
+    fundamental: 0.35
+    technical: 0.50
+    sentiment: 0.15            # ignored while llm.enabled is false
+  min_composite_score: 0.4     # only signal when the weighted score clears this
+  min_fundamental_score: 0.0   # fundamental quality gate for entries
+
+notifications:
+  email:
+    enabled: false
+    to: []                     # set in settings.local.yaml
+    send_empty_digest: false
+
+llm:
+  enabled: false
+  provider: anthropic          # anthropic | openai
+  model: claude-sonnet-5-5
+  max_daily_cost_usd: 1.0

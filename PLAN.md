@@ -57,7 +57,7 @@ An engine that analyses stocks using fundamentals, technicals and sentiment. It 
 | Broker | Alpaca (`alpaca-py`). Free paper account, no commission on stocks | **Zerodha** (`kiteconnect`) and **Dhan** (`dhanhq`), both implementing `BrokerAdapter`; config picks the active one |
 | Paper trading | Alpaca's own paper account | No broker sandbox, so we build an internal `PaperBroker` simulator |
 | Prices (EOD) | Alpaca bars, falling back to yfinance | Kite historical data or NSE bhavcopy, falling back to yfinance (`.NS`) |
-| Fundamentals | SEC EDGAR `companyfacts` (free XBRL), FMP / OpenBB | Hardest part. Options: yfinance (thin), a paid API, or quarterly filings. **Decide in phase 1.** |
+| Fundamentals | **SEC EDGAR `companyfacts`**: free, point-in-time via filing dates, full history. yfinance is the fallback. | **yfinance** for now: about 4 years annual and about 5 quarters, with availability estimated from SEBI deadlines (Q +45 days, annual +60 days). Can move to a paid API later if it is too thin. |
 | News | Alpaca news API, RSS | RSS from Moneycontrol, ET and exchange announcements |
 | Universe | S&P 500 or a liquid subset | Nifty 200 or another liquid subset |
 
@@ -174,12 +174,12 @@ tests/
 
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
-| **0. Scaffold** | uv project, config, models, logging, tests, CI lint | `pytest` passes and settings load |
-| **1. Data layer** | Price and fundamental providers for US and India, local cache, universe lists | 5 years of daily bars and fundamentals stored for both universes |
+| **0. Scaffold** ✅ | uv project, config, models, logging, tests, CI lint | `pytest` passes and settings load |
+| **1. Data layer** ✅ | Price and fundamental providers for US and India, local cache, universe lists | 5 years of daily bars and fundamentals stored for both universes |
 | **2. Analysts** | Technical and fundamental analysts, regime filter, aggregator | Signals for any `asof` date with readable reasons |
 | **3. Backtester** | Daily event loop reusing the phase 2 code, costs, metrics (CAGR, Sharpe, max drawdown, win rate), walk-forward split | A report for each market, beating buy-and-hold of the index on a risk-adjusted basis, out of sample |
 | **4. Risk & budget** | Sizing, caps, kill switch, expiry, plus their effect in backtests | Hard limits are never breached (property tests) |
-| **5. Signals live (no orders)** | Scheduler, email digest, dashboard listing signals and positions | Two weeks of daily emails delivered correctly |
+| **5. Signals live (no orders)** 🔄 dashboard foundation built early (data views) | Scheduler, email digest, dashboard listing signals and positions | Two weeks of daily emails delivered correctly |
 | **6. Paper execution** | Approve flow → Alpaca paper and the internal PaperBroker for India, reconciliation, journal | 4–6 weeks of paper trading tracking the backtest |
 | **7. Live, small** | Zerodha and Alpaca live adapters, static IP VPS, a small budget | Clean reconciliation and no limit breaches for a month |
 | **8. Sentiment/LLM** | News ingestion and LLM sentiment with veto, plus an A/B test of its effect in paper trading | Kept only if it improves results |
@@ -188,7 +188,7 @@ tests/
 ## 9. Known risks / pitfalls
 - **Look-ahead and survivorship bias:** free fundamental data is not point-in-time, and current index membership leaves out companies that were delisted. Lag fundamentals by their reporting date and be sceptical of backtest results.
 - **Overfitting:** use walk-forward validation and few parameters, and test on data the strategy was never tuned on.
-- **India fundamentals data quality and cost.** This is the biggest open question about data.
+- **India fundamentals data is thin.** yfinance has only about 4 years of annual data and a few quarters, and some quarters are missing for banks. Fundamental backtests in India are limited to recent years until we add a richer source.
 - **Broker API changes, token expiry:** Kite access tokens must be refreshed every day. Plan the login flow for this.
 - **This is not financial advice.** Start with paper trading and small capital.
 
@@ -198,5 +198,5 @@ tests/
 - ✅ It runs on your Mac first and is deployed to a VPS later. Note that a home IP is usually dynamic, so **live Indian API orders will probably need the VPS** with a static IP. Paper trading and signals work fine on the Mac.
 - ✅ LLM: the `LLMClient` interface supports Claude or OpenAI. It is disabled for now.
 - ✅ Long and short are both supported, controlled by `allow_short` per market (off by default).
-- ⏳ The source for Indian fundamentals data is still to be decided in phase 1.
+- ✅ Fundamentals: EDGAR for the US (point-in-time) and yfinance for India (availability estimated from SEBI deadlines). Both are swappable through config (`fundamentals_source`).
 - ⏳ Final budget numbers will be filled into the config when the time comes.

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Overview</h1>
+<div class="grid two">
+{% for c in cards %}
+  <section class="card">
+    <div class="card-head">
+      <h2>{{ "🇮🇳 India" if c.market.value == "IN" else "🇺🇸 United States" }}</h2>
+      <span class="badge {{ 'on' if c.cfg.enabled else 'off' }}">{{ "enabled" if c.cfg.enabled else "disabled" }}</span>
+    </div>
+    <dl class="kv">
+      <dt>Budget</dt><dd>{{ c.cfg.budget | money(c.market, False) }} <small>(deployable {{ c.cfg.deployable_capital | money(c.market, False) }})</small></dd>
+      <dt>Broker</dt><dd>{{ c.cfg.broker }}</dd>
+      <dt>Directions</dt><dd>{{ "long" if c.cfg.allow_long }}{{ " + short" if c.cfg.allow_short }}</dd>
+      <dt>Stop-loss</dt><dd>{{ c.cfg.stop_loss.method }}{% if c.cfg.stop_loss.trailing %} · trailing {{ c.cfg.stop_loss.trail_method }} {{ c.cfg.stop_loss.trail_value }}{% endif %}</dd>
+      <dt>Universe</dt><dd><a href="/m/{{ c.market.value }}">{{ c.cfg.universe }}</a> · {{ c.universe_size }} symbols</dd>
+      <dt>Prices cached</dt><dd>{{ c.bars }} / {{ c.universe_size }} · last bar {{ c.last_date or "—" }}</dd>
+      <dt>Fundamentals</dt><dd>{{ c.fundamentals }} / {{ c.universe_size }} · {{ c.source }}</dd>
+      <dt>Breadth (1D)</dt><dd><span class="up">{{ c.advancers }} up</span> · <span class="down">{{ c.decliners }} down</span></dd>
+      <dt>Next session</dt><dd>{{ c.next_session or "calendar out of range" }}</dd>
+    </dl>
+    <div class="grid two movers">
+      <div><h3>Top gainers</h3>
+        <table class="mini">{% for r in c.top %}<tr><td><a href="/m/{{ c.market.value }}/{{ r.symbol | urlencode }}">{{ r.symbol }}</a></td><td class="num {{ r.returns.chg_1d | tone }}">{{ r.returns.chg_1d | pct(1, True) }}</td></tr>{% endfor %}</table>
+      </div>
+      <div><h3>Top losers</h3>
+        <table class="mini">{% for r in c.bottom %}<tr><td><a href="/m/{{ c.market.value }}/{{ r.symbol | urlencode }}">{{ r.symbol }}</a></td><td class="num {{ r.returns.chg_1d | tone }}">{{ r.returns.chg_1d | pct(1, True) }}</td></tr>{% endfor %}</table>
+      </div>
+    </div>
+  </section>
+{% endfor %}
+</div>
+<p class="muted">Signals, positions and the approve flow arrive in later phases (see PLAN.md).</p>
+{% endblock %}

@@ -32,6 +32,38 @@ Data layer ──► Analysts (fundamental · technical · sentiment)
 Backtester reuses the same analysts, aggregator and risk modules.
 ```
 
+## Getting started
+
+Requires [uv](https://docs.astral.sh/uv/); it installs Python 3.12 automatically.
+
+```bash
+git clone https://github.com/Mayank9mare/TradeMare.git && cd TradeMare
+uv sync                       # create .venv and install dependencies
+cp .env.example .env          # add broker / SMTP keys (optional for now)
+uv run trademare check        # validate config and show a summary of each market
+uv run pytest                 # run the test suite
+
+# Market data (cached under data/cache/, git-ignored)
+uv run trademare universe refresh          # download Nifty 200 / S&P 500 constituents
+uv run trademare data update --limit 5     # quick test: 5 symbols per market
+uv run trademare data update               # full: ~8 years of daily bars + fundamentals
+uv run trademare data status               # what is cached
+
+# Dashboard (local only)
+uv run trademare web                       # http://127.0.0.1:8000
+```
+
+US fundamentals come from SEC EDGAR, which requires a contact in `.env`:
+`SEC_USER_AGENT="TradeMare you@example.com"`. Without it, the engine falls back to yfinance.
+
+Put personal values such as your real budgets and email address in `config/settings.local.yaml`. That file is git-ignored and is deep-merged over `settings.yaml`:
+
+```yaml
+markets:
+  IN: { budget: 250000, broker: zerodha }
+  US: { budget: 3000 }
+```
+
 ## Configuration
 
 All tunable values live in `config/settings.yaml`, so you can change them without touching code:
@@ -55,12 +87,12 @@ Secrets such as broker API keys and SMTP credentials go in `.env`, which is neve
 
 | Phase | Deliverable |
 |---|---|
-| 0 | Project scaffold, config, core models |
-| 1 | Data layer (prices and fundamentals for India and the US) |
+| 0 ✅ | Project scaffold, config, core models |
+| 1 ✅ | Data layer (prices and fundamentals for India and the US) |
 | 2 | Technical and fundamental analysts, aggregator |
 | 3 | Backtester with costs and walk-forward validation |
 | 4 | Risk and budget manager, kill switch |
-| 5 | Live signals: email and dashboard, no orders |
+| 5 🔄 | Live signals: email and dashboard, no orders (data dashboard already built) |
 | 6 | Paper execution with the approve flow |
 | 7 | Live trading with a small budget (Zerodha / Dhan / Alpaca) |
 | 8 | LLM sentiment analyst |

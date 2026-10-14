@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ symbol }} · TradeMare{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/m/{{ market.value }}">{{ "India" if market.value == "IN" else "US" }}</a> / {{ symbol }}</p>
+<div class="symbol-head">
+  <div><h1>{{ symbol }} <small class="muted">{{ name }}</small></h1><span class="badge">{{ sector }}</span></div>
+  <div class="price"><b>{{ close | money(market, False) }}</b> <span class="{{ change | tone }}">{{ change | pct(2, True) }}</span><div class="muted small">close {{ last }}</div></div>
+</div>
+
+<section class="card chart-card">
+  <div class="chart-controls">
+    {% for y, label in [(0.5, "6M"), (1, "1Y"), (3, "3Y"), (8, "Max")] %}<button data-years="{{ y }}" {% if y == 1 %}class="active"{% endif %}>{{ label }}</button>{% endfor %}
+    <span class="legend"><i class="sw sma50"></i>SMA 50 <i class="sw sma200"></i>SMA 200</span>
+  </div>
+  <div id="chart" data-market="{{ market.value }}" data-symbol="{{ symbol }}"></div>
+</section>
+
+<h2>Key ratios <small class="muted">TTM, as of {{ last }}</small></h2>
+{% set x = ratios %}
+<div class="ratios">
+  {% for label, value in [
+      ("Market cap", x.market_cap | money(market)), ("P/E", x.pe | num(1)), ("P/B", x.price_to_book | num(2)),
+      ("FCF yield", x.fcf_yield | pct(1)), ("Revenue (TTM)", x.revenue_ttm | money(market)),
+      ("Revenue growth", x.revenue_growth | pct(1, True)), ("Gross margin", x.gross_margin | pct(1)),
+      ("Operating margin", x.operating_margin | pct(1)), ("Net margin", x.net_margin | pct(1)),
+      ("ROE", x.roe | pct(1)), ("ROA", x.roa | pct(1)), ("Debt / equity", x.debt_to_equity | num(2)),
+      ("Current ratio", x.current_ratio | num(2)), ("Interest cover", x.interest_coverage | num(1)),
+  ] %}
+  <div class="ratio"><span>{{ label }}</span><b>{{ value }}</b></div>
+  {% endfor %}
+</div>
+
+<h2>Financials <small class="muted">source: {{ source }}</small></h2>
+<div class="tabs">{% for label in statements %}<button data-tab="{{ label }}" {% if loop.first %}class="active"{% endif %}>{{ label }}</button>{% endfor %}</div>
+{% for label, t in statements.items() %}
+<div class="tab-panel" data-panel="{{ label }}" {% if not loop.first %}hidden{% endif %}>
+  {% if t.periods %}
+  <div class="table-wrap"><table class="data statements">
+    <thead>
+      <tr><th>Period end</th>{% for p in t.periods %}<th class="num">{{ p }}</th>{% endfor %}</tr>
+      <tr class="sub"><th title="First date the numbers were public">Available from</th>{% for a in t.available %}<th class="num">{{ a }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>{% for f in rows %}<tr><td>{{ f.replace("_", " ") | capitalize }}</td>
+      {% for v in t["values"][f] %}<td class="num">{{ (v | num(0)) if f == "shares_outstanding" and v is not none else (v | money(market)) }}</td>{% endfor %}</tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="muted">No {{ label | lower }} data cached.</p>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="/static/chart.js"></script>
+{% endblock %}

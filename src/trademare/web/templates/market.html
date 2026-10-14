@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ cfg.universe }} · TradeMare{% endblock %}
+{% block content %}
+<h1>{{ "India" if market.value == "IN" else "US" }} · {{ cfg.universe }} <small class="muted">{{ rows | length }} symbols</small></h1>
+<div class="toolbar">
+  <input id="q" type="search" placeholder="Search symbol or name…" autofocus>
+  <select id="sector"><option value="">All sectors</option>{% for s in sectors %}<option>{{ s }}</option>{% endfor %}</select>
+  <span id="count" class="muted"></span>
+</div>
+<div class="table-wrap">
+<table class="data sortable" id="universe">
+  <thead><tr>
+    <th data-type="text">Symbol</th><th data-type="text">Sector</th>
+    <th class="num">Close</th><th class="num">1D</th><th class="num">1M</th><th class="num">6M</th><th class="num">1Y</th>
+    <th class="num" title="Distance from 52-week high">52W hi</th>
+    <th class="num">Mkt cap</th><th class="num">P/E</th><th class="num" title="TTM revenue growth">Rev gr.</th>
+    <th class="num">Net mgn</th><th class="num">ROE</th><th class="num">D/E</th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr data-search="{{ (r.symbol ~ ' ' ~ r.name) | lower }}" data-sector="{{ r.sector }}">
+      <td data-v="{{ r.symbol }}"><a href="/m/{{ market.value }}/{{ r.symbol | urlencode }}"><b>{{ r.symbol }}</b></a><div class="sub">{{ r.name }}</div></td>
+      <td data-v="{{ r.sector }}" class="sub">{{ r.sector }}</td>
+      <td class="num" data-v="{{ r.close or '' }}">{{ r.close | num(2) }}</td>
+      {% for k in ["chg_1d", "chg_1m", "chg_6m", "chg_1y"] %}{% set v = r.returns[k] %}
+      <td class="num {{ v | tone }}" data-v="{{ v if v is not none else '' }}">{{ v | pct(1, True) }}</td>{% endfor %}
+      <td class="num" data-v="{{ r.from_52w_high if r.from_52w_high is not none else '' }}">{{ r.from_52w_high | pct(0) }}</td>
+      {% set x = r.ratios %}
+      <td class="num" data-v="{{ x.market_cap or '' }}">{{ x.market_cap | money(market) }}</td>
+      <td class="num" data-v="{{ x.pe or '' }}">{{ x.pe | num(1) }}</td>
+      <td class="num {{ x.revenue_growth | tone }}" data-v="{{ x.revenue_growth if x.revenue_growth is not none else '' }}">{{ x.revenue_growth | pct(0, True) }}</td>
+      <td class="num" data-v="{{ x.net_margin if x.net_margin is not none else '' }}">{{ x.net_margin | pct(0) }}</td>
+      <td class="num" data-v="{{ x.roe if x.roe is not none else '' }}">{{ x.roe | pct(0) }}</td>
+      <td class="num" data-v="{{ x.debt_to_equity if x.debt_to_equity is not none else '' }}">{{ x.debt_to_equity | num(2) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

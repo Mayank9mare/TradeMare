@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Settings</h1>
+<p class="muted">Effective configuration (<code>config/settings.yaml</code> merged with <code>settings.local.yaml</code>). Read-only for now; editing comes with the dashboard phase. Restart the server after changing files.</p>
+<pre class="card code">{{ config_yaml }}</pre>
+{% endblock %}
