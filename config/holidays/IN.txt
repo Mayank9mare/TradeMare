@@ -1,0 +1,4 @@
+# NSE trading holidays beyond the exchange_calendars range (it currently ends 2026-12-31).
+# One ISO date per line. NSE publishes next year's list in December:
+#   https://www.nseindia.com/resources/exchange-communication-holidays
+# Until dates are added here, every weekday after the library's range counts as a session.
