@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import secrets as pysecrets
-from datetime import date
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote
@@ -21,7 +20,6 @@ from trademare.analysis.ratios import key_ratios
 from trademare.backtest.report import list_backtests, load_backtest
 from trademare.config import Secrets, load_config
 from trademare.config.schema import AppConfig
-from trademare.core.clock import MarketClock
 from trademare.core.models import Market
 from trademare.data.fields import FIELDS
 from trademare.data.service import DataService
@@ -29,6 +27,7 @@ from trademare.data.universe import load_universe
 from trademare.storage.db import Database
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
+from trademare.web.overview_data import account_summary, market_status, pending_signals, sparkline
 from trademare.web.settings_form import GLOBAL_FIELDS, MARKET_FIELDS, apply_form, current_values
 from trademare.web.snapshot import SnapshotCache
 from trademare.web.trading_routes import register_trading_routes
@@ -84,8 +83,18 @@ def create_app(
             raise HTTPException(404, f"market {market} not configured")
         return market
 
+    def chrome() -> dict:
+        """Context every page needs: market status bar and the pending-signal badge."""
+        return {
+            "statuses": [market_status(m, c) for m, c in config.markets.items() if c.enabled],
+            "pending_total": len(pending_signals(db)),
+        }
+
+    templates.env.globals["chrome"] = chrome
+
     @app.get("/", response_class=HTMLResponse)
     def overview(request: Request):
+        pending = pending_signals(db)
         cards = []
         for market, cfg in config.markets.items():
             universe = load_universe(cfg.universe)
@@ -96,27 +105,38 @@ def create_app(
             )
             rows = snapshots.get(market)
             dated = [r for r in rows if r.last_date]
-            advancers = sum(1 for r in rows if (r.returns["chg_1d"] or 0) > 0)
-            clock = MarketClock(market)
             scan = latest_scan(market)
+            index_line = None
+            if cfg.benchmark and (bench := service.store.read_bars(market, cfg.benchmark)) is not None:
+                index_line = sparkline(bench["close"].iloc[-126:])
+            account = account_summary(db, market, cfg.budget)
             cards.append(
                 dict(
                     market=market,
                     cfg=cfg,
+                    account=account,
+                    status=market_status(market, cfg),
+                    index_line=index_line,
                     universe_size=len(universe),
                     bars=len(bar_symbols & set(universe["symbol"])),
                     fundamentals=with_fin,
                     source=source,
                     last_date=max((r.last_date for r in dated), default=None),
-                    advancers=advancers,
+                    advancers=sum(1 for r in rows if (r.returns["chg_1d"] or 0) > 0),
                     decliners=sum(1 for r in rows if (r.returns["chg_1d"] or 0) < 0),
-                    next_session=_safe(lambda c=clock: c.next_session(date.today())),
                     top=sorted(dated, key=lambda r: r.returns["chg_1d"] or 0, reverse=True)[:5],
                     bottom=sorted(dated, key=lambda r: r.returns["chg_1d"] or 0)[:5],
                     scan=scan,
+                    ideas=(scan.ideas[:5] if scan else []),
+                    pending=[p for p in pending if p.market == market.value],
                 )
             )
-        return templates.TemplateResponse(request, "overview.html", {"cards": cards, "config": config})
+        first_expiry = min((p.expires_at for p in pending if p.expires_at), default=None)
+        return templates.TemplateResponse(
+            request,
+            "overview.html",
+            {"cards": cards, "config": config, "pending": pending, "first_expiry": first_expiry},
+        )
 
     @app.get("/m/{code}", response_class=HTMLResponse)
     def market_page(request: Request, code: str):

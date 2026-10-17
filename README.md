@@ -23,13 +23,36 @@ An automated swing-trading engine for **Indian (NSE/BSE)** and **US** equities. 
 
 ## Architecture
 
+Every order passes the risk manager and your approval:
+
+```mermaid
+flowchart LR
+    data["Market data<br/>Yahoo prices · SEC filings · Google News"] --> cache["Local cache<br/>prices · financials · stock lists"]
+    cache --> scan["Scanner<br/>factor ranks · regime · stop & target"]
+    scan --> risk["Risk manager<br/>sizing · budget caps · kill switch"]
+    risk --> signals["Daily signals<br/>entry · stop · qty · reasons"]
+    signals --> you(["You approve<br/>dashboard or CLI"])
+    you --> desk["Trading desk<br/>orders · fills · standing stops"]
+    desk --> broker["Broker<br/>Paper · Zerodha · Dhan · Alpaca"]
+    desk --> db[("Database<br/>positions · equity · audit log")]
+    db --> ui["Dashboard + email digest"]
+    ui -. review .-> you
+    style you fill:#e3eefc,stroke:#2f6fde,stroke-width:2px
 ```
-Data layer ──► Analysts (fundamental · technical · sentiment)
-           ──► Signal aggregator ──► Risk & budget manager
-           ──► Signal store ──► Email + Dashboard (approve / reject / edit)
-           ──► Executor ──► BrokerAdapter (Zerodha | Dhan | Alpaca | Paper)
-           ──► Journal / P&L / audit log
-Backtester reuses the same analysts, aggregator and risk modules.
+
+The backtester replays the same scanner, risk rules and fill rules over history.
+
+A signal's life:
+
+```mermaid
+flowchart TD
+    s["Signal created after the close"] --> d{"You decide"}
+    d -- "reject or ignore" --> none["No order placed"]
+    d -- approve --> o["Limit entry order for the next session"]
+    o --> f{"Price reaches the limit?"}
+    f -- no --> exp["Order expires"]
+    f -- yes --> p["Position open<br/>standing stop at the broker"]
+    p -- "stop, target or approved exit" --> c["Position closed<br/>P&L and costs recorded"]
 ```
 
 ## Getting started

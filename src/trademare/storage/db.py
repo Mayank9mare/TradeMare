@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy import JSON, Date, DateTime, Float, Integer, String, Text, create_engine, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 def utcnow() -> datetime:
@@ -141,7 +142,13 @@ class Database:
     def __init__(self, url: str) -> None:
         if url.startswith("sqlite:///") and url != "sqlite:///:memory:":
             Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
-        self.engine: Engine = create_engine(url, future=True)
+        if url in ("sqlite://", "sqlite:///:memory:"):
+            # One shared connection, or every new connection would see a fresh empty database.
+            self.engine: Engine = create_engine(
+                url, future=True, poolclass=StaticPool, connect_args={"check_same_thread": False}
+            )
+        else:
+            self.engine = create_engine(url, future=True)
         Base.metadata.create_all(self.engine)
         self._sessions = sessionmaker(self.engine, expire_on_commit=False)
 

@@ -55,7 +55,8 @@ def client(tmp_path, monkeypatch):
 def test_overview(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert "India" in r.text and "1 / 2" in r.text  # bars cached / universe
+    assert "India" in r.text and "<b>1/2</b>" in r.text  # bars cached / universe
+    assert "all caught up" in r.text  # no pending signals
 
 
 def test_market_table(client):

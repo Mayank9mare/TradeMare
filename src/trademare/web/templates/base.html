@@ -4,23 +4,50 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}TradeMare{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="/static/app.css">
 </head>
+{% set ui = chrome() %}
+{% set path = request.url.path %}
+{% macro nav(href, label, icon, active, count=0) -%}
+<a class="nav-link{{ ' active' if active }}" href="{{ href }}">{{ icon | safe }}<span>{{ label }}</span>{% if count %}<span class="count">{{ count }}</span>{% endif %}</a>
+{%- endmacro %}
+{% set i_home = '<svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>' %}
+{% set i_bell = '<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/></svg>' %}
+{% set i_brief = '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2"/></svg>' %}
+{% set i_chart = '<svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M6 15l4-5 4 3 5-7"/></svg>' %}
+{% set i_bulb = '<svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg>' %}
+{% set i_flask = '<svg viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6L4 19a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-10V3"/></svg>' %}
+{% set i_gear = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg>' %}
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">Trade<span>Mare</span></a>
-    <nav>
-      <a href="/">Overview</a>
-      {% for m in markets %}<a href="/m/{{ m.value }}">{{ "India" if m.value == "IN" else "US" }}</a>{% endfor %}
-      <a href="/signals">Signals</a>
-      {% for m in markets %}<a href="/portfolio/{{ m.value }}">Portfolio {{ m.value }}</a>{% endfor %}
-      <a href="/backtests">Backtests</a>
-      <a href="/settings">Settings</a>
-    </nav>
-  </header>
-  <main>{% block content %}{% endblock %}</main>
-  <footer>TradeMare {{ version }} · local data cache · not financial advice</footer>
-  <script src="/static/app.js"></script>
-  {% block scripts %}{% endblock %}
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="logo">T</span><span>Trade<span class="mare">Mare</span></span></a>
+    {{ nav("/", "Overview", i_home, path == "/") }}
+    {{ nav("/signals", "Signals", i_bell, path.startswith("/signals"), ui.pending_total) }}
+    <div class="nav-label">Portfolio</div>
+    {% for m in markets %}{{ nav("/portfolio/" ~ m.value, "India" if m.value == "IN" else "United States", i_brief, path == "/portfolio/" ~ m.value) }}{% endfor %}
+    <div class="nav-label">Markets</div>
+    {% for m in markets %}{{ nav("/m/" ~ m.value, ("Nifty 500" if m.value == "IN" else "S&P 500"), i_chart, path.startswith("/m/" ~ m.value) and not path.endswith("/ideas")) }}{% endfor %}
+    {% for m in markets %}{{ nav("/m/" ~ m.value ~ "/ideas", "Ideas " ~ m.value, i_bulb, path == "/m/" ~ m.value ~ "/ideas") }}{% endfor %}
+    <div class="nav-label">Research</div>
+    {{ nav("/backtests", "Backtests", i_flask, path.startswith("/backtests")) }}
+    {{ nav("/settings", "Settings", i_gear, path.startswith("/settings")) }}
+    <div class="sidebar-foot">v{{ version }} · paper trading unless a market is validated · not financial advice</div>
+  </aside>
+  <div class="content">
+    <div class="statusbar">
+      {% for s in ui.statuses %}
+      <span class="status-chip"><span class="dot{{ ' open' if s.is_open }}"></span><b>{{ s.exchange }}</b> {{ "open" if s.is_open else "closed" }}{% if s.next_run %} · next run {{ s.next_run.strftime("%a %d %b %H:%M") }} {{ s.tz_label }}{% endif %}</span>
+      {% endfor %}
+      {% if ui.pending_total %}<a class="status-chip" href="/signals"><span class="dot open" style="background:var(--accent);box-shadow:none"></span><b>{{ ui.pending_total }}</b> signal{{ "s" if ui.pending_total != 1 }} awaiting you</a>{% endif %}
+    </div>
+    <main>{% block content %}{% endblock %}</main>
+    <footer>TradeMare {{ version }} · data from a local cache · not financial advice</footer>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
 </body>
 </html>

@@ -11,3 +11,16 @@
 {% macro direction_badge(direction) -%}
 <span class="badge dir {{ direction | lower }}">{{ direction }}</span>
 {%- endmacro %}
+
+{% macro spark(line, label) -%}
+{% if line %}
+<div class="spark-block">
+  <svg class="spark" viewBox="0 0 240 48" preserveAspectRatio="none" role="img" aria-label="{{ label }}: {{ '%+.1f' | format(line.change * 100) }}% from {{ line.start }} to {{ line.end }}">
+    <title>{{ label }} · {{ line.start }} → {{ line.end }} · low {{ '{:,.2f}'.format(line.low) }} · high {{ '{:,.2f}'.format(line.high) }} · {{ '%+.1f' | format(line.change * 100) }}%</title>
+    <path class="area" d="{{ line.path }} L{{ line.last_x }} 48 L4 48 Z"></path>
+    <path class="line" d="{{ line.path }}" vector-effect="non-scaling-stroke"></path>
+  </svg>
+  <div class="spark-meta"><span>{{ label }}</span><span class="{{ line.change | tone }}">{{ line.change | pct(1, True) }}</span></div>
+</div>
+{% endif %}
+{%- endmacro %}

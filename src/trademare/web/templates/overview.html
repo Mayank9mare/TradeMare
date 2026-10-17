@@ -1,37 +1,96 @@
 {% extends "base.html" %}
-{% from "_macros.html" import regime_badge %}
+{% from "_macros.html" import regime_badge, score_bar, direction_badge, spark %}
+{% block title %}Overview · TradeMare{% endblock %}
 {% block content %}
-<h1>Overview</h1>
+<div class="page-head">
+  <div>
+    <h1>Overview</h1>
+    <p>Paper trading in {{ cards | length }} market{{ "s" if cards | length != 1 }}. Nothing is ordered without your approval.</p>
+  </div>
+</div>
+
+{% if pending %}
+<section class="action">
+  <div class="grow">
+    <div class="big">{{ pending | length }} signal{{ "s" if pending | length != 1 }} awaiting your decision</div>
+    <p>{% for c in cards if c.pending %}{{ c.pending | length }} {{ "India" if c.market.value == "IN" else "US" }}{{ " · " if not loop.last }}{% endfor %}{% if first_expiry %} — the first expires {{ first_expiry.strftime("%a %d %b, %H:%M") }} UTC{% endif %}</p>
+  </div>
+  <a class="button primary" href="/signals">Review signals →</a>
+</section>
+{% else %}
+<section class="action calm">
+  <div class="grow">
+    <div class="big">You're all caught up</div>
+    <p>New signals arrive after each market's close; the next runs are shown above.</p>
+  </div>
+</section>
+{% endif %}
+
 <div class="grid two">
-{% for c in cards %}
+{% for c in cards %}{% set a = c.account %}{% set m = c.market %}
   <section class="card">
     <div class="card-head">
-      <h2>{{ "🇮🇳 India" if c.market.value == "IN" else "🇺🇸 United States" }}</h2>
-      <span class="badge {{ 'on' if c.cfg.enabled else 'off' }}">{{ "enabled" if c.cfg.enabled else "disabled" }}</span>
+      <h2>{{ "India" if m.value == "IN" else "United States" }}</h2>
+      <div class="pills">
+        <span class="pill {{ 'good' if c.cfg.validated else 'info' }}">{{ "Live, validated" if c.cfg.validated else ("Paper" if c.cfg.broker == "paper" else c.cfg.broker ~ " · not validated") }}</span>
+        {% if c.scan %}{% set rl = c.scan.regime.label.value %}<span class="pill {{ 'good' if rl == 'risk_on' else 'bad' if rl == 'risk_off' else 'warn' }}">{{ {"risk_on": "Risk-on", "neutral": "Neutral", "risk_off": "Risk-off"}[rl] }}</span>{% endif %}
+        <span class="pill {{ 'bad' if a.kill_switch else 'good' }}">{{ "Kill switch tripped" if a.kill_switch else "Kill switch armed" }}</span>
+      </div>
     </div>
-    <dl class="kv">
-      <dt>Budget</dt><dd>{{ c.cfg.budget | money(c.market, False) }} <small>(deployable {{ c.cfg.deployable_capital | money(c.market, False) }})</small></dd>
-      <dt>Broker</dt><dd>{{ c.cfg.broker }}</dd>
-      <dt>Directions</dt><dd>{{ "long" if c.cfg.allow_long }}{{ " + short" if c.cfg.allow_short }}</dd>
-      <dt>Stop-loss</dt><dd>{{ c.cfg.stop_loss.method }}{% if c.cfg.stop_loss.trailing %} · trailing {{ c.cfg.stop_loss.trail_method }} {{ c.cfg.stop_loss.trail_value }}{% endif %}</dd>
-      <dt>Universe</dt><dd><a href="/m/{{ c.market.value }}">{{ c.cfg.universe }}</a> · {{ c.universe_size }} symbols</dd>
-      <dt>Prices cached</dt><dd>{{ c.bars }} / {{ c.universe_size }} · last bar {{ c.last_date or "—" }}</dd>
-      <dt>Fundamentals</dt><dd>{{ c.fundamentals }} / {{ c.universe_size }} · {{ c.source }}</dd>
-      <dt>Breadth (1D)</dt><dd><span class="up">{{ c.advancers }} up</span> · <span class="down">{{ c.decliners }} down</span></dd>
-      <dt>Next session</dt><dd>{{ c.next_session or "calendar out of range" }}</dd>
-      <dt>Regime</dt><dd>{% if c.scan %}{{ regime_badge(c.scan.regime) }} <small class="muted">scan {{ c.scan.asof }}</small>{% else %}<span class="muted">no scan yet</span>{% endif %}</dd>
-      <dt>Ideas</dt><dd>{% if c.scan %}<a href="/m/{{ c.market.value }}/ideas">{{ c.scan.ideas | length }} idea{{ "s" if c.scan.ideas | length != 1 }} →</a>{% else %}<code>trademare scan</code>{% endif %}</dd>
-    </dl>
-    <div class="grid two movers">
-      <div><h3>Top gainers</h3>
-        <table class="mini">{% for r in c.top %}<tr><td><a href="/m/{{ c.market.value }}/{{ r.symbol | urlencode }}">{{ r.symbol }}</a></td><td class="num {{ r.returns.chg_1d | tone }}">{{ r.returns.chg_1d | pct(1, True) }}</td></tr>{% endfor %}</table>
+
+    <div class="account">
+      <div class="kpi">
+        <span class="label">Equity</span>
+        <span class="value hero">{{ a.equity | money(m, False) }}</span>
+        {% if a.previous_equity %}<span class="delta {{ (a.equity / a.previous_equity - 1) | tone }}">{{ (a.equity / a.previous_equity - 1) | pct(2, True) }} today</span>{% else %}<span class="delta faint">first session recorded</span>{% endif %}
       </div>
-      <div><h3>Top losers</h3>
-        <table class="mini">{% for r in c.bottom %}<tr><td><a href="/m/{{ c.market.value }}/{{ r.symbol | urlencode }}">{{ r.symbol }}</a></td><td class="num {{ r.returns.chg_1d | tone }}">{{ r.returns.chg_1d | pct(1, True) }}</td></tr>{% endfor %}</table>
+      <div class="mini-kpis">
+        <div class="kpi"><span class="label">Cash</span><span class="value">{{ a.cash | money(m) }}</span></div>
+        <div class="kpi"><span class="label">Positions</span><span class="value">{{ a.positions }} <small class="muted">/ {{ c.cfg.max_open_positions }}</small></span></div>
+        <div class="kpi"><span class="label">From peak</span><span class="value {{ ((a.equity / a.peak - 1) if a.peak else 0) | tone }}">{{ ((a.equity / a.peak - 1) if a.peak else 0) | pct(1) }}</span></div>
+        <div class="kpi"><span class="label">Budget</span><span class="value">{{ c.cfg.budget | money(m) }}</span></div>
       </div>
+    </div>
+
+    <div class="grid two" style="margin-top:18px; grid-template-columns: 1fr 1fr">
+      {% if a.equity_line %}{{ spark(a.equity_line, "Account equity") }}{% else %}<div class="empty">Equity chart appears after a few daily runs</div>{% endif %}
+      {% if c.index_line %}{{ spark(c.index_line, ("Nifty 50" if m.value == "IN" else "S&P 500") ~ " · 6 months") }}{% endif %}
+    </div>
+
+    {% if a.kill_switch %}<div class="flash bad" style="margin:14px 0 0">Kill switch: {{ a.kill_reason }} — <a href="/portfolio/{{ m.value }}">review and re-arm</a></div>{% endif %}
+
+    <h3 style="margin-top:20px">Top ideas{% if c.scan %} <span class="faint">· scan {{ c.scan.asof }}</span>{% endif %}</h3>
+    {% if c.ideas %}
+    <table class="data">
+      <tbody>
+      {% for i in c.ideas %}
+        <tr>
+          <td><a href="/m/{{ m.value }}/{{ i.symbol | urlencode }}"><b>{{ i.symbol }}</b></a> {{ direction_badge(i.direction.value) }}<div class="sub">{{ i.sector }}</div></td>
+          <td class="num">{{ i.levels.entry | money(m, False) }}<div class="sub">stop {{ ((i.levels.stop / i.levels.entry) - 1) | pct(1, True) }}</div></td>
+          <td class="num">{{ score_bar(i.composite) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="sub" style="margin:8px 0 0"><a href="/m/{{ m.value }}/ideas">All {{ c.scan.ideas | length }} ideas →</a></p>
+    {% else %}<div class="empty">No ideas yet — run <code>trademare scan</code> or wait for the daily job</div>{% endif %}
+
+    <div class="grid two movers" style="margin-top:18px; grid-template-columns: 1fr 1fr">
+      <div><h3>Top gainers today</h3>
+        <table class="mini">{% for r in c.top %}<tr><td><a href="/m/{{ m.value }}/{{ r.symbol | urlencode }}">{{ r.symbol }}</a></td><td class="num {{ r.returns.chg_1d | tone }}">{{ r.returns.chg_1d | pct(1, True) }}</td></tr>{% endfor %}</table>
+      </div>
+      <div><h3>Top losers today</h3>
+        <table class="mini">{% for r in c.bottom %}<tr><td><a href="/m/{{ m.value }}/{{ r.symbol | urlencode }}">{{ r.symbol }}</a></td><td class="num {{ r.returns.chg_1d | tone }}">{{ r.returns.chg_1d | pct(1, True) }}</td></tr>{% endfor %}</table>
+      </div>
+    </div>
+
+    <div class="card-foot">
+      <span>Breadth <b class="up">{{ c.advancers }} up</b> / <b class="down">{{ c.decliners }} down</b></span>
+      <span>Prices <b>{{ c.bars }}/{{ c.universe_size }}</b> to {{ c.last_date or "—" }}</span>
+      <span>Fundamentals <b>{{ c.fundamentals }}/{{ c.universe_size }}</b> ({{ c.source }})</span>
+      <span>Last processed <b>{{ a.last_processed or "—" }}</b></span>
     </div>
   </section>
 {% endfor %}
 </div>
-<p class="muted">Position sizing, signals and the approve flow arrive in later phases (see PLAN.md).</p>
 {% endblock %}
