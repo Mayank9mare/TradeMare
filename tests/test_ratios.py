@@ -57,3 +57,16 @@ def test_no_pe_for_losses(financials):
 def test_empty_before_data(financials):
     ratios = key_ratios(financials, date(2020, 1, 1), price=50.0)
     assert ratios and all(v is None for v in ratios.values())
+
+
+def test_recurring_earnings_preferred_over_reported(financials):
+    # A one-off gain lifts reported income; normalized income excludes it.
+    financials["net_income_normalized"] = -2.0
+    r = key_ratios(financials, date(2026, 3, 1), price=50.0)
+    assert r["net_income_ttm"] == 62 and r["earnings_ttm"] == -8
+    assert r["pe"] is None  # no P/E on recurring losses
+
+
+def test_falls_back_to_reported_income_without_normalized(financials):
+    r = key_ratios(financials, date(2026, 3, 1), price=50.0)
+    assert r["earnings_ttm"] == r["net_income_ttm"] == 62

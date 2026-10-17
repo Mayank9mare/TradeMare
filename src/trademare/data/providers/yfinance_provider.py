@@ -65,6 +65,7 @@ _ROWS: dict[str, tuple[str, ...]] = {
     "gross_profit": ("Gross Profit",),
     "operating_income": ("Operating Income", "Total Operating Income As Reported"),
     "net_income": ("Net Income Common Stockholders", "Net Income"),
+    "net_income_normalized": ("Normalized Income",),
     "ebitda": ("EBITDA", "Normalized EBITDA"),
     "interest_expense": ("Interest Expense", "Interest Expense Non Operating"),
     "operating_cash_flow": ("Operating Cash Flow",),

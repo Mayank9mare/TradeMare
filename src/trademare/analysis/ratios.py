@@ -25,7 +25,7 @@ def _div(a: float | None, b: float | None) -> float | None:
 RATIO_KEYS = (
     "market_cap", "pe", "price_to_book", "fcf_yield", "gross_margin", "operating_margin", "net_margin",
     "roe", "roa", "debt_to_equity", "current_ratio", "interest_coverage", "revenue_growth",
-    "earnings_growth", "gross_profitability", "revenue_ttm", "net_income_ttm", "total_equity",
+    "earnings_growth", "gross_profitability", "revenue_ttm", "net_income_ttm", "earnings_ttm", "total_equity",
     "data_age_days",
 )  # fmt: skip
 
@@ -41,6 +41,9 @@ def statement_ratios(financials: pd.DataFrame, asof: date) -> dict[str, Any] | N
         return _clean(now.get(field))
 
     net_income = g("net_income")
+    # Recurring earnings: net income excluding one-off items when the source reports it.
+    normalized = g("net_income_normalized")
+    earnings = normalized if normalized is not None else net_income
     ocf, capex = g("operating_cash_flow"), g("capex")
 
     revenue_growth = earnings_growth = None
@@ -67,6 +70,7 @@ def statement_ratios(financials: pd.DataFrame, asof: date) -> dict[str, Any] | N
         "gross_profitability": _div(g("gross_profit"), g("total_assets")),  # Novy-Marx (2013)
         "revenue_ttm": g("revenue"),
         "net_income_ttm": net_income,
+        "earnings_ttm": earnings,
         "total_equity": g("total_equity"),
         # Inputs for finalize_ratios:
         "_shares": g("shares_outstanding"),
@@ -79,12 +83,12 @@ def finalize_ratios(base: dict[str, Any] | None, asof: date, price: float | None
     """Add valuation ratios at ``price`` and data age at ``asof``. Always returns every key."""
     if base is None:
         return dict.fromkeys(RATIO_KEYS)
-    shares, net_income = base["_shares"], base["net_income_ttm"]
+    shares, earnings = base["_shares"], base["earnings_ttm"]
     market_cap = price * shares if price is not None and shares is not None else None
     out = {k: v for k, v in base.items() if not k.startswith("_")}
     out.update(
         market_cap=market_cap,
-        pe=_div(market_cap, net_income) if net_income is not None and net_income > 0 else None,
+        pe=_div(market_cap, earnings) if earnings is not None and earnings > 0 else None,
         price_to_book=_div(market_cap, base["total_equity"]),
         fcf_yield=_div(base["_fcf"], market_cap),
         data_age_days=float((pd.Timestamp(asof) - base["_flow_period_end"]).days),

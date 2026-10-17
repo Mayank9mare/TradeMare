@@ -46,9 +46,16 @@ def _ratio(key: str) -> Callable[[dict, dict | None], float | None]:
 
 
 def _earnings_yield(_row: dict, ratios: dict | None) -> float | None:
-    if ratios is None or not ratios.get("market_cap") or ratios.get("net_income_ttm") is None:
+    """Recurring (normalized) earnings / market cap, falling back to reported net income.
+
+    Loss-makers stay negative so they rank last.
+    """
+    if ratios is None or not ratios.get("market_cap"):
         return None
-    return ratios["net_income_ttm"] / ratios["market_cap"]
+    earnings = ratios.get("earnings_ttm")
+    if earnings is None:
+        earnings = ratios.get("net_income_ttm")
+    return None if earnings is None else earnings / ratios["market_cap"]
 
 
 def _v1_technical(row: dict, _ratios: dict | None) -> float | None:

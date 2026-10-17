@@ -71,9 +71,9 @@ class DataService:
             market, symbols, through, self.config.data.history_years, self.config.data.batch_size
         )
 
-    def update_fundamentals(self, market: Market, symbols: list[str]) -> UpdateReport:
+    def update_fundamentals(self, market: Market, symbols: list[str], force: bool = False) -> UpdateReport:
         source = self.market(market).financials.source.source
         log.info("%s: updating %s fundamentals for %d symbols", market, source, len(symbols))
         return self.market(market).financials.update(
-            market, symbols, self.config.data.fundamentals_refresh_days
+            market, symbols, self.config.data.fundamentals_refresh_days, force=force
         )

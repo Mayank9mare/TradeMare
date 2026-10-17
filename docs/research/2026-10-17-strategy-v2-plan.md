@@ -96,3 +96,23 @@ Pass bar: Sharpe ≥ index (−0.17 ≥ −0.23, **passes**) and max DD within 5
 **Strategy v2 fails the pre-registered bar** and must not be traded with real money. It is not re-tuned on the out-of-sample period.
 
 India momentum is the only effect with in-sample support that survives the survivorship correction. It becomes the **paper-trading candidate**: forward paper trading is the next genuine out-of-sample test and costs nothing. Both markets are marked `validated: false`, which blocks live orders.
+
+
+---
+
+# 2026-10-17 amendment: earnings yield uses recurring earnings
+
+**Why:** the first live paper scan ranked Vodafone Idea (IDEA) #2 of 183 on earnings yield (27.4%). Its March 2026 quarter included a one-off gain of about ₹57,000 Cr ("Total Unusual Items"), while every other quarter was a loss. Tata Motors PV (TMPV) topped the list (75%) because of demerger accounting. TTM net income including one-offs made both look cheap.
+
+**Change:** `earnings_yield` (and P/E) now use yfinance's **Normalized Income** (net income excluding unusual items) and fall back to reported net income where it is missing. 100% of cached Indian periods with net income also have normalized income. EDGAR (US) has no clean equivalent tag, so US still uses reported income. Loss-makers stay negative and rank last.
+
+**Re-selection, in-sample only** (2019-10-15 → 2024-10-15, 63-session horizon, monthly sampling, Nifty 500 top-200 point-in-time universe). No out-of-sample data was run or inspected for this decision.
+
+| Factor | Before (reported income) | After (normalized income) | Selected |
+|---|---|---|---|
+| mom_12_1 | +0.059 (t +2.3) | +0.059 (t +2.3), unchanged | yes |
+| earnings_yield | +0.092 (t +2.6) | **+0.077 (t +2.1)** | yes, barely clears t ≥ 2.0 |
+
+Part of the earlier earnings-yield strength came from one-off gains. It still meets the pre-registered rule, so India keeps `factors: [mom_12_1, earnings_yield]`. Its evidence is thin: 24% coverage, 2023–24 only.
+
+**Sanity check (2026-10-16):** IDEA's earnings yield is −16.2%, ranked #182 of 184 (was #2). The top 5 are now HINDPETRO, PFC, IOC, RECLTD and CANBK.

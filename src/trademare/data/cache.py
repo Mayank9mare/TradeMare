@@ -17,7 +17,7 @@ from typing import Protocol
 import pandas as pd
 
 from trademare.core.models import Market
-from trademare.data.fields import empty_financials
+from trademare.data.fields import COLUMNS, empty_financials
 from trademare.data.quality import clean_bars, empty_bars
 from trademare.data.store import ParquetStore
 
@@ -158,7 +158,10 @@ class FinancialsCache:
 
     def get_financials(self, market: Market, symbol: str) -> pd.DataFrame:
         df = self.store.read_financials(market, self.source.source, symbol)
-        return empty_financials() if df is None else df
+        if df is None:
+            return empty_financials()
+        # Files cached before a field was added lack its column: add it as NaN.
+        return df.reindex(columns=list(COLUMNS))
 
     def update(
         self,
@@ -166,13 +169,15 @@ class FinancialsCache:
         symbols: list[str],
         max_age_days: int,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        force: bool = False,
     ) -> UpdateReport:
+        """Refresh financials older than ``max_age_days`` (all of them when ``force``)."""
         report = UpdateReport()
         cutoff = now() - timedelta(days=max_age_days)
         stale = []
         for symbol in symbols:
             updated_at = self.store.financials_updated_at(market, self.source.source, symbol)
-            if updated_at is not None and updated_at >= cutoff:
+            if not force and updated_at is not None and updated_at >= cutoff:
                 report.up_to_date.append(symbol)
             else:
                 stale.append(symbol)

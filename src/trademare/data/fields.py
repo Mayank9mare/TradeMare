@@ -26,6 +26,7 @@ FLOW_FIELDS = (
     "gross_profit",
     "operating_income",
     "net_income",
+    "net_income_normalized",  # excludes unusual / one-off items where the source provides it
     "ebitda",
     "interest_expense",
     "operating_cash_flow",
