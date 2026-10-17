@@ -116,3 +116,18 @@ India momentum is the only effect with in-sample support that survives the survi
 Part of the earlier earnings-yield strength came from one-off gains. It still meets the pre-registered rule, so India keeps `factors: [mom_12_1, earnings_yield]`. Its evidence is thin: 24% coverage, 2023–24 only.
 
 **Sanity check (2026-10-16):** IDEA's earnings yield is −16.2%, ranked #182 of 184 (was #2). The top 5 are now HINDPETRO, PFC, IOC, RECLTD and CANBK.
+
+# 2026-10-17 amendment 2: statement currency fix
+
+**Why:** some Indian listings report to Yahoo in **USD** while trading in INR (found: Infosys, HCLTech). Their income was compared against INR market caps, which made their earnings yield and P/E off by roughly 85×.
+
+**Change:** statements are converted to INR at the USD/INR close on each period end. The currency is read from Yahoo's `financialCurrency`, and a missing value now fails the download rather than being guessed. All 494 India symbols were re-downloaded.
+
+**Re-selection, in-sample only** (same rule and period as above, no out-of-sample data inspected):
+
+| Factor | Mean IC | t-stat | Selected |
+|---|---|---|---|
+| mom_12_1 | +0.059 | +2.3 | yes |
+| earnings_yield | +0.076 | +2.1 | yes (still barely) |
+
+No configuration change.
