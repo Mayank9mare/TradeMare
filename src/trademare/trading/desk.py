@@ -23,12 +23,15 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from trademare.analysis.indicators import atr
+from trademare.analysis.llm import create_llm_client
+from trademare.analysis.sentiment import SentimentAnalyst
 from trademare.backtest.costs import cost_model
 from trademare.config.schema import Rebalance, StrategyMode, TrailMethod
 from trademare.config.secrets import Secrets
@@ -94,10 +97,13 @@ class TradingDesk:
         self.config = service.config
         self.cfg = self.config.markets[market]
         self.risk = RiskManager(self.cfg, self.config.strategy)
-        self.broker = create_broker(market, self.cfg, secrets or Secrets())
+        self.secrets = secrets or Secrets()
+        self.broker = create_broker(market, self.cfg, self.secrets)
         self.clock = MarketClock(market)
         self.costs = cost_model(market)
         self._sectors: dict[str, str] | None = None
+        self._names: dict[str, str] | None = None
+        self.sentiment: SentimentAnalyst | None = None  # built on first use when llm.enabled
 
     # ------------------------------------------------------------------ helpers
     def _bar(self, symbol: str, day: date) -> Bar | None:
@@ -145,7 +151,22 @@ class TradingDesk:
         if self._sectors is None:
             u = load_universe(self.cfg.universe)
             self._sectors = dict(zip(u["symbol"], u["sector"], strict=True))
+            self._names = dict(zip(u["symbol"], u["name"], strict=True))
         return self._sectors.get(symbol, "")
+
+    def company(self, symbol: str) -> str:
+        self.sector(symbol)
+        return (self._names or {}).get(symbol, symbol)
+
+    def _sentiment_analyst(self) -> SentimentAnalyst | None:
+        if not self.config.llm.enabled:
+            return None
+        if self.sentiment is None:
+            cache = Path(self.config.data.cache_dir).parent / "sentiment"
+            self.sentiment = SentimentAnalyst(
+                self.config.llm, create_llm_client(self.config.llm, self.secrets), cache
+            )
+        return self.sentiment
 
     def equity(self, s: Session) -> tuple[float, float, float]:
         """(equity, cash, gross exposure) at the latest marked prices."""
@@ -716,6 +737,7 @@ class TradingDesk:
         held = {p.symbol for p in positions}
         slots = max_positions - len(staying) - len(pending_entries)
         equity, cash, _ = self.equity(s)
+        sentiment = self._sentiment_analyst()
         for idea in scan.ideas:
             if slots <= 0:
                 break
@@ -725,6 +747,27 @@ class TradingDesk:
             if qty <= 0:
                 report.notes.append(f"{idea.symbol}: no size within budget/limits")
                 continue
+            reasons = dict(idea.reasons)
+            if sentiment is not None:
+                outcome = sentiment.assess(
+                    self.market, idea.symbol, self.company(idea.symbol), idea.direction, day
+                )
+                if outcome.veto:
+                    report.notes.append(f"{idea.symbol}: entry vetoed by news sentiment ({outcome.note})")
+                    self.db.log(
+                        s,
+                        "sentiment_veto",
+                        f"{idea.symbol} {idea.direction.value} vetoed: {outcome.note}",
+                        self.market.value,
+                        symbol=idea.symbol,
+                        direction=idea.direction.value,
+                        entry=idea.levels.entry,
+                        composite=idea.composite,
+                        sentiment=outcome.result.score if outcome.result else None,
+                        reasons=outcome.result.reasons if outcome.result else [],
+                    )
+                    continue
+                reasons["sentiment"] = outcome.result.reasons if outcome.result else [outcome.note]
             sig = SignalRow(
                 id=uuid.uuid4().hex,
                 market=self.market.value,
@@ -737,7 +780,7 @@ class TradingDesk:
                 target_price=idea.levels.target,
                 score=idea.composite,
                 confidence=idea.confidence,
-                reasons=idea.reasons,
+                reasons=reasons,
                 status=SignalStatus.PENDING.value,
                 scan_date=day,
                 expires_at=expires,

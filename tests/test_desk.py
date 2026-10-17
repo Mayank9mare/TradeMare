@@ -359,3 +359,42 @@ def test_live_exit_cancels_protection(live_desk):
     with desk.db.session() as s:
         pos = s.query(PositionRow).one()
         assert pos.status == "closed" and pos.exit_reason == "signal" and pos.realized_pnl > 0
+
+
+def test_sentiment_veto_skips_entry_and_is_logged(desk, tmp_path):
+    from trademare.analysis.sentiment import SentimentAnalyst
+    from trademare.config.schema import LLMConfig
+    from trademare.core.interfaces import LLMResult
+    from trademare.storage.db import EventRow
+
+    class RedFlagForS0:
+        model = "fake"
+
+        def complete_json(self, system, prompt, schema):
+            bad = "S0" in prompt
+            data = {
+                "score": -0.8 if bad else 0.3,
+                "confidence": 0.9,
+                "red_flags": ["fraud_or_accounting"] if bad else [],
+                "summary": "Probe." if bad else "Fine.",
+            }
+            return LLMResult(data=data, input_tokens=10, output_tokens=10, cost_usd=0.0)
+
+    from trademare.analysis.news import Headline
+
+    desk.config = desk.config.model_copy(update={"llm": LLMConfig(enabled=True)})
+    desk.sentiment = SentimentAnalyst(
+        desk.config.llm,
+        RedFlagForS0(),
+        tmp_path / "sent",
+        news=lambda market, company, *_: [
+            Headline(f"{company} news", "Wire", datetime(2025, 6, 1, tzinfo=UTC))
+        ],
+    )
+    report = desk.run_daily(DAY0)
+    symbols = [sig.symbol for sig in entry_signals(desk)]
+    assert "S0" not in symbols and symbols
+    assert any("S0: entry vetoed by news sentiment" in n for n in report.notes)
+    assert entry_signals(desk)[0].reasons["sentiment"] == ["Fine."]
+    with desk.db.session() as s:
+        assert s.query(EventRow).filter_by(kind="sentiment_veto").count() == 1

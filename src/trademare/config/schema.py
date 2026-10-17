@@ -225,10 +225,33 @@ class LLMProvider(StrEnum):
 
 
 class LLMConfig(_Strict):
+    """Optional news-sentiment overlay (step 8). Off by default."""
+
     enabled: bool = False
     provider: LLMProvider = LLMProvider.ANTHROPIC
-    model: str = "claude-sonnet-5-5"
-    max_daily_cost_usd: float = Field(1.0, ge=0)
+    model: str = "claude-opus-5-5"
+    max_daily_cost_usd: float = Field(1.0, ge=0, description="Stop calling the LLM for the day beyond this")
+    lookback_days: int = Field(7, ge=1, le=30, description="Headline window")
+    max_headlines: int = Field(15, ge=1, le=50)
+    veto_score: float = Field(
+        -0.5,
+        ge=-1,
+        le=0,
+        description="Veto a long entry at or below this score (shorts: at or above its negative)",
+    )
+    input_usd_per_mtok: float | None = Field(None, ge=0, description="Price override; required for openai")
+    output_usd_per_mtok: float | None = Field(None, ge=0, description="Price override; required for openai")
+
+    @model_validator(mode="after")
+    def _provider_model(self) -> Self:
+        if self.provider is LLMProvider.OPENAI:
+            if self.model.startswith("claude"):
+                raise ValueError("llm.model must name an OpenAI model when llm.provider is openai")
+            if self.input_usd_per_mtok is None or self.output_usd_per_mtok is None:
+                raise ValueError(
+                    "llm.provider openai needs input_usd_per_mtok and output_usd_per_mtok for the cost cap"
+                )
+        return self
 
 
 class DataConfig(_Strict):

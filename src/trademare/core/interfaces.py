@@ -57,8 +57,17 @@ class Analyst(Protocol):
     def analyze(self, market: Market, symbol: str, asof: date) -> AnalystResult: ...
 
 
+class LLMResult(BaseModel):
+    data: dict
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+
+
 @runtime_checkable
 class LLMClient(Protocol):
-    """Provider-agnostic text completion (Claude, OpenAI, ...)."""
+    """Provider-agnostic JSON completion (Claude, OpenAI, ...) constrained to a JSON schema."""
 
-    def complete(self, system: str, prompt: str, max_tokens: int = 1024) -> str: ...
+    model: str
+
+    def complete_json(self, system: str, prompt: str, schema: dict) -> LLMResult: ...

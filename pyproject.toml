@@ -5,6 +5,7 @@ description = "Swing-trading signal engine for Indian and US equities with funda
 requires-python = ">=3.12"
 dependencies = [
     "alpaca-py>=0.44.0",
+    "anthropic>=1.15.0",
     "apscheduler>=3.11.3",
     "dhanhq>=2.3.0",
     "exchange-calendars>=4.13.2",
