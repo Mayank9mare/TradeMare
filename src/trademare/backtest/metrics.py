@@ -79,6 +79,10 @@ def summarize(result: BacktestResult, out_of_sample_fraction: float = 0.4) -> di
         "exposure_avg": float(result.exposure.mean()) if len(result.exposure) else None,
         "time_in_market": float((result.exposure > 0).mean()) if len(result.exposure) else None,
     }
+    summary["kill_switch"] = {
+        "trips": [{"date": d.isoformat(), "reason": r} for d, r in result.kill_switch_trips],
+        "halted_sessions": result.halted_sessions,
+    }
     exits = pd.Series([t.exit_reason for t in result.trades]).value_counts()
     summary["exit_reasons"] = {k: int(v) for k, v in exits.items()}
 

@@ -30,6 +30,7 @@ from trademare.backtest.costs import cost_model
 from trademare.config.schema import AppConfig, Rebalance, StopLossConfig, StrategyMode, TrailMethod
 from trademare.core.models import Direction, OrderSide
 from trademare.execution.fills import Bar, limit_fill, slipped, stop_fill, target_fill
+from trademare.risk.manager import RiskManager
 from trademare.risk.sizing import position_size
 from trademare.strategy.scanner import Idea, ScanContext, is_rebalance_day
 
@@ -91,6 +92,8 @@ class BacktestResult:
     trades: list[Trade]
     open_positions: list[Position]
     settings: dict = field(default_factory=dict)
+    kill_switch_trips: list[tuple[date, str]] = field(default_factory=list)
+    halted_sessions: int = 0
 
 
 class Backtester:
@@ -131,6 +134,9 @@ class Backtester:
         last_fund_refresh: pd.Timestamp | None = None
         borrow_daily = self.config.backtest.short_borrow_rate_pct / 100 / 252
         equity = initial
+        risk = RiskManager(cfg, strat)
+        peak, halted_until, halted = initial, None, 0
+        kill_trips: list[tuple[date, str]] = []
         factor_mode = cfg.strategy_mode is StrategyMode.FACTOR
         rebalance = strat.factor_rebalance if factor_mode else Rebalance.DAILY
         max_positions = cfg.max_open_positions
@@ -253,9 +259,24 @@ class Backtester:
                 gross += abs(pos.market_value(px))
                 if pos.direction is Direction.SHORT:
                     cash -= abs(pos.market_value(px)) * borrow_daily
+            previous_equity = equity
             equity = cash + marked
             equity_curve[ts] = equity
             exposure_curve[ts] = gross / equity if equity > 0 else 0.0
+
+            # Kill switch: same rule as live trading; re-armed after a cooling-off period
+            # (live re-arming is manual) with the peak reset, as a manual re-arm does.
+            if self.config.backtest.simulate_kill_switch:
+                if halted_until is not None and i >= halted_until:
+                    halted_until, peak = None, equity
+                peak = max(peak, equity)
+                if halted_until is None:
+                    check = risk.check_kill_switch(equity, previous_equity, peak)
+                    if check.tripped:
+                        halted_until = i + self.config.backtest.kill_switch_rearm_sessions
+                        kill_trips.append((today, check.reason))
+                if halted_until is not None:
+                    halted += 1
 
             if i == len(sessions) - 1:
                 break  # no orders after the final session
@@ -318,7 +339,12 @@ class Backtester:
                 weakest = sorted(staying, key=lambda p: p.sign * (composites.get(p.symbol) or 0.0))
                 for pos in weakest[:excess]:
                     pending_exits[pos.symbol] = "regime"
-            pending_entries = [idea for idea in scan.ideas if idea.symbol not in positions]
+            # While the kill switch is tripped, no new entries (exits and stops still work).
+            pending_entries = (
+                []
+                if halted_until is not None
+                else [idea for idea in scan.ideas if idea.symbol not in positions]
+            )
 
         benchmark = None
         if ctx.benchmark is not None:
@@ -334,6 +360,8 @@ class Backtester:
             exposure=pd.Series(exposure_curve),
             trades=trades,
             open_positions=list(positions.values()),
+            kill_switch_trips=kill_trips,
+            halted_sessions=halted,
         )
 
 

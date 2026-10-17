@@ -224,3 +224,37 @@ def test_apply_overrides():
         apply_overrides(c, ["strategy.nope=1"])
     with pytest.raises(ValueError):
         apply_overrides(c, ["strategy.min_composite_score=5"])  # fails validation
+
+
+def test_kill_switch_halts_entries_then_rearms(config):
+    config.backtest.kill_switch_rearm_sessions = 3
+    config.markets[Market.US].max_position_pct = 100
+    config.markets[Market.US].risk_per_trade_pct = 10
+    # A: bought day 1, collapses 30% on day 3 (stop far below) -> a >3% daily loss -> trip.
+    a = [[100, 101, 99, 100], [100, 100.5, 99.5, 100], [100, 100, 99, 100], [70, 71, 69, 70]] + [
+        [70, 71, 69, 70]
+    ] * 6
+    b = [[50, 51, 49, 50]] * 10
+    bars = {"A": ohlc(a), "B": ohlc(b)}
+    d = [ts.date() for ts in bars["A"].index]
+    ideas = {
+        d[0]: [idea("A", 100, 20, None)],
+        d[4]: [idea("B", 50, 40, None)],  # during the halt: must not be entered
+        d[8]: [idea("B", 50, 40, None)],  # after re-arming: entered
+    }
+    result = run(config, bars, ideas)
+    assert len(result.kill_switch_trips) == 1 and "daily loss" in result.kill_switch_trips[0][1]
+    assert result.halted_sessions == 3
+    held = {p.symbol: p.entry_date for p in result.open_positions}
+    assert held["B"] == d[9]
+
+
+def test_kill_switch_can_be_disabled(config):
+    config.backtest.simulate_kill_switch = False
+    config.markets[Market.US].max_position_pct = 100
+    config.markets[Market.US].risk_per_trade_pct = 10
+    a = [[100, 101, 99, 100], [100, 100.5, 99.5, 100], [100, 100, 99, 100], [70, 71, 69, 70]] + [
+        [70, 71, 69, 70]
+    ] * 3
+    result = run(config, {"A": ohlc(a)}, {ohlc(a).index[0].date(): [idea("A", 100, 20, None)]})
+    assert result.kill_switch_trips == [] and result.halted_sessions == 0

@@ -144,6 +144,13 @@ def format_summary(meta: dict) -> str:
         f"exposure {_fmt('exposure', s.get('exposure_avg'))}"
     )
     lines.append(f"  costs paid {st.get('total_costs', 0):,.0f}; exits: {s['exit_reasons']}")
+    ks = s.get("kill_switch") or {}
+    if ks.get("trips"):
+        first = ks["trips"][0]
+        lines.append(
+            f"  kill switch tripped {len(ks['trips'])}x, {ks['halted_sessions']} sessions without "
+            f"new entries (first {first['date']}: {first['reason']})"
+        )
     years = "  ".join(
         f"{y}: {_fmt('total_return', r['strategy'])} vs {_fmt('total_return', r.get('benchmark'))}"
         for y, r in s["by_year"].items()

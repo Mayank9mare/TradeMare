@@ -248,6 +248,10 @@ class BacktestConfig(_Strict):
     )
     compound: bool = Field(True, description="Size from current equity (True) or the fixed budget (False)")
     short_borrow_rate_pct: float = Field(0.5, ge=0, description="Annual stock-borrow fee for shorts")
+    simulate_kill_switch: bool = Field(True, description="Apply the markets' kill switch in backtests")
+    kill_switch_rearm_sessions: int = Field(
+        20, ge=1, description="Backtests re-arm a tripped kill switch after this many sessions (live: manual)"
+    )
 
 
 class AppConfig(_Strict):
