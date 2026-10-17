@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
 from trademare.config.schema import AppConfig
 from trademare.config.secrets import Secrets
@@ -12,7 +13,11 @@ from trademare.core.clock import MarketClock
 from trademare.core.models import Market
 from trademare.data.cache import FinancialsCache, FinancialsSource, PriceCache, UpdateReport
 from trademare.data.providers.edgar import EdgarFundamentalsProvider, SecClient
-from trademare.data.providers.yfinance_provider import YFinanceFundamentalsProvider, YFinancePriceProvider
+from trademare.data.providers.yfinance_provider import (
+    CurrencyCache,
+    YFinanceFundamentalsProvider,
+    YFinancePriceProvider,
+)
 from trademare.data.store import ParquetStore
 from trademare.data.universe import load_universe
 
@@ -56,7 +61,8 @@ class DataService:
                     pass
                 return EdgarFundamentalsProvider(SecClient(ua), ciks)
             log.warning("SEC_USER_AGENT not set in .env; using yfinance for %s fundamentals", market)
-        return YFinanceFundamentalsProvider()
+        cache = Path(self.config.data.cache_dir) / "financials" / market.value / "yfinance_currency.json"
+        return YFinanceFundamentalsProvider(currencies=CurrencyCache(cache))
 
     def universe_symbols(self, market: Market) -> list[str]:
         return load_universe(self.config.markets[market].universe)["symbol"].tolist()

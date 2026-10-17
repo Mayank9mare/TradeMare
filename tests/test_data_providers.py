@@ -147,3 +147,91 @@ def test_yfinance_maps_normalized_income():
     df = statements_to_financials(Market.IN, {"Q": [income]})
     row = df.iloc[0]
     assert row["net_income"] == 520 and row["net_income_normalized"] == -55
+
+
+# ---------------------------------------------------------------- statement currency conversion
+from trademare.data.providers import yfinance_provider as yfp  # noqa: E402
+
+
+def test_fx_converts_money_fields_but_not_shares():
+    end = pd.Timestamp("2025-03-31")
+    income = pd.DataFrame({end: [100.0, 10.0]}, index=["Total Revenue", "Net Income"])
+    balance = pd.DataFrame({end: [4.0]}, index=["Ordinary Shares Number"])
+    df = statements_to_financials(Market.IN, {"A": [income, balance]}, fx=lambda day: 85.0)
+    row = df.iloc[0]
+    assert row["revenue"] == 8500 and row["net_income"] == 850
+    assert row["shares_outstanding"] == 4  # share counts are not money
+
+
+def test_fx_rate_lookup_uses_last_close_on_or_before_date():
+    series = pd.Series([80.0, 82.0, 84.0], index=pd.to_datetime(["2025-03-27", "2025-03-28", "2025-04-01"]))
+    rates = yfp.FxRates(download=lambda pair: series)
+    rate = rates.converter("USD", "INR")
+    assert rate(pd.Timestamp("2025-03-31")) == 82.0  # weekend/holiday -> previous close
+    assert rate(pd.Timestamp("2025-04-01")) == 84.0
+    assert rate(pd.Timestamp("2020-01-01")) == 80.0  # before history -> earliest
+
+
+def test_provider_converts_only_foreign_currency_statements(monkeypatch):
+    end = pd.Timestamp("2025-03-31")
+
+    class FakeTicker:
+        def __init__(self, symbol):
+            self.symbol = symbol
+            income = pd.DataFrame({end: [5.0e9]}, index=["Total Revenue"])
+            self.income_stmt = self.quarterly_income_stmt = income
+            empty = pd.DataFrame()
+            self.balance_sheet = self.cashflow = self.quarterly_balance_sheet = self.quarterly_cashflow = (
+                empty
+            )
+            self.info = {"financialCurrency": "USD" if symbol == "INFY.NS" else "INR"}
+
+    monkeypatch.setattr(yfp.yf, "Ticker", FakeTicker)
+    provider = yfp.YFinanceFundamentalsProvider(
+        fx=yfp.FxRates(download=lambda pair: pd.Series([85.0], index=[end]))
+    )
+    assert provider.get_financials(Market.IN, "INFY")["revenue"].iloc[0] == pytest.approx(4.25e11)
+    assert provider.get_financials(Market.IN, "TCS")["revenue"].iloc[0] == pytest.approx(5.0e9)
+
+
+def test_failed_currency_lookup_fails_instead_of_guessing(monkeypatch, tmp_path):
+    end = pd.Timestamp("2025-03-31")
+
+    class FlakyTicker:
+        def __init__(self, symbol):
+            self.income_stmt = self.quarterly_income_stmt = pd.DataFrame(
+                {end: [5.0e9]}, index=["Total Revenue"]
+            )
+            self.balance_sheet = self.cashflow = pd.DataFrame()
+            self.quarterly_balance_sheet = self.quarterly_cashflow = pd.DataFrame()
+
+        @property
+        def info(self):
+            raise RuntimeError("Too Many Requests. Rate limited.")
+
+    monkeypatch.setattr(yfp.yf, "Ticker", FlakyTicker)
+    monkeypatch.setattr(yfp, "_with_retry", lambda fn, delays=(): fn())  # no waiting in tests
+    cache = yfp.CurrencyCache(tmp_path / "ccy.json")
+    provider = yfp.YFinanceFundamentalsProvider(currencies=cache)
+    with pytest.raises(RuntimeError, match="Too Many Requests"):
+        provider.get_financials(Market.IN, "INFY")
+    assert cache.get("IN:INFY") is None  # nothing cached on failure
+
+    cache.set("IN:INFY", "INR")  # once known, no lookup is needed
+    assert yfp.CurrencyCache(tmp_path / "ccy.json").get("IN:INFY") == "INR"  # persisted
+    assert provider.get_financials(Market.IN, "INFY")["revenue"].iloc[0] == 5.0e9
+
+
+def test_retry_on_rate_limit(monkeypatch):
+    monkeypatch.setattr(yfp.time, "sleep", lambda s: None)
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise RuntimeError("Too Many Requests")
+        return "ok"
+
+    assert yfp._with_retry(flaky, delays=(1, 1, 1)) == "ok" and len(calls) == 3
+    with pytest.raises(ValueError):
+        yfp._with_retry(lambda: (_ for _ in ()).throw(ValueError("other")), delays=(1,))

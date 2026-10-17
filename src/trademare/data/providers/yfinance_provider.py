@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import threading
+import time
+from collections.abc import Callable
 from datetime import date, timedelta
+from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
@@ -93,11 +98,14 @@ REPORTING_LAG_DAYS: dict[Market, dict[str, int]] = {
 def statements_to_financials(
     market: Market,
     statements: dict[str, list[pd.DataFrame]],
+    fx: Callable[[pd.Timestamp], float] | None = None,
 ) -> pd.DataFrame:
     """Convert yfinance statements into a standard financials frame.
 
     ``statements`` maps period type ("Q"/"A") to the list of yfinance frames
     (rows = line items, columns = period end dates) for that period type.
+    ``fx`` converts the statement currency into the market's currency at a
+    period-end date (some Indian listings, e.g. Infosys, report in USD).
     """
     rows = []
     for period_type, frames in statements.items():
@@ -123,16 +131,114 @@ def statements_to_financials(
         return empty_financials()
     df = pd.DataFrame(rows)
     df["capex"] = df["capex"].astype("float64").abs()  # Yahoo reports capex as negative
+    if fx is not None:
+        rates = df["period_end"].map(fx)
+        for field in MONEY_FIELDS:
+            df[field] = pd.to_numeric(df[field], errors="coerce") * rates
     return normalize_financials(df)
+
+
+# Every field except share counts is an amount of money.
+MONEY_FIELDS = tuple(f for f in FIELDS if f != "shares_outstanding")
+
+
+class FxRates:
+    """Daily FX closes from Yahoo (e.g. USDINR=X), fetched once per pair."""
+
+    def __init__(self, download: Callable[[str], pd.Series] | None = None) -> None:
+        self._download = download or self._yahoo
+        self._series: dict[str, pd.Series] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _yahoo(pair: str) -> pd.Series:
+        raw = yf.download(pair, start="2010-01-01", auto_adjust=False, progress=False)
+        close = raw["Close"]
+        return (close.iloc[:, 0] if isinstance(close, pd.DataFrame) else close).dropna()
+
+    def converter(self, source: str, target: str) -> Callable[[pd.Timestamp], float]:
+        pair = f"{source}{target}=X"
+        with self._lock:
+            if pair not in self._series:
+                series = self._download(pair)
+                if series.empty:
+                    raise ValueError(f"no FX data for {pair}")
+                self._series[pair] = series.sort_index()
+        series = self._series[pair]
+
+        def rate(day: pd.Timestamp) -> float:
+            # Last close on or before the period end (first available if earlier).
+            i = series.index.searchsorted(pd.Timestamp(day), side="right") - 1
+            return float(series.iloc[max(i, 0)])
+
+        return rate
+
+
+class CurrencyCache:
+    """Statement currency per symbol, persisted (it almost never changes) to spare Yahoo's rate limit."""
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+        self._data: dict[str, str] = json.loads(path.read_text()) if path and path.exists() else {}
+
+    def get(self, key: str) -> str | None:
+        return self._data.get(key)
+
+    def set(self, key: str, currency: str) -> None:
+        with self._lock:
+            self._data[key] = currency
+            if self.path:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                self.path.write_text(json.dumps(self._data, sort_keys=True))
 
 
 class YFinanceFundamentalsProvider:
     source = "yfinance"
 
+    def __init__(self, fx: FxRates | None = None, currencies: CurrencyCache | None = None) -> None:
+        self.fx = fx or FxRates()
+        self.currencies = currencies or CurrencyCache()
+
     def get_financials(self, market: Market, symbol: str) -> pd.DataFrame:
         t = yf.Ticker(yf_symbol(market, symbol))
-        statements = {
-            "A": [t.income_stmt, t.balance_sheet, t.cashflow],
-            "Q": [t.quarterly_income_stmt, t.quarterly_balance_sheet, t.quarterly_cashflow],
-        }
-        return statements_to_financials(market, statements)
+        statements = _with_retry(
+            lambda: {
+                "A": [t.income_stmt, t.balance_sheet, t.cashflow],
+                "Q": [t.quarterly_income_stmt, t.quarterly_balance_sheet, t.quarterly_cashflow],
+            }
+        )
+        key = f"{market.value}:{symbol}"
+        currency = self.currencies.get(key)
+        if currency is None:
+            currency = _with_retry(lambda: statement_currency(t)) or market.currency
+            self.currencies.set(key, currency)
+        converter = None
+        if currency and currency != market.currency:
+            log.info("%s reports in %s; converting to %s", symbol, currency, market.currency)
+            converter = self.fx.converter(currency, market.currency)
+        return statements_to_financials(market, statements, converter)
+
+
+def statement_currency(ticker: yf.Ticker) -> str | None:
+    """Currency of the financial statements (may differ from the trading currency).
+
+    Errors propagate: guessing the trading currency on a failed lookup would
+    silently store, say, USD figures as INR.
+    """
+    return (ticker.info or {}).get("financialCurrency")
+
+
+RETRY_DELAYS = (5, 20, 60)  # seconds; Yahoo rate limits recover within about a minute
+
+
+def _with_retry(fn, delays=RETRY_DELAYS):
+    for delay in (*delays, None):
+        try:
+            return fn()
+        except Exception as e:
+            if delay is None or "Too Many Requests" not in str(e):
+                raise
+            log.warning("Yahoo rate limit; retrying in %ss", delay)
+            time.sleep(delay)
+    return None
