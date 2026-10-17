@@ -210,6 +210,137 @@ def cmd_research(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_daily(args: argparse.Namespace) -> int:
+    from trademare.trading.pipeline import run_daily_pipeline
+
+    config = load_config(args.config)
+    setup_logging(config.log_level)
+    for market in _markets(args, config):
+        r = run_daily_pipeline(
+            config, market, Secrets(), update_data=not args.no_update, notify=not args.no_email
+        )
+        print(
+            f"\n[{market}] session {r.session}: processed {', '.join(map(str, r.processed)) or 'nothing new'}"
+        )
+        print(f"  equity {r.equity:,.2f}  cash {r.cash:,.2f}  open positions {r.open_positions}", end="")
+        print(f"  regime {r.regime}")
+        if r.kill_switch:
+            print(f"  KILL SWITCH ACTIVE: {r.kill_reason} (re-arm with: trademare rearm -m {market})")
+        for f in r.fills:
+            print(f"  fill: {f}")
+        for sig in r.signals:
+            print(f"  new {sig.action} {sig.direction} {sig.symbol} x{sig.quantity}", end="")
+            print(f" @ {sig.entry_price:,.2f}  [{sig.id}]")
+        for n in r.notes:
+            print(f"  note: {n}")
+    return 0
+
+
+def _desk_for_signal(config, signal_id: str):
+    from trademare.data.service import DataService
+    from trademare.storage.db import SignalRow
+    from trademare.trading.desk import TradingDesk
+    from trademare.trading.pipeline import database
+
+    db = database(config)
+    with db.session() as s:
+        sig = s.get(SignalRow, signal_id)
+        if sig is None:
+            raise SystemExit(f"no signal {signal_id}")
+        market = Market(sig.market)
+    return TradingDesk(DataService(config, Secrets()), db, market, Secrets())
+
+
+def cmd_signals(args: argparse.Namespace) -> int:
+    from sqlalchemy import select
+
+    from trademare.storage.db import SignalRow
+    from trademare.trading.pipeline import database
+
+    config = load_config(args.config)
+    with database(config).session() as s:
+        q = (
+            select(SignalRow)
+            .where(SignalRow.status == "PENDING")
+            .order_by(SignalRow.market, SignalRow.score.desc())
+        )
+        rows = [r for r in s.scalars(q) if not args.market or r.market == args.market]
+    if not rows:
+        print("no pending signals")
+    for r in rows:
+        stop = f" stop {r.stop_price:,.2f}" if r.stop_price else ""
+        print(
+            f"[{r.market}] {r.id}  {r.action:<5} {r.direction:<5} {r.symbol:<12} x{r.quantity:<6} "
+            f"@ {r.entry_price:,.2f}{stop}  score {r.score:+.2f}  expires {r.expires_at:%Y-%m-%d %H:%M} UTC"
+        )
+    return 0
+
+
+def cmd_approve(args: argparse.Namespace) -> int:
+    from trademare.trading.desk import DeskError
+
+    desk = _desk_for_signal(load_config(args.config), args.signal_id)
+    try:
+        order = desk.approve(
+            args.signal_id, quantity=args.qty, limit=args.limit, stop=args.stop, note=args.note
+        )
+    except DeskError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 1
+    print(
+        f"approved: {order.side} {order.quantity} {order.symbol} {order.order_type}"
+        f"{f' @ {order.limit_price:,.2f}' if order.limit_price else ''} for {order.valid_until} [{order.id}]"
+    )
+    return 0
+
+
+def cmd_reject(args: argparse.Namespace) -> int:
+    from trademare.trading.desk import DeskError
+
+    desk = _desk_for_signal(load_config(args.config), args.signal_id)
+    try:
+        desk.reject(args.signal_id, args.note)
+    except DeskError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 1
+    print("rejected")
+    return 0
+
+
+def cmd_rearm(args: argparse.Namespace) -> int:
+    from trademare.data.service import DataService
+    from trademare.trading.desk import TradingDesk
+    from trademare.trading.pipeline import database
+
+    config = load_config(args.config)
+    market = Market(args.market)
+    TradingDesk(DataService(config, Secrets()), database(config), market, Secrets()).rearm()
+    print(f"[{market}] kill switch re-armed")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from trademare.scheduler import build_scheduler, catch_up
+    from trademare.web.app import create_app
+
+    config = load_config(args.config)
+    setup_logging(config.log_level)
+    scheduler = build_scheduler(config, args.config)
+    scheduler.start()
+    for job in scheduler.get_jobs():
+        print(f"scheduled {job.id}: next run {job.next_run_time}")
+    for market in catch_up(config, args.config):
+        print(f"[{market}] behind on sessions: catching up in the background")
+    print(f"TradeMare dashboard: http://{args.host}:{args.port}")
+    try:
+        uvicorn.run(create_app(config), host=args.host, port=args.port, log_level="warning")
+    finally:
+        scheduler.shutdown(wait=False)
+    return 0
+
+
 def cmd_web(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -280,6 +411,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research.add_argument("--set", action="append", metavar="KEY=VALUE", help="override config for this run")
     research.set_defaults(func=cmd_research)
+
+    daily = sub.add_parser("daily", help="run the daily process now: data, paper fills, signals, digest")
+    daily.add_argument("-m", "--market", choices=[m.value for m in Market])
+    daily.add_argument("--no-update", action="store_true", help="skip the data download")
+    daily.add_argument("--no-email", action="store_true", help="skip the digest")
+    daily.set_defaults(func=cmd_daily)
+
+    signals = sub.add_parser("signals", help="list pending signals")
+    signals.add_argument("-m", "--market", choices=[m.value for m in Market])
+    signals.set_defaults(func=cmd_signals)
+
+    approve = sub.add_parser("approve", help="approve a pending signal (places the order)")
+    approve.add_argument("signal_id")
+    approve.add_argument("--qty", type=int, help="override quantity")
+    approve.add_argument("--limit", type=float, help="override entry limit price")
+    approve.add_argument("--stop", type=float, help="override stop price")
+    approve.add_argument("--note")
+    approve.set_defaults(func=cmd_approve)
+
+    reject = sub.add_parser("reject", help="reject a pending signal")
+    reject.add_argument("signal_id")
+    reject.add_argument("--note")
+    reject.set_defaults(func=cmd_reject)
+
+    rearm = sub.add_parser("rearm", help="re-arm a tripped kill switch")
+    rearm.add_argument("-m", "--market", choices=[m.value for m in Market], required=True)
+    rearm.set_defaults(func=cmd_rearm)
+
+    serve = sub.add_parser("serve", help="dashboard + scheduled daily runs (keep this running)")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.set_defaults(func=cmd_serve)
 
     web = sub.add_parser("web", help="run the local dashboard")
     web.add_argument("--host", default="127.0.0.1")

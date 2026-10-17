@@ -120,6 +120,11 @@ class MarketConfig(_Strict):
     )
     strategy_mode: StrategyMode = StrategyMode.SWING
     factors: list[str] = Field(default_factory=list, description="Factor names for strategy_mode: factor")
+    daily_run_time: str = Field(
+        "17:00",
+        pattern=r"^\d{2}:\d{2}$",
+        description="Local market time (HH:MM) for the daily job, after close",
+    )
     min_avg_traded_value: float = Field(
         0.0, ge=0, description="Skip symbols whose 20-day average traded value is below this"
     )

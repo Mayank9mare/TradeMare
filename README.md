@@ -58,9 +58,23 @@ uv run trademare backtest -m US                                   # last 5 years
 uv run trademare backtest -m IN --set strategy.min_composite_score=0.5   # try a variation
 uv run trademare research -m US --horizon 20                      # do the scores predict returns?
 
-# Dashboard (local only)
+# Daily trading (paper unless a market is validated)
+uv run trademare serve                     # dashboard + daily job after each close (keep running)
+uv run trademare daily                     # run the daily process now instead
+uv run trademare signals                   # list pending signals
+uv run trademare approve <id> [--qty N]    # or use the Signals page in the dashboard
+uv run trademare rearm -m IN               # re-arm a tripped kill switch
+
+# Dashboard only (no scheduler)
 uv run trademare web                       # http://127.0.0.1:8000
 ```
+
+**Daily flow:** after each market closes, the job refreshes data, fills paper orders against that day's
+prices, updates stops, records equity, checks the kill switch, and creates new signals. You approve them
+on the **Signals** page (or by CLI) before the next session. Entries become limit orders with a protective
+stop, and exits fill at the next open. A digest is emailed if SMTP is configured in `.env` (Gmail app
+password); otherwise it is saved to `data/outbox/`. Set `DASHBOARD_PASSWORD` in `.env` before exposing the
+dashboard beyond your Mac.
 
 US fundamentals come from SEC EDGAR, which requires a contact in `.env`:
 `SEC_USER_AGENT="TradeMare you@example.com"`. Without it, the engine falls back to yfinance.
@@ -100,9 +114,9 @@ Secrets such as broker API keys and SMTP credentials go in `.env`, which is neve
 | 1 ✅ | Data layer (prices and fundamentals for India and the US) |
 | 2 ✅ | Technical and fundamental analysts, aggregator |
 | 3 ✅ | Backtester with costs, in/out-of-sample split, signal research ([v1 results](docs/research/2026-10-17-strategy-v1-baseline.md)) |
-| 4 | Risk and budget manager, kill switch |
-| 5 🔄 | Live signals: email and dashboard, no orders (data dashboard already built) |
-| 6 | Paper execution with the approve flow |
+| 4 ✅ | Risk and budget manager, kill switch |
+| 5 ✅ | Daily signals: email digest, dashboard approve/reject, scheduler |
+| 6 ✅ | Paper execution with the approve flow |
 | 7 | Live trading with a small budget (Zerodha / Dhan / Alpaca) |
 | 8 | LLM sentiment analyst |
 

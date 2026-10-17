@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import secrets as pysecrets
 from datetime import date
 from pathlib import Path
+from typing import Annotated
 
 import pandas as pd
 import yaml
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -22,26 +25,42 @@ from trademare.core.models import Market
 from trademare.data.fields import FIELDS
 from trademare.data.service import DataService
 from trademare.data.universe import load_universe
+from trademare.storage.db import Database
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
 from trademare.web.snapshot import SnapshotCache
+from trademare.web.trading_routes import register_trading_routes
 
 HERE = Path(__file__).parent
 STATEMENT_ROWS = [f for f in FIELDS if f != "shares_outstanding"] + ["shares_outstanding"]
 
 
-def create_app(config: AppConfig | None = None, service: DataService | None = None) -> FastAPI:
+def create_app(
+    config: AppConfig | None = None,
+    service: DataService | None = None,
+    db: Database | None = None,
+    secrets: Secrets | None = None,
+) -> FastAPI:
     config = config or load_config()
-    service = service or DataService(config, Secrets())
+    secrets = secrets or Secrets()
+    service = service or DataService(config, secrets)
+    db = db or Database(config.database_url)
     snapshots = SnapshotCache(service)
 
-    app = FastAPI(title="TradeMare", version=__version__, docs_url=None, redoc_url=None)
+    app = FastAPI(
+        title="TradeMare",
+        version=__version__,
+        docs_url=None,
+        redoc_url=None,
+        dependencies=[Depends(basic_auth(secrets))],
+    )
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     env = templates.env
     env.filters.update(money=formatting.money, pct=formatting.pct, num=formatting.num, tone=formatting.tone)
     env.globals.update(version=__version__, markets=list(config.markets))
 
+    register_trading_routes(app, templates, config, service, db, secrets)
     scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}
 
     def latest_scan(market: Market) -> ScanResult | None:
@@ -240,6 +259,23 @@ def create_app(config: AppConfig | None = None, service: DataService | None = No
         return templates.TemplateResponse(request, "settings.html", {"config_yaml": dumped})
 
     return app
+
+
+# Module level: annotations are resolved from module globals (from __future__ import annotations).
+_basic = HTTPBasic(auto_error=False)
+
+
+def basic_auth(secrets: Secrets):
+    """HTTP Basic auth (any username) when DASHBOARD_PASSWORD is set; open otherwise (localhost use)."""
+    password = secrets.dashboard_password.get_secret_value() if secrets.dashboard_password else None
+
+    def check(credentials: Annotated[HTTPBasicCredentials | None, Depends(_basic)]) -> None:
+        if password is None:
+            return
+        if credentials is None or not pysecrets.compare_digest(credentials.password, password):
+            raise HTTPException(401, "authentication required", headers={"WWW-Authenticate": "Basic"})
+
+    return check
 
 
 def _line(times: list[str], values: pd.Series) -> list[dict]:

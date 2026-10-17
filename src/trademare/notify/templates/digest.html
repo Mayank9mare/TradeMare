@@ -1,0 +1,32 @@
+<div style="font-family:-apple-system,Segoe UI,sans-serif;max-width:680px;color:#16191d">
+<h2 style="margin:0 0 4px">TradeMare daily digest</h2>
+<p style="color:#6b7280;margin:0 0 16px">{{ generated }}</p>
+{% for r in reports %}
+<h3 style="margin:20px 0 6px">{{ "India" if r.market.value == "IN" else "US" }} · session {{ r.session }}</h3>
+{% if r.kill_switch %}<p style="background:#fde8e8;color:#9b1c1c;padding:8px;border-radius:6px">
+  <b>Kill switch active:</b> {{ r.kill_reason }}. New entries are blocked until you re-arm it.</p>{% endif %}
+<p style="margin:4px 0">Equity <b>{{ r.equity | money(r.market, False) }}</b>
+  {% if r.previous_equity %}({{ (r.equity / r.previous_equity - 1) | pct(2, True) }} on the day){% endif %}
+  · cash {{ r.cash | money(r.market, False) }} · {{ r.open_positions }} open positions
+  {% if r.regime %}· regime {{ r.regime.replace("_", "-") }}{% endif %}</p>
+{% if r.fills %}<p style="margin:8px 0 2px"><b>Fills</b></p><ul style="margin:0">
+  {% for f in r.fills %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
+{% if r.signals %}
+<p style="margin:12px 0 4px"><b>New signals — approve before the next session</b></p>
+<table style="border-collapse:collapse;width:100%;font-size:14px">
+  <tr style="text-align:left;color:#6b7280"><th>Action</th><th>Symbol</th><th style="text-align:right">Qty</th>
+    <th style="text-align:right">Price</th><th style="text-align:right">Stop</th><th>Why</th></tr>
+  {% for s in r.signals %}
+  <tr style="border-top:1px solid #e3e6ea">
+    <td>{{ s.action }} {{ s.direction }}</td><td><b>{{ s.symbol }}</b></td><td style="text-align:right">{{ s.quantity }}</td>
+    <td style="text-align:right">{{ s.entry_price | money(r.market, False) }}</td>
+    <td style="text-align:right">{{ s.stop_price | money(r.market, False) }}</td>
+    <td style="font-size:12px;color:#6b7280">{% for k, v in s.reasons.items() %}{{ v[:2] | join("; ") }}{% endfor %}</td>
+  </tr>{% endfor %}
+</table>
+<p><a href="{{ base_url }}/signals">Review and approve in the dashboard →</a></p>
+{% elif r.rebalance_day %}<p style="color:#6b7280">No new signals.</p>{% endif %}
+{% for n in r.notes %}<p style="color:#6b7280;font-size:12px;margin:2px 0">{{ n }}</p>{% endfor %}
+{% endfor %}
+<p style="color:#9ca3af;font-size:12px;margin-top:24px">Paper trading unless a market is validated. Not financial advice.</p>
+</div>

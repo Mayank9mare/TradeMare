@@ -115,7 +115,7 @@ class TradingDesk:
         upto = bars.loc[: pd.Timestamp(day)]
         return float(upto["close"].iloc[-1]) if len(upto) else None
 
-    def _state(self, s: Session):
+    def account_state(self, s: Session):
         return self.db.market_state(s, self.market.value, starting_cash=self.cfg.budget)
 
     def _orders(self, s: Session, **filters) -> list[OrderRow]:
@@ -149,7 +149,7 @@ class TradingDesk:
 
     def equity(self, s: Session) -> tuple[float, float, float]:
         """(equity, cash, gross exposure) at the latest marked prices."""
-        state = self._state(s)
+        state = self.account_state(s)
         value = gross = 0.0
         for p in self.db.open_positions(s, self.market.value):
             px = p.last_price or p.entry_price
@@ -182,7 +182,7 @@ class TradingDesk:
                     f"{self.market} is not validated: live orders are blocked (set validated: true only "
                     "after the strategy passes its out-of-sample test)"
                 )
-            state = self._state(s)
+            state = self.account_state(s)
             valid_until = self.clock.next_session(sig.scan_date)
 
             if sig.action == SignalAction.ENTRY.value:
@@ -249,7 +249,7 @@ class TradingDesk:
 
     def rearm(self) -> None:
         with self.db.session() as s:
-            state = self._state(s)
+            state = self.account_state(s)
             equity, _, _ = self.equity(s)
             state.kill_switch, state.kill_reason, state.kill_at = False, None, None
             state.peak_equity = equity  # otherwise an ongoing drawdown would re-trip immediately
@@ -309,7 +309,7 @@ class TradingDesk:
     def process_session(self, s: Session, day: date, report: DailyReport) -> None:
         if not self.broker.simulated:
             raise NotImplementedError("live order sync arrives with the broker adapters (phase 7)")
-        state = self._state(s)
+        state = self.account_state(s)
         fresh_entries: dict[int, float] = {}
 
         def eligible(o: OrderRow) -> bool:
@@ -483,7 +483,7 @@ class TradingDesk:
                     o.trigger_price = pos.stop_price
 
     def _snapshot(self, s: Session, day: date, report: DailyReport) -> None:
-        state = self._state(s)
+        state = self.account_state(s)
         equity, cash, gross = self.equity(s)
         prev = s.scalars(
             select(EquityRow)
@@ -524,6 +524,13 @@ class TradingDesk:
         factor_mode = self.cfg.strategy_mode is StrategyMode.FACTOR
         frequency = self.config.strategy.factor_rebalance if factor_mode else Rebalance.DAILY
         report.rebalance_day = is_rebalance_day(self.clock.previous_session(day), day, frequency)
+        never_signalled = (
+            s.scalars(select(SignalRow.id).where(SignalRow.market == self.market.value).limit(1)).first()
+            is None
+        )
+        if not report.rebalance_day and never_signalled and not self.db.open_positions(s, self.market.value):
+            report.rebalance_day = True  # first run of an empty account: build the initial portfolio now
+            report.notes.append("initial portfolio build (first run of an empty account)")
         ctx = ScanContext(self.service, self.market)
         scan = ctx.evaluate(day)
         save_scan(self.service, scan)
@@ -532,8 +539,9 @@ class TradingDesk:
             report.notes.append(f"not a rebalance day ({frequency}): no new signals; stops stay active")
             return scan
 
-        state = self._state(s)
-        expires = self.clock.session_close(self.clock.next_session(day))
+        state = self.account_state(s)
+        # Store UTC: SQLite drops tz info and values are read back as UTC.
+        expires = self.clock.session_close(self.clock.next_session(day)).astimezone(UTC)
         composites = {x.symbol: x.composite for x in scan.scores}
         positions = self.db.open_positions(s, self.market.value)
         exiting = {o.position_id for o in self._orders(s, purpose="exit", status=OPEN)}
@@ -642,7 +650,7 @@ class TradingDesk:
         now = now or datetime.now(UTC)
         report = DailyReport(market=self.market, session=day)
         with self.db.session() as s:
-            state = self._state(s)
+            state = self.account_state(s)
             sessions = (
                 self.clock.sessions_between(state.last_processed, day) if state.last_processed else [day]
             )

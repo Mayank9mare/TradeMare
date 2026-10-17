@@ -102,3 +102,14 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 .analysis-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .components { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin: .3rem 0 .5rem; color: var(--muted); font-size: .8rem; }
 .analysis h3 { display: flex; align-items: center; gap: .6rem; }
+
+/* Signals & portfolio */
+.flash { padding: .7rem 1rem; border-radius: 8px; margin-bottom: 1rem; border: 1px solid; }
+.flash.ok { color: var(--up); border-color: var(--up); }
+.flash.bad { color: var(--down); border-color: var(--down); }
+.flash form { margin-left: .75rem; }
+.approve-form { display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center; margin-top: .9rem; }
+.approve-form label { display: flex; gap: .35rem; align-items: center; color: var(--muted); font-size: .85rem; }
+.approve-form input[type=number] { width: 8.5rem; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .35rem .5rem; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.idea.expired { opacity: .55; }

@@ -20,6 +20,7 @@ markets:
     universe: nifty500
     universe_top_n: 200        # each day, only the 200 most-traded names (reduces survivorship bias)
     strategy_mode: factor      # v2 paper candidate — see docs/research/2026-10-17-strategy-v2-plan.md
+    daily_run_time: "17:00"    # IST, daily job (data update, paper fills, signals, email) on trading days
     factors: [mom_12_1, earnings_yield]
     price_source: yfinance
     fundamentals_source: yfinance  # filing dates estimated from SEBI reporting deadlines
@@ -67,6 +68,7 @@ markets:
     price_source: yfinance
     fundamentals_source: edgar     # point-in-time via SEC filing dates; needs SEC_USER_AGENT in .env
     benchmark: "^GSPC"             # S&P 500 index
+    daily_run_time: "17:30"        # New York time
     min_avg_traded_value: 20000000   # $20M/day average dollar volume
     slippage_bps: 5
     budget: 1000               # USD

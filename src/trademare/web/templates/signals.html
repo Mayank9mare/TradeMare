@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "_macros.html" import direction_badge, score_bar %}
+{% block title %}Signals · TradeMare{% endblock %}
+{% block content %}
+<h1>Signals</h1>
+{% include "_flash.html" %}
+<p class="muted">Approving places an order for the next session: entries as a limit order at the signal price
+  (a protective stop is placed once filled), exits at the next open.
+  {% for m, c in config.markets.items() %}<b>{{ m.value }}</b>: {{ "validated" if c.validated else "paper only (not validated)" }}{{ " · " if not loop.last }}{% endfor %}</p>
+
+{% if not pending %}
+<div class="card"><p>No pending signals. The daily job creates them after each market closes (<code>trademare daily</code> or <code>trademare serve</code>).</p></div>
+{% endif %}
+<div class="ideas">
+{% for s in pending %}{% set m = s.market %}
+  <article class="card idea{{ ' expired' if s.is_expired }}">
+    <div class="idea-head">
+      <div>
+        <span class="badge">{{ m }}</span> <b>{{ s.action }}</b>
+        <a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b class="sym">{{ s.symbol }}</b></a> {{ direction_badge(s.direction) }}
+        <div class="sub">scan {{ s.scan_date }} · expires {{ s.expires_at.strftime("%Y-%m-%d %H:%M") }} UTC{% if s.is_expired %} · <b class="down">expired</b>{% endif %}</div>
+      </div>
+      <div class="idea-score">{{ score_bar(s.score) }}</div>
+    </div>
+    <ul class="reasons">{% for k, rs in s.reasons.items() %}{% for r in rs[:4] %}<li>{{ r }}</li>{% endfor %}{% endfor %}</ul>
+    {% if not s.is_expired %}
+    <form method="post" action="/signals/{{ s.id }}/approve" class="approve-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Qty <input type="number" name="quantity" min="1" step="1" value="{{ s.quantity }}"></label>
+      {% if s.action == "ENTRY" %}
+      <label>Limit <input type="number" name="limit" step="any" value="{{ '%.2f' | format(s.entry_price) }}"></label>
+      <label>Stop <input type="number" name="stop" step="any" value="{{ '%.2f' | format(s.stop_price) }}"></label>
+      <span class="sub">value {{ (s.quantity * s.entry_price) | money(m, False) }} · risk {{ (s.quantity * (s.entry_price - s.stop_price) | abs) | money(m, False) }}</span>
+      {% else %}
+      <span class="sub">exit at next open · last {{ s.entry_price | money(m, False) }} · {{ s.exit_reason }}</span>
+      {% endif %}
+      <button type="submit" class="primary">Approve</button>
+      <button type="submit" formaction="/signals/{{ s.id }}/reject">Reject</button>
+    </form>
+    {% endif %}
+  </article>
+{% endfor %}
+</div>
+
+{% if recent %}
+<h2>Recent decisions</h2>
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Created</th><th>Market</th><th>Action</th><th>Symbol</th><th class="num">Qty</th><th class="num">Price</th><th>Status</th><th>Decided</th></tr></thead>
+  <tbody>{% for s in recent %}
+    <tr><td>{{ s.created_at.strftime("%Y-%m-%d %H:%M") }}</td><td>{{ s.market }}</td><td>{{ s.action }} {{ s.direction }}</td>
+      <td><a href="/m/{{ s.market }}/{{ s.symbol | urlencode }}">{{ s.symbol }}</a></td><td class="num">{{ s.quantity }}</td>
+      <td class="num">{{ s.entry_price | num(2) }}</td><td>{{ s.status }}</td><td class="sub">{{ s.decided_at.strftime("%Y-%m-%d %H:%M") if s.decided_at else "—" }}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% endif %}
+{% endblock %}

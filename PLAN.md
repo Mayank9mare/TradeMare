@@ -178,9 +178,9 @@ tests/
 | **1. Data layer** ✅ | Price and fundamental providers for US and India, local cache, universe lists | 5 years of daily bars and fundamentals stored for both universes |
 | **2. Analysts** ✅ | Technical and fundamental analysts, regime filter, aggregator | Signals for any `asof` date with readable reasons |
 | **3. Backtester** ✅ (strategy v1 fails the bar; see docs/research) | Daily event loop reusing the phase 2 code, costs, metrics (CAGR, Sharpe, max drawdown, win rate), walk-forward split | A report for each market, beating buy-and-hold of the index on a risk-adjusted basis, out of sample |
-| **4. Risk & budget** | Sizing, caps, kill switch, expiry, plus their effect in backtests | Hard limits are never breached (property tests) |
-| **5. Signals live (no orders)** 🔄 dashboard foundation built early (data views) | Scheduler, email digest, dashboard listing signals and positions | Two weeks of daily emails delivered correctly |
-| **6. Paper execution** | Approve flow → Alpaca paper and the internal PaperBroker for India, reconciliation, journal | 4–6 weeks of paper trading tracking the backtest |
+| **4. Risk & budget** ✅ | Sizing, caps, kill switch, expiry, plus their effect in backtests | Hard limits are never breached (property tests) |
+| **5. Signals live (no orders)** ✅ | Scheduler, email digest, dashboard listing signals and positions | Two weeks of daily emails delivered correctly |
+| **6. Paper execution** ✅ (paper trading running from 2026-10-17) | Approve flow → Alpaca paper and the internal PaperBroker for India, reconciliation, journal | 4–6 weeks of paper trading tracking the backtest |
 | **7. Live, small** | Zerodha and Alpaca live adapters, static IP VPS, a small budget | Clean reconciliation and no limit breaches for a month |
 | **8. Sentiment/LLM** | News ingestion and LLM sentiment with veto, plus an A/B test of its effect in paper trading | Kept only if it improves results |
 | Later | Optional automatic execution within limits, more strategies, ML ranking, tax/P&L export | |
