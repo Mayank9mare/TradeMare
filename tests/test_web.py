@@ -87,3 +87,48 @@ def test_formatting():
     assert money(3.2e9, Market.US) == "$3.2B"
     assert money(None, Market.US) == "—"
     assert pct(0.1234, 1, True) == "+12.3%"
+
+
+def test_filters_treat_missing_values_as_blank():
+    from jinja2 import Environment
+
+    from trademare.web.formatting import num, tone
+
+    missing = Environment().undefined()
+    assert pct(missing) == "—" and num(float("nan")) == "—" and tone(missing) == ""
+    assert money(None, Market.US) == "—"
+
+
+def test_backtest_list_tolerates_runs_without_splits(tmp_path, monkeypatch):
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from trademare.config import Secrets
+    from trademare.storage.db import Database
+
+    monkeypatch.chdir(tmp_path)
+    config = load_config(REPO_CONFIG).model_copy(deep=True)
+    config.data.cache_dir = str(tmp_path / "data" / "cache")
+    run = tmp_path / "data" / "backtests" / "IN-x"
+    run.mkdir(parents=True)
+    summary = {"strategy": {"cagr": 0.05}, "benchmark": {}, "exit_reasons": {}, "by_year": {}}
+    meta = {
+        "id": "IN-x",
+        "market": "IN",
+        "start": "2025-01-01",
+        "end": "2025-12-31",
+        "created_at": "2026-01-01T00:00:00",
+        "initial_capital": 1.0,
+        "final_equity": 1.0,
+        "overrides": [],
+        "open_positions": 0,
+        "summary": summary,
+    }
+    (run / "summary.json").write_text(json.dumps(meta))
+    secrets = Secrets(_env_file=None)
+    app = create_app(
+        config, DataService(config, secrets), Database("sqlite:///:memory:"), secrets, config_path=REPO_CONFIG
+    )
+    page = TestClient(app).get("/backtests")
+    assert page.status_code == 200 and "+5.0%" in page.text

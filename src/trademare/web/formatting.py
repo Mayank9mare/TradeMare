@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
+import math
+
+from jinja2 import Undefined
+
 from trademare.core.models import Market
 
 DASH = "—"
 
 
+def _missing(value: object) -> bool:
+    """None, NaN, or a key absent from a template's data (Jinja Undefined) all render as a dash."""
+    if value is None or isinstance(value, Undefined):
+        return True
+    return isinstance(value, float) and math.isnan(value)
+
+
 def money(value: float | None, market: Market | str, compact: bool = True) -> str:
-    if value is None:
+    if _missing(value):
         return DASH
     market = Market(market)
     sign = "-" if value < 0 else ""
@@ -26,17 +37,17 @@ def money(value: float | None, market: Market | str, compact: bool = True) -> st
 
 
 def pct(value: float | None, digits: int = 1, signed: bool = False) -> str:
-    if value is None:
+    if _missing(value):
         return DASH
     return f"{value * 100:+.{digits}f}%" if signed else f"{value * 100:.{digits}f}%"
 
 
 def num(value: float | None, digits: int = 1) -> str:
-    return DASH if value is None else f"{value:,.{digits}f}"
+    return DASH if _missing(value) else f"{value:,.{digits}f}"
 
 
 def tone(value: float | None) -> str:
     """CSS class for gains/losses."""
-    if value is None or value == 0:
+    if _missing(value) or value == 0:
         return ""
     return "up" if value > 0 else "down"
