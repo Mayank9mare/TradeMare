@@ -16,7 +16,9 @@ from trademare.config.secrets import Secrets
 from trademare.core.models import Direction, Market
 from trademare.data.service import DataService
 from trademare.storage.db import Database, EquityRow, EventRow, OrderRow, PositionRow, SignalRow
+from trademare.strategy.evidence import FUND_METRICS, TECH_METRICS
 from trademare.trading.desk import DeskError, TradingDesk
+from trademare.web.overview_data import sparkline
 
 
 def register_trading_routes(
@@ -57,6 +59,11 @@ def register_trading_routes(
     def signals_page(request: Request, msg: str | None = None, err: str | None = None):
         now = datetime.now(UTC)
         with db.session() as s:
+            pending_rows = s.scalars(select(SignalRow).where(SignalRow.status == "PENDING"))
+            needs = {Market(sig.market) for sig in pending_rows if not sig.evidence}
+        for market in needs:  # signals created before evidence was recorded
+            desk(market).ensure_evidence()
+        with db.session() as s:
             pending = list(
                 s.scalars(
                     select(SignalRow)
@@ -79,10 +86,24 @@ def register_trading_routes(
                 else sig.expires_at
             )
             sig.is_expired = bool(exp and exp < now)  # type: ignore[attr-defined]
+        charts = {}
+        for sig in pending:  # 6-month price line up to the scan date
+            bars = service.store.read_bars(Market(sig.market), sig.symbol)
+            if bars is not None and len(bars):
+                charts[sig.id] = sparkline(bars["close"].loc[: str(sig.scan_date)].iloc[-126:])
         return templates.TemplateResponse(
             request,
             "signals.html",
-            {"pending": pending, "recent": recent, "msg": msg, "err": err, "config": config},
+            {
+                "pending": pending,
+                "recent": recent,
+                "msg": msg,
+                "err": err,
+                "config": config,
+                "charts": charts,
+                "tech_metrics": TECH_METRICS,
+                "fund_metrics": FUND_METRICS,
+            },
         )
 
     @app.post("/signals/{signal_id}/approve")

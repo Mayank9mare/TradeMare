@@ -23,6 +23,7 @@
       <div class="idea-score">{{ score_bar(s.score) }}</div>
     </div>
     <ul class="reasons">{% for k, rs in s.reasons.items() %}{% for r in rs[:4] %}<li>{{ r }}</li>{% endfor %}{% endfor %}</ul>
+    {% include "_explain.html" %}
     {% if not s.is_expired %}
     <form method="post" action="/signals/{{ s.id }}/approve" class="approve-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

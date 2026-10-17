@@ -54,6 +54,7 @@ def test_approve_via_form(tmp_path, monkeypatch):
     client, db = make_app(tmp_path, monkeypatch)
     page = client.get("/signals")
     assert page.status_code == 200 and "INFY" in page.text and "12-1 month momentum" in page.text
+    assert "Explain this signal" in page.text  # evidence panel (backfilled; no price data here)
     r = client.post(
         "/signals/sig1/approve", data={"csrf_token": token(page.text), "quantity": 5}, follow_redirects=False
     )

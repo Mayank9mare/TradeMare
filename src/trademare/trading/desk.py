@@ -52,6 +52,7 @@ from trademare.execution.brokers import BrokerError, LoginRequired, OrderUpdate,
 from trademare.execution.fills import Bar, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.manager import Exposure, RiskManager
 from trademare.storage.db import Database, EquityRow, OrderRow, PositionRow, SignalRow
+from trademare.strategy.evidence import build_evidence, risk_evidence
 from trademare.strategy.scanner import ScanContext, ScanResult, is_rebalance_day, save_scan
 
 log = logging.getLogger(__name__)
@@ -696,6 +697,14 @@ class TradingDesk:
         scan = ctx.evaluate(day)
         save_scan(self.service, scan)
         report.regime = scan.regime.label.value
+        fund_scores: dict | None = None
+
+        def evidence_for(symbol: str, risk: dict | None = None) -> dict:
+            nonlocal fund_scores
+            if fund_scores is None:  # universe-wide ranking, computed once per run
+                fund_scores = ctx.fundamental_scores(day)
+            return build_evidence(ctx, symbol, day, fund_scores, risk)
+
         if not report.rebalance_day:
             report.notes.append(f"not a rebalance day ({frequency}): no new signals; stops stay active")
             return scan
@@ -715,7 +724,9 @@ class TradingDesk:
             if c is not None and (
                 (long and c <= scan.exit_long_below) or (not long and c >= scan.exit_short_above)
             ):
-                report.signals.append(self._exit_signal(s, pos, day, expires, "signal", c))
+                report.signals.append(
+                    self._exit_signal(s, pos, day, expires, "signal", c, evidence_for(pos.symbol))
+                )
             else:
                 staying.append(pos)
         max_positions = self.risk.max_positions(scan.regime.label)
@@ -725,7 +736,9 @@ class TradingDesk:
             weakest = sorted(staying, key=lambda p: sign[p.id] * (composites.get(p.symbol) or 0.0))
             for pos in weakest[:excess]:
                 report.signals.append(
-                    self._exit_signal(s, pos, day, expires, "regime", composites.get(pos.symbol))
+                    self._exit_signal(
+                        s, pos, day, expires, "regime", composites.get(pos.symbol), evidence_for(pos.symbol)
+                    )
                 )
                 staying.remove(pos)
 
@@ -781,6 +794,17 @@ class TradingDesk:
                 score=idea.composite,
                 confidence=idea.confidence,
                 reasons=reasons,
+                evidence=evidence_for(
+                    idea.symbol,
+                    risk_evidence(
+                        idea.levels.entry,
+                        idea.levels.stop,
+                        idea.levels.target,
+                        qty,
+                        self.risk.capital(equity),
+                        self.cfg,
+                    ),
+                ),
                 status=SignalStatus.PENDING.value,
                 scan_date=day,
                 expires_at=expires,
@@ -801,7 +825,14 @@ class TradingDesk:
         return scan
 
     def _exit_signal(
-        self, s: Session, pos: PositionRow, day: date, expires: datetime, reason: str, score: float | None
+        self,
+        s: Session,
+        pos: PositionRow,
+        day: date,
+        expires: datetime,
+        reason: str,
+        score: float | None,
+        evidence: dict | None = None,
     ) -> SignalRow:
         sig = SignalRow(
             id=uuid.uuid4().hex,
@@ -817,6 +848,7 @@ class TradingDesk:
             confidence=1.0,
             reasons={"exit": [f"{reason}: composite {score:+.2f}" if score is not None else reason]},
             exit_reason=reason,
+            evidence=evidence,
             position_id=pos.id,
             status=SignalStatus.PENDING.value,
             scan_date=day,
@@ -824,6 +856,31 @@ class TradingDesk:
         )
         s.add(sig)
         return sig
+
+    def ensure_evidence(self) -> int:
+        """Attach evidence to pending signals created before evidence was recorded."""
+        with self.db.session() as s:
+            q = select(SignalRow).where(SignalRow.market == self.market.value, SignalRow.status == "PENDING")
+            # Checked in Python: older rows may hold JSON null rather than SQL NULL.
+            missing = [sig for sig in s.scalars(q) if not sig.evidence]
+            if not missing:
+                return 0
+            ctx = ScanContext(self.service, self.market)
+            equity, _, _ = self.equity(s)
+            capital = self.risk.capital(equity)
+            scores_by_day: dict[date, dict] = {}
+            for sig in missing:
+                if sig.scan_date not in scores_by_day:
+                    scores_by_day[sig.scan_date] = ctx.fundamental_scores(sig.scan_date)
+                risk = None
+                if sig.action == SignalAction.ENTRY.value:
+                    risk = risk_evidence(
+                        sig.entry_price, sig.stop_price, sig.target_price, sig.quantity, capital, self.cfg
+                    )
+                sig.evidence = build_evidence(
+                    ctx, sig.symbol, sig.scan_date, scores_by_day[sig.scan_date], risk
+                )
+            return len(missing)
 
     # ------------------------------------------------------------------ daily
     def run_daily(

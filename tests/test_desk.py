@@ -398,3 +398,28 @@ def test_sentiment_veto_skips_entry_and_is_logged(desk, tmp_path):
     assert entry_signals(desk)[0].reasons["sentiment"] == ["Fine."]
     with desk.db.session() as s:
         assert s.query(EventRow).filter_by(kind="sentiment_veto").count() == 1
+
+
+def test_signals_carry_technical_fundamental_and_risk_evidence(desk):
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    ev = sig.evidence
+    assert ev["asof"] == DAY0.isoformat()
+    tech = ev["technical"]
+    assert set(tech["components"]) == {"trend", "momentum", "setup", "volume"}
+    assert tech["metrics"]["close"] == pytest.approx(sig.entry_price, rel=0.01)
+    assert tech["metrics"]["from_52w_high"] <= 0
+    assert ev["fundamental"] is None  # this fixture has no financial statements
+    risk = ev["risk"]
+    assert risk["risk_amount"] == pytest.approx(sig.quantity * (sig.entry_price - sig.stop_price), rel=1e-6)
+    assert 0 < risk["risk_pct"] <= desk.cfg.risk_per_trade_pct / 100 + 1e-9
+
+
+def test_ensure_evidence_backfills_old_signals(desk):
+    desk.run_daily(DAY0)
+    with desk.db.session() as s:
+        for sig in s.query(SignalRow).all():
+            sig.evidence = None
+    assert desk.ensure_evidence() == len(entry_signals(desk))
+    assert all(sig.evidence["technical"] for sig in entry_signals(desk))
+    assert desk.ensure_evidence() == 0

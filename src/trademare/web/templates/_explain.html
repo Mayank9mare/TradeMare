@@ -1,0 +1,74 @@
+{# Expandable evidence for one signal. Expects: s (SignalRow), m (market code), charts, tech_metrics, fund_metrics. #}
+{% from "_macros.html" import score_bar, spark %}
+{% set ev = s.evidence or {} %}{% set t = ev.technical %}{% set f = ev.fundamental %}{% set r = ev.risk %}
+{% set tech_help = {
+  "trend": "price vs its 50- and 200-day averages, and the 200-day slope",
+  "momentum": "6-month return vs the index and 3-month return",
+  "setup": "breakout, pullback or overextension right now",
+  "volume": "buying vs selling volume over 20 days",
+} %}
+{% set fund_help = {
+  "quality": "ROE, ROA and margins vs sector peers",
+  "health": "debt, liquidity and interest cover vs peers",
+  "growth": "revenue and earnings growth vs peers",
+  "value": "earnings, cash-flow and book yield vs peers",
+} %}
+<details class="explain">
+  <summary>
+    <svg class="chev" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    <span>Explain this signal</span>
+    <span class="sub">technical · fundamental · risk{% if ev.asof %} · as of {{ ev.asof }}{% endif %}</span>
+  </summary>
+  {% if not ev %}
+  <p class="empty">Evidence was not recorded for this signal.</p>
+  {% else %}
+  <div class="explain-body">
+    <section class="evidence">
+      <div class="evidence-head"><h4>Technical</h4>{% if t and t.score is not none %}{{ score_bar(t.score) }}{% endif %}</div>
+      {% if t %}
+        {% if t.components %}
+        <table class="factor-table"><tbody>
+        {% for k, v in t.components.items() %}<tr><td><b>{{ k | capitalize }}</b><div class="sub">{{ tech_help.get(k, "") }}</div></td><td class="num">{{ score_bar(v) }}</td></tr>{% endfor %}
+        </tbody></table>
+        {% endif %}
+        {% if t.reasons %}<ul class="reasons">{% for x in t.reasons %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+        <dl class="metrics">
+        {% for key, spec in tech_metrics.items() %}{% if t.metrics[key] is not none %}<dt>{{ spec[0] }}</dt><dd class="{{ t.metrics[key] | tone if spec[1] == 'pct' and key not in ('atr_pct',) else '' }}">{{ t.metrics[key] | metric(spec[1], m) }}</dd>{% endif %}{% endfor %}
+        </dl>
+      {% else %}<p class="empty">No technical data on the scan date.</p>{% endif %}
+    </section>
+
+    <section class="evidence">
+      <div class="evidence-head"><h4>Fundamental</h4>{% if f and f.score is not none %}{{ score_bar(f.score) }}{% endif %}</div>
+      {% if f %}
+        {% if f.factors %}
+        <table class="factor-table"><tbody>
+        {% for k, v in f.factors.items() %}<tr><td><b>{{ k | capitalize }}</b><div class="sub">{{ fund_help.get(k, "") }}</div></td><td class="num">{% if v is none %}<span class="faint">no data</span>{% else %}{{ score_bar(v) }}{% endif %}</td></tr>{% endfor %}
+        </tbody></table>
+        {% endif %}
+        {% if f.reasons %}<ul class="reasons">{% for x in f.reasons %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
+        <dl class="metrics">
+        {% for key, spec in fund_metrics.items() %}{% if f.metrics[key] is not none %}<dt>{{ spec[0] }}</dt><dd class="{{ f.metrics[key] | tone if key in ('earnings_growth', 'revenue_growth') else '' }}">{{ f.metrics[key] | metric(spec[1], m) }}</dd>{% endif %}{% endfor %}
+        </dl>
+        <p class="sub">Source: {{ f.source }} · scores rank the company against its sector peers (−1 worst, +1 best).</p>
+      {% else %}<p class="empty">No fundamental data for this company yet.</p>{% endif %}
+    </section>
+
+    <section class="evidence">
+      <div class="evidence-head"><h4>Price, 6 months</h4></div>
+      {% if charts.get(s.id) %}{{ spark(charts[s.id], s.symbol) }}{% else %}<p class="empty">No price history cached.</p>{% endif %}
+      {% if r %}
+      <div class="evidence-head" style="margin-top:16px"><h4>Risk and sizing</h4></div>
+      <dl class="metrics">
+        <dt>Position value</dt><dd>{{ r.position_value | money(m, False) }}{% if r.position_pct is not none %} <span class="faint">({{ r.position_pct | pct(1) }} of capital)</span>{% endif %}</dd>
+        {% if r.risk_per_share is defined %}
+        <dt>Stop distance</dt><dd>{{ r.risk_per_share | money(m, False) }} <span class="faint">({{ r.stop_distance | pct(1) }}, {{ r.stop_method }} stop)</span></dd>
+        <dt>Loss if stopped</dt><dd class="down">{{ r.risk_amount | money(m, False) }} <span class="faint">({{ r.risk_pct | pct(2) }} of capital; limit {{ r.risk_per_trade_pct }}%)</span></dd>
+        {% endif %}
+        {% if r.reward_risk is defined %}<dt>Reward : risk</dt><dd>{{ "%.1f" | format(r.reward_risk) }} : 1</dd>{% endif %}
+      </dl>
+      {% endif %}
+    </section>
+  </div>
+  {% endif %}
+</details>

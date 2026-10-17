@@ -12,7 +12,19 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import JSON, Date, DateTime, Float, Integer, String, Text, create_engine, select
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    inspect,
+    select,
+    text,
+)
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -41,6 +53,8 @@ class SignalRow(Base):
     score: Mapped[float] = mapped_column(Float)
     confidence: Mapped[float] = mapped_column(Float)
     reasons: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # Technical / fundamental / risk facts as of the scan date (see strategy/evidence.py).
+    evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     exit_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     position_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(12), index=True)  # see SignalStatus
@@ -150,7 +164,23 @@ class Database:
         else:
             self.engine = create_engine(url, future=True)
         Base.metadata.create_all(self.engine)
+        self._add_missing_columns()
         self._sessions = sessionmaker(self.engine, expire_on_commit=False)
+
+    def _add_missing_columns(self) -> None:
+        """Additive schema migration: add new nullable columns to existing tables.
+
+        create_all() creates missing tables but never alters existing ones, so a
+        database from an older version would lack newer columns.
+        """
+        inspector = inspect(self.engine)
+        with self.engine.begin() as conn:
+            for table in Base.metadata.sorted_tables:
+                existing = {c["name"] for c in inspector.get_columns(table.name)}
+                for column in table.columns:
+                    if column.name not in existing and column.nullable:
+                        kind = column.type.compile(dialect=self.engine.dialect)
+                        conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {kind}'))
 
     @contextmanager
     def session(self) -> Iterator[Session]:

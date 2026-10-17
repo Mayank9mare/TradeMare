@@ -51,3 +51,22 @@ def tone(value: float | None) -> str:
     if _missing(value) or value == 0:
         return ""
     return "up" if value > 0 else "down"
+
+
+def metric(value: float | None, kind: str, market: Market | str) -> str:
+    """Format an evidence metric by its kind (see strategy/evidence.py)."""
+    if _missing(value):
+        return DASH
+    match kind:
+        case "price":
+            return money(value, market, compact=False)
+        case "money":
+            return money(value, market)
+        case "pct":
+            return pct(value, 1, signed=True)
+        case "times":
+            return f"{value:.1f}x"
+        case "int":
+            return f"{value:,.0f}"
+        case _:
+            return f"{value:,.2f}"

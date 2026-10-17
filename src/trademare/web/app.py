@@ -59,8 +59,16 @@ def create_app(
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     env = templates.env
-    env.filters.update(money=formatting.money, pct=formatting.pct, num=formatting.num, tone=formatting.tone)
-    env.globals.update(version=__version__, markets=list(config.markets))
+    env.filters.update(
+        money=formatting.money,
+        pct=formatting.pct,
+        num=formatting.num,
+        tone=formatting.tone,
+        metric=formatting.metric,
+    )
+    # Cache-busting: static URLs carry the files' modification time, so browsers fetch new versions.
+    asset_v = max(int(f.stat().st_mtime) for f in (HERE / "static").iterdir())
+    env.globals.update(version=__version__, markets=list(config.markets), asset_v=asset_v)
 
     register_trading_routes(app, templates, config, service, db, secrets)
     scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}
