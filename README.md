@@ -4,7 +4,7 @@ An automated swing-trading engine for **Indian (NSE/BSE)** and **US** equities. 
 
 > ⚠️ **Status: planning / early development.** This is a personal research project and **not financial advice**. Use paper trading before you risk real capital.
 
-## Features (planned)
+## Features
 
 - **Multi-factor analysis**
   - Fundamental: quality, financial health, growth, valuation vs peers
@@ -133,9 +133,16 @@ Secrets such as broker API keys and SMTP credentials go in `.env`, which is neve
 | 5 ✅ | Daily signals: email digest, dashboard approve/reject, scheduler |
 | 6 ✅ | Paper execution with the approve flow |
 | 7 🔄 | Broker adapters built (Zerodha / Dhan / Alpaca); live use waits for a validated strategy |
-| 8 | LLM sentiment analyst |
+| 8 ✅ | News-sentiment overlay (Claude or OpenAI), off by default ([evaluation plan](docs/research/2026-10-17-sentiment-overlay-plan.md)) |
 
 The full design, decisions and risks are in **[PLAN.md](PLAN.md)**.
+
+## Documentation
+
+- **User guide:** every feature and how to use it. A copy lives in the project's Claude doc (shared separately).
+- **[PLAN.md](PLAN.md):** design, decisions and risks.
+- **[docs/research/](docs/research/):** pre-registered strategy research and results.
+- **[deploy/README.md](deploy/README.md):** Mac auto-start (launchd) and server deployment (Docker, static IP for SEBI).
 
 ## Tech stack
 

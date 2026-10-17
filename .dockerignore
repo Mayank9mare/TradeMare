@@ -1,0 +1,8 @@
+.venv
+.git
+.claude
+data
+logs
+.env
+config/*.local.yaml
+**/__pycache__

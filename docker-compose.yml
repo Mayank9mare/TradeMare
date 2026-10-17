@@ -1,0 +1,14 @@
+# Run on an always-on server (needed for live India trading: SEBI requires a static IP
+# whitelisted with your broker). The dashboard is published on the server's localhost only;
+# reach it with an SSH tunnel:  ssh -L 8000:127.0.0.1:8000 you@server
+services:
+  trademare:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config/settings.local.yaml:/app/config/settings.local.yaml
