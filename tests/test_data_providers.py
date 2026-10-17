@@ -136,3 +136,14 @@ def test_universe_parsers():
     assert nifty["symbol"].tolist() == ["INFY"] and nifty["sector"].iloc[0] == "Information Technology"
     sp = _parse_sp500("Symbol,Security,GICS Sector,CIK\nAAPL,Apple Inc.,Information Technology,320193\n")
     assert sp["cik"].iloc[0] == "0000320193"
+
+
+def test_yfinance_maps_normalized_income():
+    end = pd.Timestamp("2026-03-31")
+    income = pd.DataFrame(
+        {end: [100.0, 520.0, -55.0]},
+        index=["Total Revenue", "Net Income Common Stockholders", "Normalized Income"],
+    )
+    df = statements_to_financials(Market.IN, {"Q": [income]})
+    row = df.iloc[0]
+    assert row["net_income"] == 520 and row["net_income_normalized"] == -55

@@ -179,3 +179,9 @@ def test_engine_trims_positions_in_risk_off(factor_config):
     # Risk-off allows 2 positions: first rebalance fills 2 (slots), none trimmed later.
     held = {p.symbol for p in result.open_positions}
     assert held == {"A", "B"}
+
+
+def test_earnings_yield_prefers_recurring_earnings():
+    ey = FACTORS["earnings_yield"].value
+    assert ey({}, {"earnings_ttm": -5.0, "net_income_ttm": 50.0, "market_cap": 100.0}) == pytest.approx(-0.05)
+    assert ey({}, {"earnings_ttm": None, "net_income_ttm": 10.0, "market_cap": 100.0}) == pytest.approx(0.10)

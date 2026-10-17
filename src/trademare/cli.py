@@ -86,9 +86,10 @@ def cmd_universe_refresh(args: argparse.Namespace) -> int:
 
 
 def cmd_data_update(args: argparse.Namespace) -> int:
+    from trademare.backtest.report import apply_overrides
     from trademare.data.service import DataService
 
-    config = load_config(args.config)
+    config = apply_overrides(load_config(args.config), args.set or [])
     setup_logging(config.log_level)
     service = DataService(config, Secrets())
     failed = False
@@ -103,7 +104,7 @@ def cmd_data_update(args: argparse.Namespace) -> int:
                 print(f"  failed: {', '.join(report.failed)}")
             failed |= bool(report.failed)
         if not args.skip_fundamentals:
-            report = service.update_fundamentals(market, symbols)
+            report = service.update_fundamentals(market, symbols, force=args.refresh_fundamentals)
             print(f"[{market}] fundamentals: {report.summary()}")
             if report.failed:
                 print(f"  failed: {', '.join(report.failed)}")
@@ -378,6 +379,10 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--limit", type=int, help="only the first N symbols (for quick tests)")
     update.add_argument("--skip-prices", action="store_true")
     update.add_argument("--skip-fundamentals", action="store_true")
+    update.add_argument(
+        "--refresh-fundamentals", action="store_true", help="re-download fundamentals even if recently cached"
+    )
+    update.add_argument("--set", action="append", metavar="KEY=VALUE", help="override config for this run")
     update.add_argument("--strict", action="store_true", help="exit non-zero if any symbol fails")
     update.set_defaults(func=cmd_data_update)
     status = data.add_parser("status", help="show what is cached")

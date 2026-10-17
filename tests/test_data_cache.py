@@ -130,3 +130,15 @@ def test_financials_cache_refreshes_only_stale(store):
     assert cache.update(Market.US, ["AAA"], max_age_days=7, now=later).updated == ["AAA"]
     assert cache.get_financials(Market.US, "AAA")["revenue"].iloc[0] == 1.0
     assert cache.get_financials(Market.US, "NONE").empty
+
+
+def test_force_refresh_and_old_files_gain_new_columns(store):
+    src = FakeFinancials()
+    cache = FinancialsCache(src, store, workers=1)
+    cache.update(Market.US, ["AAA"], max_age_days=7)
+    assert cache.update(Market.US, ["AAA"], max_age_days=7, force=True).updated == ["AAA"]
+    assert src.calls == ["AAA", "AAA"]
+    # A file written before a field existed is read back with that column as NaN.
+    old = cache.get_financials(Market.US, "AAA").drop(columns=["net_income_normalized"])
+    store.write_financials(Market.US, "fake", "AAA", old)
+    assert cache.get_financials(Market.US, "AAA")["net_income_normalized"].isna().all()
