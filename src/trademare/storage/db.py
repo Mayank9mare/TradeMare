@@ -74,7 +74,8 @@ class OrderRow(Base):
     market: Mapped[str] = mapped_column(String(4), index=True)
     symbol: Mapped[str] = mapped_column(String(32))
     side: Mapped[str] = mapped_column(String(4))
-    purpose: Mapped[str] = mapped_column(String(8))  # entry | exit | stop
+    purpose: Mapped[str] = mapped_column(String(8))  # entry | exit | stop | target
+    reason: Mapped[str | None] = mapped_column(String(40), nullable=True)  # why an exit was placed
     quantity: Mapped[int] = mapped_column(Integer)
     order_type: Mapped[str] = mapped_column(String(12))
     limit_price: Mapped[float | None] = mapped_column(Float, nullable=True)

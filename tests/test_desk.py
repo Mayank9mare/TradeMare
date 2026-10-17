@@ -317,7 +317,53 @@ def test_live_sync_survives_login_expiry_and_flags_lost_stop(live_desk):
     desk.run_daily(day2, generate=False)
     broker.protections["P0"] = broker_base.OrderUpdate(OrderStatus.CANCELLED, message="GTT deleted")
     report = desk.run_daily(day3, generate=False)
-    assert any("unprotected" in n for n in report.notes)
+    assert any("no longer active" in n for n in report.notes)
+    assert any("protective stop re-placed" in n for n in report.notes)
+    assert list(broker.protections) == ["P0", "P1"]  # a fresh standing stop was placed
+
+
+def test_live_stuck_stop_becomes_market_exit(live_desk):
+    desk, broker = live_desk, live_desk.broker
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    day1, day2, day3 = SESSIONS[SESSIONS.index(DAY0) + 1 : SESSIONS.index(DAY0) + 4]
+    bid, placed = broker.placed[0]
+    broker.orders[bid] = broker_base.OrderUpdate(OrderStatus.FILLED, placed.quantity, sig.entry_price)
+    desk.run_daily(day1, generate=False)
+    # Day 2 closes far below the stop's limit leg while the broker stop is still "open": stuck.
+    stop = sig.stop_price
+    set_bar(desk, placed.symbol, day2, open=stop * 0.9, high=stop * 0.92, low=stop * 0.88, close=stop * 0.9)
+    report = desk.run_daily(day2, generate=False)
+    assert any("gapped past limit" in n for n in report.notes)
+    assert "P0" in broker.cancelled
+    exit_bid, exit_order = broker.placed[-1]
+    assert exit_order.order_type.value == "MARKET" and exit_order.side.value == "SELL"
+    broker.orders[exit_bid] = broker_base.OrderUpdate(OrderStatus.FILLED, placed.quantity, stop * 0.89)
+    desk.run_daily(day3, generate=False)
+    with desk.db.session() as s:
+        pos = s.query(PositionRow).one()
+        assert pos.status == "closed" and pos.exit_reason == "stop (gapped past limit)"
+
+
+def test_paper_big_gap_exits_next_open(desk):
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    day1, day2, day3 = SESSIONS[SESSIONS.index(DAY0) + 1 : SESSIONS.index(DAY0) + 4]
+    limit = sig.entry_price
+    set_bar(desk, "S0", day1, open=limit * 0.999, high=limit * 1.002, low=limit * 0.998, close=limit * 1.001)
+    desk.run_daily(day1, generate=False)
+    stop = sig.stop_price
+    set_bar(desk, "S0", day2, open=stop * 0.9, high=stop * 0.92, low=stop * 0.88, close=stop * 0.9)
+    report = desk.run_daily(day2, generate=False)
+    assert any("gapped past limit" in n for n in report.notes)
+    set_bar(desk, "S0", day3, open=stop * 0.91, high=stop * 0.95, low=stop * 0.9, close=stop * 0.93)
+    desk.run_daily(day3, generate=False)
+    with desk.db.session() as s:
+        pos = s.query(PositionRow).one()
+        assert pos.status == "closed" and pos.exit_reason == "stop (gapped past limit)"
+        assert pos.exit_price == pytest.approx(stop * 0.91)
 
 
 def test_live_exit_cancels_protection(live_desk):

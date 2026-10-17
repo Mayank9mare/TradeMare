@@ -49,6 +49,7 @@ markets:
       trailing: false
       trail_method: atr        # atr | percent
       trail_value: 2.5
+      limit_buffer_pct: 1.0    # Zerodha/Dhan stops are limit orders this far past the trigger; bigger gaps exit at next open
 
     take_profit:
       method: none             # r_multiple | percent | none — momentum lets winners run

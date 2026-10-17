@@ -41,6 +41,12 @@ MARKET_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("stop_loss.atr_multiple", "Stop: ATR multiple", "float"),
     FieldSpec("stop_loss.percent", "Stop: percent", "float"),
     FieldSpec("stop_loss.trailing", "Trailing stop", "bool"),
+    FieldSpec(
+        "stop_loss.limit_buffer_pct",
+        "Stop limit buffer %",
+        "float",
+        help="How far past the trigger a broker limit stop is priced; bigger gaps exit at the next open",
+    ),
     FieldSpec("take_profit.method", "Take-profit method", "choice", ("r_multiple", "percent", "none")),
     FieldSpec("take_profit.value", "Take-profit value", "float", help="R multiple or percent"),
     FieldSpec("time_stop_days", "Time stop (sessions, blank = off)", "optional_int"),

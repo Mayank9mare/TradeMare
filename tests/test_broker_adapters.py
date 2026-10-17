@@ -35,7 +35,13 @@ def order(side=OrderSide.BUY, order_type=OrderType.LIMIT, symbol="INFY", market=
 
 # ---------------------------------------------------------------- Zerodha
 class FakeKite:
-    VARIETY_REGULAR, EXCHANGE_NSE, PRODUCT_CNC, VALIDITY_DAY = "regular", "NSE", "CNC", "DAY"
+    VARIETY_REGULAR, VARIETY_AMO, EXCHANGE_NSE, PRODUCT_CNC, VALIDITY_DAY = (
+        "regular",
+        "amo",
+        "NSE",
+        "CNC",
+        "DAY",
+    )
     TRANSACTION_TYPE_BUY, TRANSACTION_TYPE_SELL = "BUY", "SELL"
     ORDER_TYPE_LIMIT, ORDER_TYPE_MARKET = "LIMIT", "MARKET"
     GTT_TYPE_SINGLE, GTT_TYPE_OCO = "single", "two-leg"
@@ -60,9 +66,17 @@ class FakeKite:
     def get_gtt(self, trigger_id):
         return {"status": "triggered", "orders": [{"result": {"order_result": {"order_id": "K9"}}}]}
 
+    def cancel_order(self, **kw):
+        self.calls.append(("cancel_order", kw))
 
-def zerodha(kite):
-    return ZerodhaBroker(Market.IN, cfg(Market.IN), Secrets(_env_file=None), client=kite)
+    def delete_gtt(self, trigger_id):
+        self.calls.append(("delete_gtt", trigger_id))
+
+
+def zerodha(kite, market_open=True):
+    broker = ZerodhaBroker(Market.IN, cfg(Market.IN), Secrets(_env_file=None), client=kite)
+    broker._market_open = lambda: market_open
+    return broker
 
 
 def test_zerodha_limit_order_mapping():
@@ -216,3 +230,41 @@ def test_alpaca_protection_gtc_stop_and_oco():
     # An OCO whose stop leg executed reports that fill.
     update = alpaca(client).protection_status("A1")
     assert update.status is OrderStatus.FILLED and update.average_price == 95.5
+
+
+def test_zerodha_after_hours_orders_are_amo_and_cancel_with_their_variety():
+    kite = FakeKite()
+    broker = zerodha(kite, market_open=False)
+    order_id = broker.place_order(order())
+    assert kite.calls[0][1]["variety"] == "amo" and order_id == "amo:K1"
+    broker.cancel_order(order_id)
+    assert kite.calls[-1] == ("cancel_order", {"variety": "amo", "order_id": "K1"})
+    assert zerodha(FakeKite(), market_open=True).place_order(order()) == "K1"
+
+
+def test_zerodha_stop_buffer_is_configurable():
+    kite = FakeKite()
+    broker = zerodha(kite)
+    broker.config = broker.config.model_copy(
+        update={"stop_loss": broker.config.stop_loss.model_copy(update={"limit_buffer_pct": 2.5})}
+    )
+    broker.place_protection("INFY", OrderSide.SELL, 10, 1000.0, None, 1100.0)
+    assert kite.calls[0][1]["orders"][0]["price"] == 975.0
+
+
+def test_zerodha_cancelling_a_triggered_gtt_cancels_its_working_order():
+    class StuckKite(FakeKite):
+        def order_history(self, order_id):
+            return [{"status": "OPEN", "filled_quantity": 0}]
+
+    kite = StuckKite()
+    zerodha(kite).cancel_protection("77")
+    assert ("cancel_order", {"variety": "regular", "order_id": "K9"}) in kite.calls
+    assert not any(c[0] == "delete_gtt" for c in kite.calls)
+
+
+def test_dhan_after_hours_orders_are_amo(monkeypatch):
+    client = FakeDhan()
+    monkeypatch.setattr(DhanBroker, "_market_open", staticmethod(lambda: False))
+    dhan(client).place_order(order())
+    assert client.calls[0][1]["after_market_order"] is True and client.calls[0][1]["amo_time"] == "OPEN"

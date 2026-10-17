@@ -97,12 +97,28 @@ class ZerodhaBroker(BrokerAdapter):
             raise BrokerError(f"Zerodha: {e}") from e
 
     # ------------------------------------------------------------------ orders
+    def _market_open(self) -> bool:
+        from trademare.core.clock import MarketClock
+
+        try:
+            return MarketClock(Market.IN).is_open()
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _split_id(broker_order_id: str) -> tuple[str, str]:
+        """Order ids for after-market orders are returned as 'amo:<id>' (cancel needs the variety)."""
+        variety, sep, order_id = broker_order_id.partition(":")
+        return (variety, order_id) if sep else ("regular", broker_order_id)
+
     def place_order(self, order: Order) -> str:
         kite = self._client()
+        # Orders approved outside market hours must go in as after-market orders (AMO).
+        variety = kite.VARIETY_REGULAR if self._market_open() else kite.VARIETY_AMO
         if order.side is OrderSide.SELL and not self._holds(order.symbol, order.quantity):
             raise BrokerError("short selling equity delivery is not possible in India (use futures)")
         kwargs = dict(
-            variety=kite.VARIETY_REGULAR,
+            variety=variety,
             exchange=kite.EXCHANGE_NSE,
             tradingsymbol=order.symbol,
             transaction_type=kite.TRANSACTION_TYPE_BUY
@@ -120,7 +136,8 @@ class ZerodhaBroker(BrokerAdapter):
             kwargs.update(order_type=kite.ORDER_TYPE_MARKET, market_protection=-1)
         else:
             raise BrokerError(f"unsupported day order type {order.order_type}")
-        return str(self._call(kite.place_order, **kwargs))
+        order_id = str(self._call(kite.place_order, **kwargs))
+        return order_id if variety == kite.VARIETY_REGULAR else f"{variety}:{order_id}"
 
     def _holds(self, symbol: str, quantity: int) -> bool:
         kite = self._client()
@@ -133,11 +150,12 @@ class ZerodhaBroker(BrokerAdapter):
 
     def cancel_order(self, broker_order_id: str) -> None:
         kite = self._client()
-        self._call(kite.cancel_order, variety=kite.VARIETY_REGULAR, order_id=broker_order_id)
+        variety, order_id = self._split_id(broker_order_id)
+        self._call(kite.cancel_order, variety=variety, order_id=order_id)
 
     def get_order(self, broker_order_id: str) -> OrderUpdate:
         kite = self._client()
-        history = self._call(kite.order_history, broker_order_id)
+        history = self._call(kite.order_history, self._split_id(broker_order_id)[1])
         if not history:
             raise BrokerError(f"Zerodha has no order {broker_order_id}")
         last = history[-1]
@@ -161,8 +179,10 @@ class ZerodhaBroker(BrokerAdapter):
             "product": kite.PRODUCT_CNC,
             "price": price,
         }
-        # A stop leg is a limit order slightly through the trigger so it fills in a fast market.
-        stop_limit = round(stop * (0.99 if side is OrderSide.SELL else 1.01), 1)
+        # GTT legs must be limit orders: price the stop leg through the trigger by the configured
+        # buffer so it fills in a fast market. A gap beyond the buffer is handled by the desk.
+        buffer = self.config.stop_loss.limit_buffer_pct / 100
+        stop_limit = round(stop * (1 - buffer if side is OrderSide.SELL else 1 + buffer), 1)
         if target is None:
             result = self._call(
                 kite.place_gtt,
@@ -186,7 +206,16 @@ class ZerodhaBroker(BrokerAdapter):
         return str(result["trigger_id"])
 
     def cancel_protection(self, protection_id: str) -> None:
-        self._call(self._client().delete_gtt, int(protection_id))
+        kite = self._client()
+        gtt = self._call(kite.get_gtt, int(protection_id))
+        if gtt.get("status") == "triggered":
+            # The GTT already fired: cancel the limit order it placed if that is still working.
+            for leg in gtt.get("orders", []):
+                order_id = ((leg.get("result") or {}).get("order_result") or {}).get("order_id")
+                if order_id and self.get_order(str(order_id)).status is OrderStatus.OPEN:
+                    self.cancel_order(str(order_id))
+            return
+        self._call(kite.delete_gtt, int(protection_id))
 
     def protection_status(self, protection_id: str) -> OrderUpdate:
         kite = self._client()

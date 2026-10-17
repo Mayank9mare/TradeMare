@@ -146,10 +146,22 @@ class DhanBroker(BrokerAdapter):
                 product_type=dhan.CNC,
                 price=order.limit_price or 0,
                 validity=dhan.DAY,
+                # Outside market hours the order is queued as an after-market order for the open.
+                after_market_order=not self._market_open(),
+                amo_time="OPEN",
                 tag="trademare",
             )
         )
         return str(data["orderId"])
+
+    @staticmethod
+    def _market_open() -> bool:
+        from trademare.core.clock import MarketClock
+
+        try:
+            return MarketClock(Market.IN).is_open()
+        except ValueError:
+            return False
 
     def _holds(self, symbol: str, quantity: int) -> bool:
         holdings = self._data(self._client().get_holdings()) or []
@@ -168,7 +180,8 @@ class DhanBroker(BrokerAdapter):
     # ------------------------------------------------------------------ protection (Forever orders)
     def place_protection(self, symbol, side, quantity, stop, target, last_price) -> str:
         dhan = self._client()
-        stop_limit = round(stop * (0.99 if side is OrderSide.SELL else 1.01), 1)
+        buffer = self.config.stop_loss.limit_buffer_pct / 100
+        stop_limit = round(stop * (1 - buffer if side is OrderSide.SELL else 1 + buffer), 1)
         kwargs: dict[str, Any] = dict(
             security_id=self.security_id(symbol),
             exchange_segment=dhan.NSE,

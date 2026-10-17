@@ -150,11 +150,22 @@ def test_stop_and_target_same_day_assumes_stop(config):
     assert result.trades[0].exit_reason == "stop" and result.trades[0].exit_price == 95
 
 
-def test_gap_down_through_stop_fills_at_open(config):
-    bars = {"A": ohlc([[100, 101, 99, 100], [100, 100, 99.8, 100], [90, 91, 88, 89], [89, 90, 88, 89]])}
+def test_small_gap_through_stop_fills_at_open(config):
+    # Opens at 94.5: through the 95 stop but above its 1% limit leg (94.05), so it fills at the open.
+    bars = {"A": ohlc([[100, 101, 99, 100], [100, 100, 99.8, 100], [94.5, 95, 93, 94], [94, 95, 93, 94]])}
     result = run(config, bars, {bars["A"].index[0].date(): [idea("A", 100, 95, 110)]})
     t = result.trades[0]
-    assert t.exit_reason == "stop (gap)" and t.exit_price == 90
+    assert t.exit_reason == "stop (gap)" and t.exit_price == 94.5
+
+
+def test_big_gap_past_stop_limit_exits_next_open(config):
+    # Opens at 90, beyond the stop's limit leg: a live limit stop would sit unfilled, so the
+    # engine exits with a market order at the next open (89), like the live desk does.
+    bars = {"A": ohlc([[100, 101, 99, 100], [100, 100, 99.8, 100], [90, 91, 88, 89], [89, 90, 88, 89]])}
+    d = [ts.date() for ts in bars["A"].index]
+    result = run(config, bars, {d[0]: [idea("A", 100, 95, 110)]})
+    t = result.trades[0]
+    assert t.exit_reason == "stop (gapped past limit)" and t.exit_price == 89 and t.exit_date == d[3]
 
 
 def test_short_trade_profits_when_price_falls(config):

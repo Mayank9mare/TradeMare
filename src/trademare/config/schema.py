@@ -64,6 +64,13 @@ class StopLossConfig(_Strict):
     trailing: bool = False
     trail_method: TrailMethod = TrailMethod.ATR
     trail_value: float = Field(2.5, gt=0, description="ATR multiple or percent, per trail_method")
+    limit_buffer_pct: float = Field(
+        1.0,
+        ge=0.1,
+        le=10,
+        description="Stop orders that must be limit orders (Zerodha GTT, Dhan Forever) are priced this far "
+        "through the trigger; a gap beyond it is handled as a stuck stop (market exit next open)",
+    )
 
     @model_validator(mode="after")
     def _method_has_params(self) -> Self:

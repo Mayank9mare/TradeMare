@@ -49,7 +49,7 @@ from trademare.core.models import (
 from trademare.data.service import DataService
 from trademare.data.universe import load_universe
 from trademare.execution.brokers import BrokerError, LoginRequired, OrderUpdate, create_broker
-from trademare.execution.fills import Bar, limit_fill, slipped, stop_fill, target_fill
+from trademare.execution.fills import Bar, gapped_past_limit, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.manager import Exposure, RiskManager
 from trademare.storage.db import Database, EquityRow, OrderRow, PositionRow, SignalRow
 from trademare.strategy.evidence import build_evidence, risk_evidence
@@ -351,7 +351,7 @@ class TradingDesk:
             pos = s.get(PositionRow, o.position_id)
             price = slipped(bar.open, OrderSide(o.side), self.cfg.slippage_bps)
             self._fill(o, price, day)
-            self._close(s, state, pos, price, day, o.costs, "signal", report)
+            self._close(s, state, pos, price, day, o.costs, o.reason or "signal", report)
 
         # 2. Limit entries.
         for o in self._orders(s, purpose="entry", status=OPEN):
@@ -431,6 +431,12 @@ class TradingDesk:
             stop = orders.get("stop")
             active = stop is not None and (opened_at is not None or stop.placed_on < day)
             if active and (hit := stop_fill(OrderSide(stop.side), stop.trigger_price, bar, opened_at)):
+                buffer = self.cfg.stop_loss.limit_buffer_pct
+                if hit[1] and gapped_past_limit(OrderSide(stop.side), stop.trigger_price, hit[0], buffer):
+                    # Same as a live limit stop that the gap jumped over: exit at the next open.
+                    stop.status = OrderStatus.CANCELLED.value
+                    self._market_exit(s, pos, day, "stop (gapped past limit)", report)
+                    continue
                 price = slipped(hit[0], OrderSide(stop.side), self.cfg.slippage_bps)
                 self._fill(stop, price, day)
                 reason = "stop (gap)" if hit[1] else "stop"
@@ -467,7 +473,8 @@ class TradingDesk:
                     else:
                         pos = s.get(PositionRow, o.position_id)
                         self._cancel_protection(s, pos, report)
-                        self._close(s, state, pos, update.average_price, day, o.costs, "signal", report)
+                        reason = o.reason or "signal"
+                        self._close(s, state, pos, update.average_price, day, o.costs, reason, report)
                 elif update.is_dead:
                     o.status = update.status.value
                     report.notes.append(
@@ -498,8 +505,59 @@ class TradingDesk:
                     o.status = update.status.value
                     report.notes.append(
                         f"WARNING {o.symbol}: protective stop no longer active at the broker "
-                        f"({update.message}); the position is unprotected — re-place it in the broker app"
+                        f"({update.message}); re-placing it"
                     )
+                elif pos is not None and (bar := self._bar(pos.symbol, day)) is not None:
+                    buffer = self.cfg.stop_loss.limit_buffer_pct
+                    if gapped_past_limit(OrderSide(o.side), o.trigger_price, bar.close, buffer):
+                        # The price is beyond the stop's limit leg, so it cannot fill: get out at the open.
+                        try:
+                            self.broker.cancel_protection(o.broker_order_id)
+                        except BrokerError as e:
+                            report.notes.append(f"WARNING {o.symbol}: could not cancel stuck stop: {e}")
+                        o.status = OrderStatus.CANCELLED.value
+                        self._market_exit(s, pos, day, "stop (gapped past limit)", report)
+
+        # Every open live position must have a standing stop (or an exit on its way).
+        for pos in self.db.open_positions(s, self.market.value):
+            working = {o.purpose for o in self._orders(s, position_id=pos.id, status=OPEN)}
+            if working & {"stop", "exit"} or pos.stop_price is None:
+                continue
+            exit_side = _side(pos.direction, False)
+            try:
+                pid = self.broker.place_protection(
+                    pos.symbol,
+                    exit_side,
+                    pos.quantity,
+                    pos.stop_price,
+                    pos.target_price,
+                    pos.last_price or pos.entry_price,
+                )
+            except BrokerError as e:
+                report.notes.append(
+                    f"WARNING {pos.symbol}: position has NO protective stop and re-placing failed: {e}"
+                )
+                continue
+            s.add(
+                OrderRow(
+                    id=uuid.uuid4().hex,
+                    position_id=pos.id,
+                    market=self.market.value,
+                    symbol=pos.symbol,
+                    side=exit_side.value,
+                    purpose="stop",
+                    quantity=pos.quantity,
+                    order_type=OrderType.STOP.value,
+                    limit_price=pos.target_price,
+                    trigger_price=pos.stop_price,
+                    status=OPEN,
+                    broker=self.broker.name,
+                    broker_order_id=pid,
+                    placed_on=day,
+                    valid_until=None,
+                )
+            )
+            report.notes.append(f"{pos.symbol}: protective stop re-placed at {pos.stop_price:,.2f}")
 
     def _open_live_position(self, s: Session, state, o: OrderRow, day: date, report: DailyReport) -> None:
         sig = s.get(SignalRow, o.signal_id)
@@ -557,6 +615,46 @@ class TradingDesk:
         report.fills.append(f"{o.symbol}: {sig.direction} {o.quantity} @ {price:,.2f} (broker)")
         self.db.log(
             s, "fill", f"live entry {o.symbol} x{o.quantity} @ {price}", self.market.value, order=o.id
+        )
+
+    def _market_exit(self, s: Session, pos: PositionRow, day: date, reason: str, report: DailyReport) -> None:
+        """Pre-approved protective exit: market order at the next session's open."""
+        side = _side(pos.direction, False)
+        model = Order(
+            market=self.market,
+            symbol=pos.symbol,
+            side=side,
+            quantity=pos.quantity,
+            order_type=OrderType.MARKET,
+        )
+        try:
+            broker_id = self.broker.place_order(model)
+        except BrokerError as e:
+            report.notes.append(
+                f"WARNING {pos.symbol}: {reason} — market exit FAILED ({e}); exit it manually"
+            )
+            return
+        s.add(
+            OrderRow(
+                id=model.id,
+                position_id=pos.id,
+                market=self.market.value,
+                symbol=pos.symbol,
+                side=side.value,
+                purpose="exit",
+                reason=reason,
+                quantity=pos.quantity,
+                order_type=OrderType.MARKET.value,
+                status=OPEN,
+                broker=self.broker.name,
+                broker_order_id=broker_id,
+                placed_on=day,
+                valid_until=self.clock.next_session(day),
+            )
+        )
+        report.notes.append(f"ALERT {pos.symbol}: {reason} — market exit placed for the next open")
+        self.db.log(
+            s, "stop_gap", f"{pos.symbol}: {reason}; market exit placed", self.market.value, position=pos.id
         )
 
     def _cancel_protection(self, s: Session, pos: PositionRow, report: DailyReport) -> None:

@@ -29,7 +29,7 @@ from trademare.analysis.regime import RegimeLabel
 from trademare.backtest.costs import cost_model
 from trademare.config.schema import AppConfig, Rebalance, StopLossConfig, StrategyMode, TrailMethod
 from trademare.core.models import Direction, OrderSide
-from trademare.execution.fills import Bar, limit_fill, slipped, stop_fill, target_fill
+from trademare.execution.fills import Bar, gapped_past_limit, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.manager import RiskManager
 from trademare.risk.sizing import position_size
 from trademare.strategy.scanner import Idea, ScanContext, is_rebalance_day
@@ -240,6 +240,11 @@ class Backtester:
                 bar_today = _bar(b)
                 if hit := stop_fill(exit_side, pos.stop, bar_today, opened_at):
                     price, gapped = hit
+                    buffer = cfg.stop_loss.limit_buffer_pct
+                    if gapped and gapped_past_limit(exit_side, pos.stop, price, buffer):
+                        # Live limit stops can't fill past their limit: exit at the next open instead.
+                        pending_exits[pos.symbol] = "stop (gapped past limit)"
+                        continue
                     close_position(
                         pos, self._slipped(price, exit_side), ts, "stop (gap)" if gapped else "stop"
                     )
