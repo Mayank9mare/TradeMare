@@ -19,7 +19,7 @@ def _div(a: float | None, b: float | None) -> float | None:
 RATIO_KEYS = (
     "market_cap", "pe", "price_to_book", "fcf_yield", "gross_margin", "operating_margin", "net_margin",
     "roe", "roa", "debt_to_equity", "current_ratio", "interest_coverage", "revenue_growth",
-    "revenue_ttm", "net_income_ttm",
+    "earnings_growth", "revenue_ttm", "net_income_ttm", "total_equity", "data_age_days",
 )  # fmt: skip
 
 
@@ -38,11 +38,15 @@ def key_ratios(financials: pd.DataFrame, asof: date, price: float | None) -> dic
     ocf, capex = g("operating_cash_flow"), g("capex")
     fcf = None if ocf is None else ocf - (capex or 0.0)
 
-    revenue_growth = None
+    revenue_growth = earnings_growth = None
     # Compare against a different (older) TTM window only.
     if year_ago is not None and year_ago["flow_period_end"] != now["flow_period_end"]:
         growth = _div(g("revenue"), _clean(year_ago.get("revenue")))
         revenue_growth = None if growth is None else growth - 1
+        prev_ni = _clean(year_ago.get("net_income"))
+        # Growth from a loss is not meaningful as a ratio.
+        if prev_ni is not None and prev_ni > 0 and net_income is not None:
+            earnings_growth = net_income / prev_ni - 1
 
     return {
         "market_cap": market_cap,
@@ -58,8 +62,11 @@ def key_ratios(financials: pd.DataFrame, asof: date, price: float | None) -> dic
         "current_ratio": _div(g("current_assets"), g("current_liabilities")),
         "interest_coverage": _div(g("operating_income"), g("interest_expense")),
         "revenue_growth": revenue_growth,
+        "earnings_growth": earnings_growth,
+        "data_age_days": float((pd.Timestamp(asof) - now["flow_period_end"]).days),
         "revenue_ttm": g("revenue"),
         "net_income_ttm": net_income,
+        "total_equity": g("total_equity"),
     }
 
 

@@ -94,6 +94,12 @@ class MarketConfig(_Strict):
     universe: str = Field(description="Name of the symbol universe, e.g. nifty200 or sp500")
     price_source: str = "yfinance"
     fundamentals_source: str = "yfinance"
+    benchmark: str | None = Field(
+        None, description="Index symbol for relative strength and regime, e.g. ^NSEI"
+    )
+    min_avg_traded_value: float = Field(
+        0.0, ge=0, description="Skip symbols whose 20-day average traded value is below this"
+    )
     budget: float = Field(gt=0, description="Hard cap on deployed capital, in market currency")
     cash_buffer_pct: float = Field(10.0, ge=0, lt=100)
 
@@ -139,8 +145,18 @@ class StrategyWeights(_Strict):
 
 class StrategyConfig(_Strict):
     weights: StrategyWeights = StrategyWeights()
-    min_composite_score: float = Field(0.4, ge=-1, le=1)
-    min_fundamental_score: float = Field(0.0, ge=-1, le=1, description="Fundamental gate for entries")
+    min_composite_score: float = Field(0.4, ge=0, le=1, description="|composite| needed for an idea")
+    min_fundamental_score: float = Field(
+        0.0, ge=0, le=1, description="Longs need fundamental >= this; shorts need <= -this"
+    )
+    require_fundamentals: bool = Field(True, description="Skip symbols without fundamental data")
+    regime_penalty: float = Field(
+        0.15, ge=0, le=1, description="Extra score needed when trading against the market regime"
+    )
+    max_ideas: int = Field(10, ge=1, description="Per direction, per market")
+    avoid_extended_entries: bool = Field(
+        True, description="Skip entries whose technical setup argues against the direction (don't chase)"
+    )
 
 
 class EmailConfig(_Strict):

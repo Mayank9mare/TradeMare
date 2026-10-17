@@ -19,6 +19,8 @@ markets:
     universe: nifty200
     price_source: yfinance
     fundamentals_source: yfinance  # filing dates estimated from SEBI reporting deadlines
+    benchmark: "^NSEI"             # Nifty 50: relative strength + market regime
+    min_avg_traded_value: 100000000  # ₹10 Cr/day average turnover
     budget: 100000             # INR — hard cap on deployed capital
     cash_buffer_pct: 10
 
@@ -59,6 +61,8 @@ markets:
     universe: sp500
     price_source: yfinance
     fundamentals_source: edgar     # point-in-time via SEC filing dates; needs SEC_USER_AGENT in .env
+    benchmark: "^GSPC"             # S&P 500 index
+    min_avg_traded_value: 20000000   # $20M/day average dollar volume
     budget: 1000               # USD
     cash_buffer_pct: 10
 
@@ -93,8 +97,12 @@ strategy:
     fundamental: 0.35
     technical: 0.50
     sentiment: 0.15            # ignored while llm.enabled is false
-  min_composite_score: 0.4     # only signal when the weighted score clears this
-  min_fundamental_score: 0.0   # fundamental quality gate for entries
+  min_composite_score: 0.4     # |weighted score| needed for a long/short idea
+  min_fundamental_score: 0.0   # longs need fundamental >= this, shorts <= -this
+  require_fundamentals: true   # skip symbols with no fundamental data
+  regime_penalty: 0.15         # extra score needed to trade against the market regime
+  max_ideas: 10                # per direction, per market
+  avoid_extended_entries: true # don't chase overextended moves
 
 notifications:
   email:

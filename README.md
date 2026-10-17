@@ -49,6 +49,10 @@ uv run trademare data update --limit 5     # quick test: 5 symbols per market
 uv run trademare data update               # full: ~8 years of daily bars + fundamentals
 uv run trademare data status               # what is cached
 
+# Analysis: score every stock and propose ideas (uses cached data only)
+uv run trademare scan                      # latest session, both markets
+uv run trademare scan -m IN --date 2025-06-30   # any past date (point-in-time)
+
 # Dashboard (local only)
 uv run trademare web                       # http://127.0.0.1:8000
 ```
@@ -89,7 +93,7 @@ Secrets such as broker API keys and SMTP credentials go in `.env`, which is neve
 |---|---|
 | 0 ✅ | Project scaffold, config, core models |
 | 1 ✅ | Data layer (prices and fundamentals for India and the US) |
-| 2 | Technical and fundamental analysts, aggregator |
+| 2 ✅ | Technical and fundamental analysts, aggregator |
 | 3 | Backtester with costs and walk-forward validation |
 | 4 | Risk and budget manager, kill switch |
 | 5 🔄 | Live signals: email and dashboard, no orders (data dashboard already built) |

@@ -1,0 +1,13 @@
+{% macro regime_badge(regime) -%}
+<span class="badge regime {{ regime.label.value }}">{{ {"risk_on": "Risk-on", "neutral": "Neutral", "risk_off": "Risk-off"}[regime.label.value] }} {{ "%+.2f" | format(regime.score) }}</span>
+{%- endmacro %}
+
+{% macro score_bar(value) -%}
+{% if value is none %}<span class="muted">—</span>{% else -%}
+<span class="score {{ value | tone }}" title="{{ '%+.2f' | format(value) }}"><span class="track"><span class="fill" style="{{ 'left:50%;width:' ~ (value * 50) ~ '%' if value >= 0 else 'right:50%;width:' ~ (-value * 50) ~ '%' }}"></span></span>{{ "%+.2f" | format(value) }}</span>
+{%- endif %}
+{%- endmacro %}
+
+{% macro direction_badge(direction) -%}
+<span class="badge dir {{ direction | lower }}">{{ direction }}</span>
+{%- endmacro %}

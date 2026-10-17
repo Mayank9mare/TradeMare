@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import regime_badge %}
 {% block content %}
 <h1>Overview</h1>
 <div class="grid two">
@@ -18,6 +19,8 @@
       <dt>Fundamentals</dt><dd>{{ c.fundamentals }} / {{ c.universe_size }} · {{ c.source }}</dd>
       <dt>Breadth (1D)</dt><dd><span class="up">{{ c.advancers }} up</span> · <span class="down">{{ c.decliners }} down</span></dd>
       <dt>Next session</dt><dd>{{ c.next_session or "calendar out of range" }}</dd>
+      <dt>Regime</dt><dd>{% if c.scan %}{{ regime_badge(c.scan.regime) }} <small class="muted">scan {{ c.scan.asof }}</small>{% else %}<span class="muted">no scan yet</span>{% endif %}</dd>
+      <dt>Ideas</dt><dd>{% if c.scan %}<a href="/m/{{ c.market.value }}/ideas">{{ c.scan.ideas | length }} idea{{ "s" if c.scan.ideas | length != 1 }} →</a>{% else %}<code>trademare scan</code>{% endif %}</dd>
     </dl>
     <div class="grid two movers">
       <div><h3>Top gainers</h3>
@@ -30,5 +33,5 @@
   </section>
 {% endfor %}
 </div>
-<p class="muted">Signals, positions and the approve flow arrive in later phases (see PLAN.md).</p>
+<p class="muted">Position sizing, signals and the approve flow arrive in later phases (see PLAN.md).</p>
 {% endblock %}

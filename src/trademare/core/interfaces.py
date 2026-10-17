@@ -45,6 +45,7 @@ class AnalystResult(BaseModel):
     score: float = Field(ge=-1, le=1, description="-1 strongly bearish .. +1 strongly bullish")
     confidence: float = Field(ge=0, le=1)
     reasons: list[str] = Field(default_factory=list)
+    details: dict[str, float | None] = Field(default_factory=dict, description="Sub-scores / metrics")
 
 
 @runtime_checkable

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import score_bar, direction_badge, regime_badge %}
 {% block title %}{{ symbol }} · TradeMare{% endblock %}
 {% block content %}
 <p class="crumbs"><a href="/m/{{ market.value }}">{{ "India" if market.value == "IN" else "US" }}</a> / {{ symbol }}</p>
@@ -14,6 +15,26 @@
   </div>
   <div id="chart" data-market="{{ market.value }}" data-symbol="{{ symbol }}"></div>
 </section>
+
+{% if score %}
+<h2>Analysis <small class="muted">scan {{ scan.asof }} · market {{ regime_badge(scan.regime) }}</small></h2>
+<section class="card analysis">
+  <div class="analysis-head">
+    <div><span class="muted">Composite</span> {{ score_bar(score.composite) }} <span class="muted small">confidence {{ "%.0f" | format(score.confidence * 100) }}%</span>
+      {% if not score.liquid %}<span class="badge off">below liquidity threshold</span>{% endif %}</div>
+    {% if idea %}<div>{{ direction_badge(idea.direction.value) }} idea: entry {{ idea.levels.entry | money(market, False) }} · stop {{ idea.levels.stop | money(market, False) }} · target {{ idea.levels.target | money(market, False) }}</div>{% endif %}
+  </div>
+  <div class="grid two">
+  {% for name, a in score.analysts.items() %}
+    <div>
+      <h3>{{ name }} {{ score_bar(a.score) }}</h3>
+      <div class="components">{% for k, v in a.details.items() %}<span>{{ k }} {{ score_bar(v) }}</span>{% endfor %}</div>
+      <ul class="reasons">{% for r in a.reasons %}<li>{{ r }}</li>{% else %}<li class="muted">No notable factors</li>{% endfor %}</ul>
+    </div>
+  {% endfor %}
+  </div>
+</section>
+{% endif %}
 
 <h2>Key ratios <small class="muted">TTM, as of {{ last }}</small></h2>
 {% set x = ratios %}

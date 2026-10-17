@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import regime_badge, score_bar, direction_badge %}
+{% block title %}Ideas · {{ market.value }} · TradeMare{% endblock %}
+{% block content %}
+<h1>{{ "India" if market.value == "IN" else "US" }} · trade ideas</h1>
+{% if not scan %}
+  <div class="card"><p>No scan yet. Run <code>uv run trademare scan -m {{ market.value }}</code>.</p></div>
+{% else %}
+<section class="card regime-card">
+  <div class="card-head"><h2>Market regime · {{ scan.asof }}</h2>{{ regime_badge(scan.regime) }}</div>
+  <ul class="reasons">{% for r in scan.regime.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+  <p class="muted small">
+    Weights: {% for k, v in scan.weights.items() if v > 0 %}{{ k }} {{ "%.2f" | format(v) }}{{ ", " if not loop.last }}{% endfor %}
+    · long needs score ≥ {{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_off" else 0)) }}
+    {% if cfg.allow_short %}· short needs score ≤ −{{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_on" else 0)) }}{% else %}· shorts disabled{% endif %}
+    · stop: {{ cfg.stop_loss.method }} · target: {{ cfg.take_profit.method }} {{ cfg.take_profit.value }}
+  </p>
+</section>
+
+{% if not scan.ideas %}
+  <div class="card"><p>No symbol passed the strategy rules on {{ scan.asof }}.</p></div>
+{% endif %}
+<div class="ideas">
+{% for i in scan.ideas %}
+  {% set lv = i.levels %}
+  <article class="card idea">
+    <div class="idea-head">
+      <div>
+        <a href="/m/{{ market.value }}/{{ i.symbol | urlencode }}"><b class="sym">{{ i.symbol }}</b></a> {{ direction_badge(i.direction.value) }}
+        <div class="sub">{{ i.name }} · {{ i.sector }}</div>
+      </div>
+      <div class="idea-score">{{ score_bar(i.composite) }}<div class="sub">confidence {{ "%.0f" | format(i.confidence * 100) }}%</div></div>
+    </div>
+    <div class="levels">
+      <div><span>Entry (limit)</span><b>{{ lv.entry | money(market, False) }}</b></div>
+      <div><span>Stop ({{ lv.stop_method }})</span><b class="down">{{ lv.stop | money(market, False) }}</b><small>{{ ((lv.stop / lv.entry) - 1) | pct(1, True) }}</small></div>
+      <div><span>Target</span><b class="up">{{ lv.target | money(market, False) }}</b>{% if lv.target %}<small>{{ ((lv.target / lv.entry) - 1) | pct(1, True) }}</small>{% endif %}</div>
+      <div><span>Risk / share</span><b>{{ lv.risk_per_share | money(market, False) }}</b></div>
+    </div>
+    <div class="grid two">
+      {% for analyst, reasons in i.reasons.items() %}
+      <div><h3>{{ analyst }}</h3><ul class="reasons">{% for r in reasons %}<li>{{ r }}</li>{% else %}<li class="muted">No notable factors</li>{% endfor %}</ul></div>
+      {% endfor %}
+    </div>
+  </article>
+{% endfor %}
+</div>
+<p class="muted small">Ideas are not orders. Position sizing and approval arrive in phases 4–6. Not financial advice.</p>
+{% endif %}
+{% endblock %}

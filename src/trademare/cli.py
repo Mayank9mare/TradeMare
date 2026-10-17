@@ -134,6 +134,39 @@ def cmd_data_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_scan(args: argparse.Namespace) -> int:
+    from trademare.core.models import Direction
+    from trademare.data.service import DataService
+    from trademare.strategy.scanner import run_scan, save_scan
+
+    config = load_config(args.config)
+    setup_logging(config.log_level)
+    service = DataService(config, Secrets())
+    asof = date.fromisoformat(args.date) if args.date else None
+    for market in _markets(args, config):
+        result = run_scan(service, market, asof)
+        path = save_scan(service, result)
+        r = result.regime
+        print(f"\n[{market}] scan {result.asof} — regime {r.label} ({r.score:+.2f}); {'; '.join(r.reasons)}")
+        scored = sum(1 for s in result.scores if s.composite is not None)
+        print(f"  scored {scored}/{len(result.scores)} symbols -> {path}")
+        for direction in Direction:
+            ideas = result.ideas_for(direction)
+            if not ideas:
+                continue
+            print(f"  {direction} ideas:")
+            for i in ideas:
+                lv = i.levels
+                target = f"{lv.target:,.2f}" if lv.target else "—"
+                print(
+                    f"    {i.symbol:<12} score {i.composite:+.2f} conf {i.confidence:.2f}  "
+                    f"entry {lv.entry:,.2f} stop {lv.stop:,.2f} target {target}"
+                )
+        if not result.ideas:
+            print("  no ideas passed the strategy rules today")
+    return 0
+
+
 def cmd_web(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -176,6 +209,11 @@ def build_parser() -> argparse.ArgumentParser:
     status = data.add_parser("status", help="show what is cached")
     status.add_argument("-m", "--market", choices=[m.value for m in Market])
     status.set_defaults(func=cmd_data_status)
+
+    scan = sub.add_parser("scan", help="score the universe and propose trade ideas (cached data only)")
+    scan.add_argument("-m", "--market", choices=[m.value for m in Market])
+    scan.add_argument("--date", help="as-of date YYYY-MM-DD (default: latest cached session)")
+    scan.set_defaults(func=cmd_scan)
 
     web = sub.add_parser("web", help="run the local dashboard")
     web.add_argument("--host", default="127.0.0.1")

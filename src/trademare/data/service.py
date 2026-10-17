@@ -63,6 +63,9 @@ class DataService:
 
     def update_prices(self, market: Market, symbols: list[str], through: date | None = None) -> UpdateReport:
         through = through or MarketClock(market).last_completed_session()
+        benchmark = self.config.markets[market].benchmark
+        if benchmark and benchmark not in symbols:
+            symbols = [*symbols, benchmark]
         log.info("%s: updating prices for %d symbols through %s", market, len(symbols), through)
         return self.market(market).prices.update(
             market, symbols, through, self.config.data.history_years, self.config.data.batch_size

@@ -176,7 +176,7 @@ tests/
 |---|---|---|
 | **0. Scaffold** ✅ | uv project, config, models, logging, tests, CI lint | `pytest` passes and settings load |
 | **1. Data layer** ✅ | Price and fundamental providers for US and India, local cache, universe lists | 5 years of daily bars and fundamentals stored for both universes |
-| **2. Analysts** | Technical and fundamental analysts, regime filter, aggregator | Signals for any `asof` date with readable reasons |
+| **2. Analysts** ✅ | Technical and fundamental analysts, regime filter, aggregator | Signals for any `asof` date with readable reasons |
 | **3. Backtester** | Daily event loop reusing the phase 2 code, costs, metrics (CAGR, Sharpe, max drawdown, win rate), walk-forward split | A report for each market, beating buy-and-hold of the index on a risk-adjusted basis, out of sample |
 | **4. Risk & budget** | Sizing, caps, kill switch, expiry, plus their effect in backtests | Hard limits are never breached (property tests) |
 | **5. Signals live (no orders)** 🔄 dashboard foundation built early (data views) | Scheduler, email digest, dashboard listing signals and positions | Two weeks of daily emails delivered correctly |

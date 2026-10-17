@@ -80,3 +80,25 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 .tabs { display: flex; gap: .4rem; margin-bottom: .75rem; }
 .code { white-space: pre; overflow-x: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
 @media (max-width: 600px) { #chart { height: 320px; } .price { text-align: left; } }
+
+/* Scores, regime, ideas */
+.score { display: inline-flex; align-items: center; gap: .4rem; font-variant-numeric: tabular-nums; font-size: .85rem; }
+.score .track { position: relative; width: 48px; height: 6px; border-radius: 3px; background: var(--row-hover); border: 1px solid var(--border); overflow: hidden; }
+.score .fill { position: absolute; top: 0; bottom: 0; background: var(--muted); }
+.score.up .fill { background: var(--up); } .score.down .fill { background: var(--down); }
+.badge.regime.risk_on, .badge.dir.long { color: var(--up); border-color: var(--up); }
+.badge.regime.risk_off, .badge.dir.short { color: var(--down); border-color: var(--down); }
+.badge.dir { font-weight: 700; font-size: .7rem; vertical-align: middle; }
+.reasons { margin: .25rem 0 0; padding-left: 1.1rem; }
+.reasons li { margin: .15rem 0; }
+.ideas { display: grid; gap: 1rem; margin-top: 1rem; }
+.idea-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .75rem; }
+.idea .sym { font-size: 1.15rem; }
+.idea-score { text-align: right; }
+.levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .5rem; margin-bottom: 1rem; }
+.levels div { background: var(--row-hover); border-radius: 8px; padding: .5rem .7rem; display: flex; flex-direction: column; }
+.levels span { color: var(--muted); font-size: .75rem; }
+.levels small { color: var(--muted); }
+.analysis-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.components { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin: .3rem 0 .5rem; color: var(--muted); font-size: .8rem; }
+.analysis h3 { display: flex; align-items: center; gap: .6rem; }

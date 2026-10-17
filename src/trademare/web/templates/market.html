@@ -1,7 +1,9 @@
 {% extends "base.html" %}
+{% from "_macros.html" import score_bar, direction_badge, regime_badge %}
 {% block title %}{{ cfg.universe }} · TradeMare{% endblock %}
 {% block content %}
 <h1>{{ "India" if market.value == "IN" else "US" }} · {{ cfg.universe }} <small class="muted">{{ rows | length }} symbols</small></h1>
+{% if scan %}<p class="muted">Scores from scan {{ scan.asof }} · {{ regime_badge(scan.regime) }} · <a href="/m/{{ market.value }}/ideas">{{ scan.ideas | length }} ideas →</a></p>{% endif %}
 <div class="toolbar">
   <input id="q" type="search" placeholder="Search symbol or name…" autofocus>
   <select id="sector"><option value="">All sectors</option>{% for s in sectors %}<option>{{ s }}</option>{% endfor %}</select>
@@ -10,7 +12,7 @@
 <div class="table-wrap">
 <table class="data sortable" id="universe">
   <thead><tr>
-    <th data-type="text">Symbol</th><th data-type="text">Sector</th>
+    <th data-type="text">Symbol</th><th class="num" title="Composite analyst score, -1 to +1">Score</th><th data-type="text">Sector</th>
     <th class="num">Close</th><th class="num">1D</th><th class="num">1M</th><th class="num">6M</th><th class="num">1Y</th>
     <th class="num" title="Distance from 52-week high">52W hi</th>
     <th class="num">Mkt cap</th><th class="num">P/E</th><th class="num" title="TTM revenue growth">Rev gr.</th>
@@ -19,7 +21,8 @@
   <tbody>
   {% for r in rows %}
     <tr data-search="{{ (r.symbol ~ ' ' ~ r.name) | lower }}" data-sector="{{ r.sector }}">
-      <td data-v="{{ r.symbol }}"><a href="/m/{{ market.value }}/{{ r.symbol | urlencode }}"><b>{{ r.symbol }}</b></a><div class="sub">{{ r.name }}</div></td>
+      <td data-v="{{ r.symbol }}"><a href="/m/{{ market.value }}/{{ r.symbol | urlencode }}"><b>{{ r.symbol }}</b></a>{% if r.symbol in ideas %} {{ direction_badge(ideas[r.symbol]) }}{% endif %}<div class="sub">{{ r.name }}</div></td>
+      {% set sc = scores.get(r.symbol) %}<td class="num" data-v="{{ sc if sc is not none else '' }}">{{ score_bar(sc) }}</td>
       <td data-v="{{ r.sector }}" class="sub">{{ r.sector }}</td>
       <td class="num" data-v="{{ r.close or '' }}">{{ r.close | num(2) }}</td>
       {% for k in ["chg_1d", "chg_1m", "chg_6m", "chg_1y"] %}{% set v = r.returns[k] %}

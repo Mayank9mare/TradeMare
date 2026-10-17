@@ -21,6 +21,7 @@ from trademare.core.models import Market
 from trademare.data.fields import FIELDS
 from trademare.data.service import DataService
 from trademare.data.universe import load_universe
+from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
 from trademare.web.snapshot import SnapshotCache
 
@@ -39,6 +40,17 @@ def create_app(config: AppConfig | None = None, service: DataService | None = No
     env = templates.env
     env.filters.update(money=formatting.money, pct=formatting.pct, num=formatting.num, tone=formatting.tone)
     env.globals.update(version=__version__, markets=list(config.markets))
+
+    scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}
+
+    def latest_scan(market: Market) -> ScanResult | None:
+        """Most recent saved scan, re-read only when a newer one is written."""
+        folder = scan_dir(service, market)
+        version = folder.stat().st_mtime if folder.exists() else 0.0
+        cached = scan_cache.get(market)
+        if cached is None or cached[0] != version:
+            scan_cache[market] = (version, load_latest_scan(service, market))
+        return scan_cache[market][1]
 
     def market_or_404(code: str) -> Market:
         try:
@@ -63,6 +75,7 @@ def create_app(config: AppConfig | None = None, service: DataService | None = No
             dated = [r for r in rows if r.last_date]
             advancers = sum(1 for r in rows if (r.returns["chg_1d"] or 0) > 0)
             clock = MarketClock(market)
+            scan = latest_scan(market)
             cards.append(
                 dict(
                     market=market,
@@ -77,6 +90,7 @@ def create_app(config: AppConfig | None = None, service: DataService | None = No
                     next_session=_safe(lambda c=clock: c.next_session(date.today())),
                     top=sorted(dated, key=lambda r: r.returns["chg_1d"] or 0, reverse=True)[:5],
                     bottom=sorted(dated, key=lambda r: r.returns["chg_1d"] or 0)[:5],
+                    scan=scan,
                 )
             )
         return templates.TemplateResponse(request, "overview.html", {"cards": cards, "config": config})
@@ -86,10 +100,37 @@ def create_app(config: AppConfig | None = None, service: DataService | None = No
         market = market_or_404(code)
         rows = snapshots.get(market)
         sectors = sorted({r.sector for r in rows if isinstance(r.sector, str)})
+        scan = latest_scan(market)
+        scores = {s.symbol: s.composite for s in scan.scores} if scan else {}
+        ideas = {i.symbol: i.direction.value for i in scan.ideas} if scan else {}
         return templates.TemplateResponse(
             request,
             "market.html",
-            {"market": market, "rows": rows, "sectors": sectors, "cfg": config.markets[market]},
+            {
+                "market": market,
+                "rows": rows,
+                "sectors": sectors,
+                "cfg": config.markets[market],
+                "scores": scores,
+                "ideas": ideas,
+                "scan": scan,
+            },
+        )
+
+    # Registered before /m/{code}/{symbol} so "ideas" is not taken as a symbol.
+    @app.get("/m/{code}/ideas", response_class=HTMLResponse)
+    def ideas_page(request: Request, code: str):
+        market = market_or_404(code)
+        return templates.TemplateResponse(
+            request,
+            "ideas.html",
+            {
+                "market": market,
+                "scan": latest_scan(market),
+                "cfg": config.markets[market],
+                "config_min": config.strategy.min_composite_score,
+                "penalty": config.strategy.regime_penalty,
+            },
         )
 
     @app.get("/m/{code}/{symbol}", response_class=HTMLResponse)
@@ -103,6 +144,9 @@ def create_app(config: AppConfig | None = None, service: DataService | None = No
         last = bars.index[-1].date()
         close = float(bars["close"].iloc[-1])
         info = universe.loc[symbol] if symbol in universe.index else None
+        scan = latest_scan(market)
+        score = next((x for x in scan.scores if x.symbol == symbol), None) if scan else None
+        idea = next((x for x in scan.ideas if x.symbol == symbol), None) if scan else None
         statements = {
             label: _statement_table(financials, kind, limit)
             for label, kind, limit in (("Quarterly", "Q", 8), ("Annual", "A", 6))
@@ -122,6 +166,9 @@ def create_app(config: AppConfig | None = None, service: DataService | None = No
                 "statements": statements,
                 "rows": STATEMENT_ROWS,
                 "source": service.market(market).financials.source.source,
+                "scan": scan,
+                "score": score,
+                "idea": idea,
             },
         )
 

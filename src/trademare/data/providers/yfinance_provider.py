@@ -17,6 +17,8 @@ log = logging.getLogger(__name__)
 
 
 def yf_symbol(market: Market, symbol: str) -> str:
+    if symbol.startswith("^"):  # index, e.g. ^NSEI, ^GSPC
+        return symbol
     if market is Market.IN:
         return f"{symbol}.NS"
     return symbol.replace(".", "-")  # BRK.B -> BRK-B
