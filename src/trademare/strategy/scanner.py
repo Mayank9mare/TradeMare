@@ -14,11 +14,12 @@ from pathlib import Path
 import pandas as pd
 from pydantic import BaseModel, Field
 
+from trademare.analysis.factors import FACTORS, combine_ranks, factor_values
 from trademare.analysis.fundamental import FundamentalScore, score_universe
 from trademare.analysis.ratios import finalize_ratios, statement_ratios
 from trademare.analysis.regime import Regime, RegimeLabel, compute_regime
 from trademare.analysis.technical import TechnicalScore, score_features, technical_features
-from trademare.config.schema import AppConfig, MarketConfig
+from trademare.config.schema import AppConfig, MarketConfig, Rebalance, StrategyMode
 from trademare.core.interfaces import AnalystResult
 from trademare.core.models import Direction, Market
 from trademare.data.service import DataService
@@ -62,6 +63,10 @@ class ScanResult(BaseModel):
     weights: dict[str, float]
     ideas: list[Idea]
     scores: list[SymbolScore]
+    mode: str = "swing"
+    # Held positions exit when their composite crosses these (long: <=, short: >=).
+    exit_long_below: float = 0.0
+    exit_short_above: float = 0.0
 
     def ideas_for(self, direction: Direction) -> list[Idea]:
         return [i for i in self.ideas if i.direction is direction]
@@ -239,6 +244,18 @@ class ScanContext:
                 ratios[symbol] = self.ratios(symbol, asof, float(row["close"]))
         return score_universe(ratios, self.sectors)
 
+    def regime_at(self, ts: pd.Timestamp, rows: dict[str, dict[str, float]] | None = None) -> Regime:
+        """Market regime from the index trend and the share of stocks above their SMA200."""
+        if rows is None:
+            rows = {s: r for s in self.symbols if (r := self.feature_row(s, ts)) is not None}
+        with_200 = [r for r in rows.values() if pd.notna(r["sma200"])]
+        breadth = sum(r["close"] > r["sma200"] for r in with_200) / len(with_200) if with_200 else None
+        index_row = None
+        if self.benchmark_features is not None:
+            i = self.benchmark_features.index.searchsorted(ts, side="right") - 1
+            index_row = self.benchmark_features.iloc[i] if i >= 0 else None
+        return compute_regime(index_row, breadth)
+
     def evaluate(
         self,
         asof: date,
@@ -246,24 +263,17 @@ class ScanContext:
         keep_scores: bool = True,
     ) -> ScanResult:
         """Score the universe and pick ideas as of ``asof`` (after that day's close)."""
+        if self.cfg.strategy_mode is StrategyMode.FACTOR:
+            return self._evaluate_factor(asof, keep_scores)
+        return self._evaluate_swing(asof, fundamentals, keep_scores)
+
+    def _evaluate_swing(
+        self, asof: date, fundamentals: dict[str, FundamentalScore] | None, keep_scores: bool
+    ) -> ScanResult:
         ts = pd.Timestamp(asof)
         fund = self.fundamental_scores(asof) if fundamentals is None else fundamentals
-
-        rows: dict[str, dict[str, float]] = {}
-        above_200 = counted = 0
-        for symbol in self.symbols:
-            row = self.feature_row(symbol, ts)
-            if row is None:
-                continue
-            rows[symbol] = row
-            if pd.notna(row["sma200"]):
-                counted += 1
-                above_200 += bool(row["close"] > row["sma200"])
-        index_row = None
-        if self.benchmark_features is not None:
-            i = self.benchmark_features.index.searchsorted(ts, side="right") - 1
-            index_row = self.benchmark_features.iloc[i] if i >= 0 else None
-        regime = compute_regime(index_row, above_200 / counted if counted else None)
+        rows = {s: r for s in self.symbols if (r := self.feature_row(s, ts)) is not None}
+        regime = self.regime_at(ts, rows)
 
         scores: list[SymbolScore] = []
         ideas: list[Idea] = []
@@ -329,9 +339,129 @@ class ScanContext:
         if not keep_scores:
             # Backtests only need composites; drop analyst detail to save memory.
             scores = [s.model_copy(update={"analysts": {}}) for s in scores if s.composite is not None]
+        exit_score = self.config.strategy.exit_score
         return ScanResult(
-            market=self.market, asof=asof, regime=regime, weights=self.weights, ideas=ranked, scores=scores
+            market=self.market,
+            asof=asof,
+            regime=regime,
+            weights=self.weights,
+            ideas=ranked,
+            scores=scores,
+            exit_long_below=exit_score,
+            exit_short_above=-exit_score,
         )
+
+    def _evaluate_factor(self, asof: date, keep_scores: bool) -> ScanResult:
+        """Strategy v2: rank liquid symbols on the configured factors."""
+        ts = pd.Timestamp(asof)
+        names = self.cfg.factors
+        strat = self.config.strategy
+        values = factor_values(self, asof, names)
+        regime = self.regime_at(ts)
+        liquid = values[values["liquid"].astype(bool)] if not values.empty else values
+        combined = combine_ranks(liquid, names) if not liquid.empty else pd.Series(dtype="float64")
+        # Re-rank so composite maps exactly to a percentile: top 10% <=> composite >= 0.8.
+        composite = combined.rank(pct=True) * 2 - 1
+        factor_pct = {n: liquid[n].rank(pct=True) for n in names if n in liquid}
+        factor_pos = {n: liquid[n].rank(ascending=False, method="min") for n in names if n in liquid}
+        counts = {n: int(liquid[n].count()) for n in names if n in liquid}
+        entry_cut = 1 - 2 * strat.factor_entry_pct
+        exit_cut = 1 - 2 * strat.factor_exit_pct
+
+        scores: list[SymbolScore] = []
+        ideas: list[Idea] = []
+        for symbol in self.symbols:
+            c = composite.get(symbol)
+            close = float(values.at[symbol, "close"]) if symbol in values.index else None
+            analysts: dict[str, AnalystResult] = {}
+            if c is not None:
+                reasons, details = [], {}
+                for n in names:
+                    v = values.at[symbol, n]
+                    if pd.isna(v):
+                        continue
+                    details[n] = round(float(factor_pct[n][symbol]) * 2 - 1, 4)
+                    reasons.append(
+                        f"{FACTORS[n].label} {FACTORS[n].display(float(v))} "
+                        f"(#{int(factor_pos[n][symbol])} of {counts[n]})"
+                    )
+                analysts["factor"] = AnalystResult(
+                    analyst="factor",
+                    score=round(float(c), 4),
+                    confidence=round(len(details) / len(names), 4),
+                    reasons=reasons,
+                    details=details,
+                )
+            score = SymbolScore(
+                symbol=symbol,
+                name=self.names[symbol],
+                sector=self.sectors[symbol],
+                close=close,
+                composite=None if c is None else round(float(c), 4),
+                confidence=analysts["factor"].confidence if analysts else 0.0,
+                liquid=c is not None,
+                analysts=analysts,
+            )
+            scores.append(score)
+            if c is None:
+                continue
+            direction = (
+                Direction.LONG
+                if self.cfg.allow_long and c >= entry_cut
+                else Direction.SHORT
+                if self.cfg.allow_short and c <= -entry_cut
+                else None
+            )
+            if direction is None:
+                continue
+            row = self.feature_row(symbol, ts)
+            atr_now = row["atr"] if self.cfg.stop_loss.atr_period == 14 else None
+            levels = compute_levels(
+                self.market,
+                direction,
+                self.bars_until(symbol, ts),
+                self.cfg.stop_loss,
+                self.cfg.take_profit,
+                atr_value=atr_now,
+            )
+            if levels is None:
+                continue
+            ideas.append(
+                Idea(
+                    symbol=symbol,
+                    name=score.name,
+                    sector=score.sector,
+                    direction=direction,
+                    composite=score.composite,
+                    confidence=score.confidence,
+                    levels=levels,
+                    reasons={"factor": analysts["factor"].reasons},
+                )
+            )
+
+        ideas.sort(key=lambda i: abs(i.composite), reverse=True)
+        if not keep_scores:
+            scores = [s.model_copy(update={"analysts": {}}) for s in scores if s.composite is not None]
+        return ScanResult(
+            market=self.market,
+            asof=asof,
+            regime=regime,
+            weights={n: 1 / len(names) for n in names},
+            ideas=ideas,
+            scores=scores,
+            mode="factor",
+            exit_long_below=exit_cut,
+            exit_short_above=-exit_cut,
+        )
+
+
+def is_rebalance_day(previous: date | None, today: date, frequency: Rebalance) -> bool:
+    """True on the first session of each period (``previous`` is the prior session)."""
+    if previous is None or frequency is Rebalance.DAILY:
+        return True
+    if frequency is Rebalance.WEEKLY:
+        return previous.isocalendar()[:2] != today.isocalendar()[:2]
+    return (previous.year, previous.month) != (today.year, today.month)
 
 
 def run_scan(service: DataService, market: Market, asof: date | None = None) -> ScanResult:

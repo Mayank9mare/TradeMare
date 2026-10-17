@@ -52,6 +52,11 @@ def technical_features(bars: pd.DataFrame, benchmark: pd.DataFrame | None = None
     down_vol = (volume * (direction < 0)).rolling(20).sum()
     f["updown_vol"] = up_vol / down_vol.replace(0, np.nan)
     f["traded_value_20"] = (close * volume).rolling(20).mean()
+    f["traded_value_126"] = (close * volume).rolling(126, min_periods=60).mean()
+    # Longer-horizon factor inputs (see analysis/factors.py).
+    f["ret_12_1"] = close.shift(21) / close.shift(252) - 1  # 12-month return skipping the last month
+    f["high_52w_ratio"] = close / bars["high"].rolling(252, min_periods=252).max()
+    f["vol_252"] = np.log(close).diff().rolling(252, min_periods=200).std() * np.sqrt(252)
     f["dist_sma20"] = close / f["sma20"] - 1
     f["dist_sma50"] = close / f["sma50"] - 1
     f["bars"] = np.arange(1, len(f) + 1)

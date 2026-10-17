@@ -38,6 +38,17 @@ class TakeProfitMethod(StrEnum):
     NONE = "none"
 
 
+class StrategyMode(StrEnum):
+    SWING = "swing"  # v1: multi-analyst composite, daily ideas
+    FACTOR = "factor"  # v2: cross-sectional factor ranks, periodic rebalance
+
+
+class Rebalance(StrEnum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+
+
 class ShortInstrument(StrEnum):
     CASH = "cash"
     FUTURES = "futures"
@@ -90,6 +101,10 @@ ALLOWED_FUNDAMENTALS_SOURCES: dict[Market, set[str]] = {
 
 class MarketConfig(_Strict):
     enabled: bool = True
+    validated: bool = Field(
+        False,
+        description="Set true only after a strategy passes its out-of-sample bar; live orders require it",
+    )
     broker: str
     universe: str = Field(description="Name of the symbol universe, e.g. nifty200 or sp500")
     price_source: str = "yfinance"
@@ -97,6 +112,14 @@ class MarketConfig(_Strict):
     benchmark: str | None = Field(
         None, description="Index symbol for relative strength and regime, e.g. ^NSEI"
     )
+    universe_top_n: int | None = Field(
+        None,
+        ge=10,
+        description="If set, on each date trade only the N most-traded names (6-month average value) of the "
+        "universe — approximates point-in-time index membership and reduces survivorship bias",
+    )
+    strategy_mode: StrategyMode = StrategyMode.SWING
+    factors: list[str] = Field(default_factory=list, description="Factor names for strategy_mode: factor")
     min_avg_traded_value: float = Field(
         0.0, ge=0, description="Skip symbols whose 20-day average traded value is below this"
     )
@@ -125,6 +148,8 @@ class MarketConfig(_Strict):
 
     @model_validator(mode="after")
     def _sane_limits(self) -> Self:
+        if self.strategy_mode is StrategyMode.FACTOR and not self.factors:
+            raise ValueError("strategy_mode 'factor' requires a non-empty factors list")
         if not (self.allow_long or self.allow_short):
             raise ValueError("at least one of allow_long / allow_short must be true")
         if self.risk_per_trade_pct > self.max_position_pct:
@@ -164,6 +189,19 @@ class StrategyConfig(_Strict):
     fundamentals_refresh_days: int = Field(
         7, ge=1, description="How often fundamental scores are recomputed (prices still update daily)"
     )
+    # Factor mode (strategy v2)
+    factor_rebalance: Rebalance = Rebalance.MONTHLY
+    factor_entry_pct: float = Field(0.10, gt=0, le=0.5, description="Buy names ranked in this top share")
+    factor_exit_pct: float = Field(0.30, gt=0, le=1, description="Sell names that fall out of this top share")
+    risk_off_exposure: float = Field(
+        1.0, ge=0, le=1, description="Share of max_open_positions allowed while the regime is risk-off"
+    )
+
+    @model_validator(mode="after")
+    def _factor_bands(self) -> Self:
+        if self.factor_exit_pct < self.factor_entry_pct:
+            raise ValueError("factor_exit_pct must be >= factor_entry_pct (exit band wider than entry band)")
+        return self
 
 
 class EmailConfig(_Strict):

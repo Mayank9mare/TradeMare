@@ -25,11 +25,12 @@ import pandas as pd
 
 from trademare.analysis.fundamental import FundamentalScore
 from trademare.analysis.indicators import atr
+from trademare.analysis.regime import RegimeLabel
 from trademare.backtest.costs import cost_model
-from trademare.config.schema import AppConfig, StopLossConfig, TrailMethod
+from trademare.config.schema import AppConfig, Rebalance, StopLossConfig, StrategyMode, TrailMethod
 from trademare.core.models import Direction, OrderSide
 from trademare.risk.sizing import position_size
-from trademare.strategy.scanner import Idea, ScanContext
+from trademare.strategy.scanner import Idea, ScanContext, is_rebalance_day
 
 log = logging.getLogger(__name__)
 
@@ -130,6 +131,9 @@ class Backtester:
         last_fund_refresh: pd.Timestamp | None = None
         borrow_daily = self.config.backtest.short_borrow_rate_pct / 100 / 252
         equity = initial
+        factor_mode = cfg.strategy_mode is StrategyMode.FACTOR
+        rebalance = strat.factor_rebalance if factor_mode else Rebalance.DAILY
+        max_positions = cfg.max_open_positions
 
         def bar(symbol: str, ts: pd.Timestamp) -> pd.Series | None:
             bars = ctx.bars.get(symbol)
@@ -180,7 +184,7 @@ class Backtester:
             # 2. Limit entries from the previous close.
             fill_prices: dict[str, float] = {}
             for idea in pending_entries:
-                if idea.symbol in positions or len(positions) >= cfg.max_open_positions:
+                if idea.symbol in positions or len(positions) >= max_positions:
                     continue
                 b = bar(idea.symbol, ts)
                 if b is None:
@@ -292,8 +296,17 @@ class Backtester:
                     if progress_r < 0.5:
                         pending_exits[pos.symbol] = "time stop"
 
-            # 6. Scan at the close for tomorrow's orders.
-            if last_fund_refresh is None or (ts - last_fund_refresh).days >= strat.fundamentals_refresh_days:
+            if progress:
+                progress(i + 1, len(sessions))
+
+            # 6. On rebalance days, scan at the close for tomorrow's orders.
+            if not is_rebalance_day(sessions[i - 1].date() if i else None, today, rebalance):
+                continue
+            if factor_mode:
+                fundamentals = {}
+            elif (
+                last_fund_refresh is None or (ts - last_fund_refresh).days >= strat.fundamentals_refresh_days
+            ):
                 fundamentals = ctx.fundamental_scores(today)
                 last_fund_refresh = ts
             scan = ctx.evaluate(today, fundamentals=fundamentals, keep_scores=False)
@@ -302,13 +315,21 @@ class Backtester:
                 c = composites.get(pos.symbol)
                 if c is None or pos.symbol in pending_exits:
                     continue
-                if (pos.direction is Direction.LONG and c <= strat.exit_score) or (
-                    pos.direction is Direction.SHORT and c >= -strat.exit_score
+                if (pos.direction is Direction.LONG and c <= scan.exit_long_below) or (
+                    pos.direction is Direction.SHORT and c >= scan.exit_short_above
                 ):
                     pending_exits[pos.symbol] = "signal"
+            # Regime filter: fewer slots in risk-off; trim the weakest holdings beyond them.
+            max_positions = cfg.max_open_positions
+            if scan.regime.label is RegimeLabel.RISK_OFF:
+                max_positions = int(cfg.max_open_positions * strat.risk_off_exposure)
+            staying = [p for p in positions.values() if p.symbol not in pending_exits]
+            excess = len(staying) - max_positions
+            if excess > 0:
+                weakest = sorted(staying, key=lambda p: p.sign * (composites.get(p.symbol) or 0.0))
+                for pos in weakest[:excess]:
+                    pending_exits[pos.symbol] = "regime"
             pending_entries = [idea for idea in scan.ideas if idea.symbol not in positions]
-            if progress:
-                progress(i + 1, len(sessions))
 
         benchmark = None
         if ctx.benchmark is not None:

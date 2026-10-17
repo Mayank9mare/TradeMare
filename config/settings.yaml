@@ -15,8 +15,12 @@ data:
 markets:
   IN:
     enabled: true
+    validated: false           # strategy v2 failed its out-of-sample bar: paper trading only
     broker: paper              # zerodha | dhan | paper
-    universe: nifty200
+    universe: nifty500
+    universe_top_n: 200        # each day, only the 200 most-traded names (reduces survivorship bias)
+    strategy_mode: factor      # v2 paper candidate — see docs/research/2026-10-17-strategy-v2-plan.md
+    factors: [mom_12_1, earnings_yield]
     price_source: yfinance
     fundamentals_source: yfinance  # filing dates estimated from SEBI reporting deadlines
     benchmark: "^NSEI"             # Nifty 50: relative strength + market regime
@@ -31,25 +35,24 @@ markets:
 
     risk_per_trade_pct: 1.0    # % of budget risked between entry and stop
     max_position_pct: 15       # max % of budget in one position
-    max_open_positions: 8
+    max_open_positions: 10
     max_sector_pct: 30
 
     stop_loss:
       method: atr              # atr | percent | swing_low | fixed_amount
-      atr_multiple: 2.0
+      atr_multiple: 3.0        # wide protective stop for monthly momentum holdings
       atr_period: 14
       percent: 5.0             # used when method: percent
       fixed_amount: null       # per-share distance, used when method: fixed_amount
       swing_lookback: 10       # used when method: swing_low
-      trailing: true
+      trailing: false
       trail_method: atr        # atr | percent
       trail_value: 2.5
 
     take_profit:
-      method: r_multiple       # r_multiple | percent | none
-      value: 2.0
+      method: none             # r_multiple | percent | none — momentum lets winners run
 
-    time_stop_days: 15         # exit if no progress after N sessions (null = off)
+    time_stop_days: null       # exit if no progress after N sessions (null = off)
     signal_expiry_sessions: 1  # unapproved signals expire after N sessions
 
     kill_switch:
@@ -58,6 +61,7 @@ markets:
 
   US:
     enabled: true
+    validated: false           # no factor passed selection (v2); swing v1 has no edge: signals only
     broker: paper              # alpaca | paper
     universe: sp500
     price_source: yfinance
@@ -107,6 +111,11 @@ strategy:
   avoid_extended_entries: true # don't chase overextended moves
   exit_score: 0.0              # exit a long when its composite falls to this (shorts: rises to -this)
   fundamentals_refresh_days: 7 # recompute fundamental scores weekly
+  # Factor mode (markets with strategy_mode: factor)
+  factor_rebalance: monthly    # daily | weekly | monthly
+  factor_entry_pct: 0.10       # buy names ranked in the top 10%
+  factor_exit_pct: 0.30        # sell names that fall out of the top 30%
+  risk_off_exposure: 0.5       # in risk-off regimes allow only half of max_open_positions
 
 backtest:
   years: 5                     # default length, ending at the latest cached session

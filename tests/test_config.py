@@ -21,7 +21,8 @@ def test_local_override_is_deep_merged(base_config_dict, write_config):
     india = config.markets[Market.IN]
     assert india.budget == 500000
     assert india.broker == "dhan"
-    assert india.stop_loss.atr_multiple == 2.0  # untouched keys survive
+    # untouched keys survive the merge
+    assert india.stop_loss.atr_multiple == base_config_dict["markets"]["IN"]["stop_loss"]["atr_multiple"]
 
 
 def test_env_var_selects_config(base_config_dict, write_config, monkeypatch):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -57,7 +58,10 @@ def run_backtest(
     result = Backtester(ctx, config).run(start, end, progress=progress)
     summary = summarize(result, config.backtest.out_of_sample_fraction)
 
-    run_id = f"{market.value}-{result.start}-{result.end}-{datetime.now():%Y%m%d%H%M%S}"
+    # Random suffix: parallel runs started in the same second must not overwrite each other.
+    run_id = (
+        f"{market.value}-{result.start}-{result.end}-{datetime.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:6]}"
+    )
     folder = backtests_dir(config) / run_id
     folder.mkdir(parents=True, exist_ok=True)
     meta: dict[str, Any] = {

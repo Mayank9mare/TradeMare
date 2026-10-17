@@ -43,3 +43,56 @@ The chosen variant is run once on 2024-10-16 → 2026-10-16. **Pass bar:** out-o
 - Universe = current constituents (survivorship bias), which particularly flatters momentum.
 - Five years per period is short, so t-stats are noisy.
 - Price indices used as benchmarks exclude dividends.
+
+---
+
+# Results (appended after the runs; the plan above was committed before any test)
+
+## Step 1: factor selection, in-sample 2019-10-15 → 2024-10-15, 63-session horizon
+
+| Market | Factor | Mean IC | t-stat | Selected |
+|---|---|---|---|---|
+| US | mom_12_1 | −0.018 | −0.7 | no |
+| US | high_52w | −0.061 | −2.1 | no (wrong sign) |
+| US | low_vol | −0.097 | −2.8 | no (wrong sign) |
+| US | gross_profitability | +0.014 | +0.7 | no |
+| US | earnings_yield | +0.008 | +0.5 | no |
+| IN | **mom_12_1** | **+0.081** | **+3.2** | **yes** |
+| IN | high_52w | −0.009 | −0.3 | no |
+| IN | low_vol | −0.093 | −2.9 | no (wrong sign) |
+| IN | gross_profitability | −0.193 | −3.6 | no (wrong sign; 21% coverage) |
+| IN | **earnings_yield** | **+0.074** | **+2.2** | **yes** (26% coverage, 2023–24 only) |
+
+**US: no factor qualifies, so no trading strategy (signals only).** In the US, high-volatility, beaten-down stocks outperformed in 2019–24. Flipping signs after seeing that would be post-hoc and is not done.
+
+## Step 2: India in-sample variants (current Nifty 200)
+
+| risk_off_exposure | max positions | CAGR | Sharpe | Max DD |
+|---|---|---|---|---|
+| 1.0 | 10 | +46.0% | 1.72 | −41.8% |
+| 1.0 | 20 | +55.7% | 1.83 | −39.2% |
+| **0.5** | **10** | **+58.3%** | **2.18** | **−22.5%** ← chosen (best Sharpe) |
+| 0.5 | 20 | +43.4% | 1.72 | −30.3% |
+| Nifty 50 | | +17.0% | 0.94 | −38.4% |
+
+## Robustness check (NOT pre-registered; added because the numbers were implausible)
+The top 5 trades produced 82% of realised P&L, and several were small or mid caps that joined the Nifty 200 *after* their rallies (CG Power, Apar, Kalyan Jewellers, Dixon). That is survivorship bias.
+
+The stricter universe: current Nifty 500 names that were among the **200 most-traded on each date** (`universe_top_n: 200`). This can only make the test harder; it adds no new choices.
+- Factor study: mom_12_1 IC +0.059 (t +2.3), earnings_yield +0.092 (t +2.6). **Both still qualify.**
+- Chosen variant, in-sample: **CAGR +28.1% vs +17.0%, Sharpe 1.37 vs 0.94, max DD −33.0% vs −38.4%.** Roughly half of the apparent outperformance was survivorship bias.
+
+## Step 3: the single out-of-sample run, 2024-10-16 → 2026-10-16
+
+| | Strategy (point-in-time universe, decisive) | Strategy (Nifty 200, reference) | Nifty 50 |
+|---|---|---|---|
+| Total return | −6.5% | +13.7% | −7.3% |
+| Sharpe | −0.17 | +0.46 | −0.23 |
+| Max drawdown | −24.1% | −22.1% | −15.6% |
+
+Pass bar: Sharpe ≥ index (−0.17 ≥ −0.23, **passes**) and max DD within 5 points of the index (−24.1% vs −15.6% is 8.5 points worse, **fails**).
+
+## Verdict
+**Strategy v2 fails the pre-registered bar** and must not be traded with real money. It is not re-tuned on the out-of-sample period.
+
+India momentum is the only effect with in-sample support that survives the survivorship correction. It becomes the **paper-trading candidate**: forward paper trading is the next genuine out-of-sample test and costs nothing. Both markets are marked `validated: false`, which blocks live orders.

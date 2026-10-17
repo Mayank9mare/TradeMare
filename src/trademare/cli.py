@@ -189,18 +189,24 @@ def cmd_backtest(args: argparse.Namespace) -> int:
 def cmd_research(args: argparse.Namespace) -> int:
     from datetime import timedelta
 
-    from trademare.backtest.diagnostics import format_study, signal_study
+    from trademare.backtest.diagnostics import factor_study, format_study, signal_study
+    from trademare.backtest.report import apply_overrides
     from trademare.data.service import DataService
     from trademare.strategy.scanner import ScanContext
 
-    config = load_config(args.config)
+    config = apply_overrides(load_config(args.config), args.set or [])
     setup_logging("WARNING")
     for market in _markets(args, config):
         ctx = ScanContext(DataService(config, Secrets()), market)
         end = date.fromisoformat(args.end) if args.end else ctx.last_date()
         start = date.fromisoformat(args.start) if args.start else end - timedelta(days=round(365.25 * 5))
-        study = signal_study(ctx, start, end, horizon=args.horizon, step=args.step)
-        print(format_study(market.value, study) + "\n")
+        if args.factors:
+            names = [f.strip() for f in args.factors.split(",")]
+            study = factor_study(ctx, start, end, names, horizon=args.horizon, step=args.step)
+            print(format_study(market.value, study, f"factor study {start}..{end}") + "\n")
+        else:
+            study = signal_study(ctx, start, end, horizon=args.horizon, step=args.step)
+            print(format_study(market.value, study, f"signal study {start}..{end}") + "\n")
     return 0
 
 
@@ -268,6 +274,11 @@ def build_parser() -> argparse.ArgumentParser:
     research.add_argument("--end", help="YYYY-MM-DD (default: latest cached session)")
     research.add_argument("--horizon", type=int, default=20, help="forward return horizon in sessions")
     research.add_argument("--step", type=int, default=5, help="sample every N sessions")
+    research.add_argument(
+        "--factors",
+        help="comma-separated factor names to study instead of the strategy scores, e.g. mom_12_1,low_vol",
+    )
+    research.add_argument("--set", action="append", metavar="KEY=VALUE", help="override config for this run")
     research.set_defaults(func=cmd_research)
 
     web = sub.add_parser("web", help="run the local dashboard")

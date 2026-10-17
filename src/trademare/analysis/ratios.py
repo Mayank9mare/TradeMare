@@ -25,7 +25,8 @@ def _div(a: float | None, b: float | None) -> float | None:
 RATIO_KEYS = (
     "market_cap", "pe", "price_to_book", "fcf_yield", "gross_margin", "operating_margin", "net_margin",
     "roe", "roa", "debt_to_equity", "current_ratio", "interest_coverage", "revenue_growth",
-    "earnings_growth", "revenue_ttm", "net_income_ttm", "total_equity", "data_age_days",
+    "earnings_growth", "gross_profitability", "revenue_ttm", "net_income_ttm", "total_equity",
+    "data_age_days",
 )  # fmt: skip
 
 
@@ -63,6 +64,7 @@ def statement_ratios(financials: pd.DataFrame, asof: date) -> dict[str, Any] | N
         "interest_coverage": _div(g("operating_income"), g("interest_expense")),
         "revenue_growth": revenue_growth,
         "earnings_growth": earnings_growth,
+        "gross_profitability": _div(g("gross_profit"), g("total_assets")),  # Novy-Marx (2013)
         "revenue_ttm": g("revenue"),
         "net_income_ttm": net_income,
         "total_equity": g("total_equity"),

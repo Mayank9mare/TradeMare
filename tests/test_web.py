@@ -16,9 +16,9 @@ from trademare.web.formatting import money, pct
 def client(tmp_path, monkeypatch):
     universes = tmp_path / "config" / "universes"
     universes.mkdir(parents=True)
-    (universes / "nifty200.csv").write_text(
-        "symbol,name,sector,cik\nM&M,Mahindra,Automobile,\nINFY,Infosys,IT,\n"
-    )
+    india = "symbol,name,sector,cik\nM&M,Mahindra,Automobile,\nINFY,Infosys,IT,\n"
+    for name in ("nifty200", "nifty500"):
+        (universes / f"{name}.csv").write_text(india)
     (universes / "sp500.csv").write_text("symbol,name,sector,cik\nAAPL,Apple,Tech,0000320193\n")
     monkeypatch.chdir(tmp_path)  # universes resolve relative to cwd
 
