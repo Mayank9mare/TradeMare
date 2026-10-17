@@ -336,7 +336,9 @@ def cmd_serve(args: argparse.Namespace) -> int:
         print(f"[{market}] behind on sessions: catching up in the background")
     print(f"TradeMare dashboard: http://{args.host}:{args.port}")
     try:
-        uvicorn.run(create_app(config), host=args.host, port=args.port, log_level="warning")
+        uvicorn.run(
+            create_app(config, config_path=args.config), host=args.host, port=args.port, log_level="warning"
+        )
     finally:
         scheduler.shutdown(wait=False)
     return 0
@@ -413,7 +415,9 @@ def cmd_web(args: argparse.Namespace) -> int:
     if args.host not in ("127.0.0.1", "localhost"):
         print("WARNING: dashboard has no login yet; exposing it beyond localhost is unsafe.", file=sys.stderr)
     print(f"TradeMare dashboard: http://{args.host}:{args.port}")
-    uvicorn.run(create_app(config), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(
+        create_app(config, config_path=args.config), host=args.host, port=args.port, log_level="warning"
+    )
     return 0
 
 

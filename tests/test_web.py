@@ -49,7 +49,7 @@ def client(tmp_path, monkeypatch):
         )
     )
     service.store.write_financials(Market.IN, "yfinance", "M&M", fin)
-    return TestClient(create_app(config, service))
+    return TestClient(create_app(config, service, config_path=REPO_CONFIG))
 
 
 def test_overview(client):

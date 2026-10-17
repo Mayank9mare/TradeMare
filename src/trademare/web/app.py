@@ -6,11 +6,12 @@ import secrets as pysecrets
 from datetime import date
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote
 
 import pandas as pd
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -28,6 +29,7 @@ from trademare.data.universe import load_universe
 from trademare.storage.db import Database
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
+from trademare.web.settings_form import GLOBAL_FIELDS, MARKET_FIELDS, apply_form, current_values
 from trademare.web.snapshot import SnapshotCache
 from trademare.web.trading_routes import register_trading_routes
 
@@ -40,8 +42,9 @@ def create_app(
     service: DataService | None = None,
     db: Database | None = None,
     secrets: Secrets | None = None,
+    config_path: str | Path | None = None,
 ) -> FastAPI:
-    config = config or load_config()
+    config = config or load_config(config_path)
     secrets = secrets or Secrets()
     service = service or DataService(config, secrets)
     db = db or Database(config.database_url)
@@ -254,15 +257,62 @@ def create_app(
         return JSONResponse(payload)
 
     @app.get("/settings", response_class=HTMLResponse)
-    def settings_page(request: Request):
-        dumped = yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False)
-        return templates.TemplateResponse(request, "settings.html", {"config_yaml": dumped})
+    def settings_page(request: Request, saved: str | None = None):
+        on_disk = load_config(config_path)  # show what is on disk, including unapplied edits
+        return templates.TemplateResponse(
+            request,
+            "settings.html",
+            {
+                "config_yaml": yaml.safe_dump(on_disk.model_dump(mode="json"), sort_keys=False),
+                "values": current_values(on_disk),
+                "market_fields": MARKET_FIELDS,
+                "global_fields": GLOBAL_FIELDS,
+                "market_codes": list(on_disk.markets),
+                "on_disk": on_disk,
+                "saved": saved,
+                "errors": [],
+            },
+        )
+
+    @app.post("/settings", response_class=HTMLResponse)
+    async def save_settings(request: Request):
+        form = dict((await request.form()).items())
+        if not pysecrets.compare_digest(str(form.get("csrf_token", "")), templates.env.globals["csrf_token"]):
+            raise HTTPException(403, "invalid form token; reload the page and try again")
+        changes, errors = apply_form(form, config_path)
+        if errors:
+            on_disk = load_config(config_path)
+            return templates.TemplateResponse(
+                request,
+                "settings.html",
+                {
+                    "config_yaml": yaml.safe_dump(on_disk.model_dump(mode="json"), sort_keys=False),
+                    "values": {**current_values(on_disk), **form},
+                    "market_fields": MARKET_FIELDS,
+                    "global_fields": GLOBAL_FIELDS,
+                    "market_codes": list(on_disk.markets),
+                    "on_disk": on_disk,
+                    "saved": None,
+                    "errors": errors,
+                },
+                status_code=422,
+            )
+        summary = "no changes" if not changes else ", ".join(_flatten(changes))
+        return RedirectResponse(f"/settings?saved={quote(summary)}", status_code=303)
 
     return app
 
 
 # Module level: annotations are resolved from module globals (from __future__ import annotations).
 _basic = HTTPBasic(auto_error=False)
+
+
+def _flatten(data: dict, prefix: str = "") -> list[str]:
+    out = []
+    for key, value in data.items():
+        path = f"{prefix}{key}"
+        out += _flatten(value, path + ".") if isinstance(value, dict) else [f"{path} = {value}"]
+    return out
 
 
 def basic_auth(secrets: Secrets):

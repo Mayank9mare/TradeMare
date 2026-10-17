@@ -1,6 +1,41 @@
 {% extends "base.html" %}
+{% block title %}Settings · TradeMare{% endblock %}
 {% block content %}
 <h1>Settings</h1>
-<p class="muted">Effective configuration (<code>config/settings.yaml</code> merged with <code>settings.local.yaml</code>). Read-only for now; editing comes with the dashboard phase. Restart the server after changing files.</p>
+{% if saved %}<div class="flash ok">Saved to <code>config/settings.local.yaml</code>: {{ saved }}. The daily job uses it from its next run; <b>restart <code>trademare serve</code></b> for the dashboard and approvals to use it.</div>{% endif %}
+{% if errors %}<div class="flash bad">Not saved:<ul class="reasons">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+<p class="muted">Changes are validated, then written to your git-ignored <code>config/settings.local.yaml</code>. <b>Broker</b> and <b>validated</b> can only be changed in the files, so live trading can't be switched on from a web form.</p>
+
+<form method="post" action="/settings" class="settings-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid two">
+  {% for m in market_codes %}
+    <section class="card">
+      <h2 style="margin-top:0">{{ "India" if m == "IN" else "US" }} <small class="muted">broker {{ on_disk.markets[m].broker }} · {{ "validated" if on_disk.markets[m].validated else "not validated" }}</small></h2>
+      {% for f in market_fields %}{% set name = m ~ "." ~ f.key %}{% set v = values[name] %}
+      <label class="field"><span>{{ f.label }}{% if f.help %} <small class="muted">— {{ f.help }}</small>{% endif %}</span>
+        {% if f.kind == "bool" %}<input type="checkbox" name="{{ name }}" {% if v in (true, "on", "true") %}checked{% endif %}>
+        {% elif f.kind == "choice" %}<select name="{{ name }}">{% for c in f.choices %}<option {% if c == v %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+        {% else %}<input type="text" inputmode="decimal" name="{{ name }}" value="{{ '' if v is none else v }}">{% endif %}
+      </label>
+      {% endfor %}
+    </section>
+  {% endfor %}
+  </div>
+  <section class="card" style="margin-top:1rem">
+    <h2 style="margin-top:0">General</h2>
+    {% for f in global_fields %}{% set v = values[f.key] %}
+    <label class="field"><span>{{ f.label }}</span>
+      {% if f.kind == "bool" %}<input type="checkbox" name="{{ f.key }}" {% if v in (true, "on", "true") %}checked{% endif %}>
+      {% elif f.kind == "emails" %}<input type="text" name="{{ f.key }}" value="{{ v | join(', ') if v is not string else v }}">
+      {% else %}<input type="text" inputmode="decimal" name="{{ f.key }}" value="{{ v }}">{% endif %}
+    </label>
+    {% endfor %}
+  </section>
+  <p><button type="submit" class="primary">Save settings</button></p>
+</form>
+
+<h2>Effective configuration</h2>
+<p class="muted"><code>config/settings.yaml</code> merged with <code>settings.local.yaml</code>, as on disk now.</p>
 <pre class="card code">{{ config_yaml }}</pre>
 {% endblock %}

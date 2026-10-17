@@ -113,3 +113,8 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 .approve-form input[type=number] { width: 8.5rem; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .35rem .5rem; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .idea.expired { opacity: .55; }
+
+/* Settings form */
+.settings-form .field { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .35rem 0; border-bottom: 1px solid var(--border); }
+.settings-form .field span { color: var(--text); }
+.settings-form input[type=text], .settings-form select { width: 11rem; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .3rem .5rem; }

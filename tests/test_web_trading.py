@@ -42,7 +42,7 @@ def make_app(tmp_path, monkeypatch, password=None):
                 expires_at=datetime(2099, 1, 1, tzinfo=UTC),
             )
         )
-    app = create_app(config, DataService(config, secrets), db, secrets)
+    app = create_app(config, DataService(config, secrets), db, secrets, config_path=REPO_CONFIG)
     return TestClient(app), db
 
 
