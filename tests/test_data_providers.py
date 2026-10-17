@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
@@ -216,6 +218,10 @@ def test_failed_currency_lookup_fails_instead_of_guessing(monkeypatch, tmp_path)
     with pytest.raises(RuntimeError, match="Too Many Requests"):
         provider.get_financials(Market.IN, "INFY")
     assert cache.get("IN:INFY") is None  # nothing cached on failure
+
+    no_currency = SimpleNamespace(info={"symbol": "INFY.NS"})  # rate-limited Yahoo omits the field
+    with pytest.raises(LookupError):
+        yfp.statement_currency(no_currency)
 
     cache.set("IN:INFY", "INR")  # once known, no lookup is needed
     assert yfp.CurrencyCache(tmp_path / "ccy.json").get("IN:INFY") == "INR"  # persisted

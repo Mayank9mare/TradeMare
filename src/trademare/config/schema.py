@@ -235,6 +235,9 @@ class DataConfig(_Strict):
     cache_dir: str = "data/cache"
     history_years: int = Field(8, ge=1, description="Years of daily bars to keep (backtest + warm-up)")
     fundamentals_refresh_days: int = Field(7, ge=1)
+    fundamentals_workers: int = Field(
+        2, ge=1, le=16, description="Parallel fundamentals downloads (Yahoo rate-limits)"
+    )
     batch_size: int = Field(50, ge=1, le=500, description="Symbols per bulk price request")
 
 

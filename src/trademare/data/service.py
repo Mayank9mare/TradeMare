@@ -43,7 +43,9 @@ class DataService:
             cfg = self.config.markets[market]
             prices = PriceCache(YFinancePriceProvider(), self.store)  # only source so far
             financials = FinancialsCache(
-                self._fundamentals_source(market, cfg.fundamentals_source), self.store
+                self._fundamentals_source(market, cfg.fundamentals_source),
+                self.store,
+                workers=self.config.data.fundamentals_workers,
             )
             self._markets[market] = MarketData(market, prices, financials)
         return self._markets[market]

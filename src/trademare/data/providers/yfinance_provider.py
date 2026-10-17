@@ -211,7 +211,7 @@ class YFinanceFundamentalsProvider:
         key = f"{market.value}:{symbol}"
         currency = self.currencies.get(key)
         if currency is None:
-            currency = _with_retry(lambda: statement_currency(t)) or market.currency
+            currency = _with_retry(lambda: statement_currency(t))
             self.currencies.set(key, currency)
         converter = None
         if currency and currency != market.currency:
@@ -223,10 +223,14 @@ class YFinanceFundamentalsProvider:
 def statement_currency(ticker: yf.Ticker) -> str | None:
     """Currency of the financial statements (may differ from the trading currency).
 
-    Errors propagate: guessing the trading currency on a failed lookup would
-    silently store, say, USD figures as INR.
+    Errors propagate, and a missing field is treated as an error: when rate
+    limited, Yahoo returns a cut-down ``info`` without it, and guessing the
+    trading currency would silently store, say, USD figures as INR.
     """
-    return (ticker.info or {}).get("financialCurrency")
+    currency = (ticker.info or {}).get("financialCurrency")
+    if not currency:
+        raise LookupError("Yahoo did not report a statement currency (possibly rate limited)")
+    return currency
 
 
 RETRY_DELAYS = (5, 20, 60)  # seconds; Yahoo rate limits recover within about a minute
