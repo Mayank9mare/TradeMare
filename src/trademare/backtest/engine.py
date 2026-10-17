@@ -29,6 +29,7 @@ from trademare.analysis.regime import RegimeLabel
 from trademare.backtest.costs import cost_model
 from trademare.config.schema import AppConfig, Rebalance, StopLossConfig, StrategyMode, TrailMethod
 from trademare.core.models import Direction, OrderSide
+from trademare.execution.fills import Bar, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.sizing import position_size
 from trademare.strategy.scanner import Idea, ScanContext, is_rebalance_day
 
@@ -98,12 +99,11 @@ class Backtester:
         self.config = config or ctx.config
         self.cfg = self.config.markets[ctx.market]
         self.costs = cost_model(ctx.market)
-        self.slip = self.cfg.slippage_bps / 10_000
         self._atr_cache: dict[str, pd.Series] = {}
 
     # Fills ---------------------------------------------------------------
     def _slipped(self, price: float, side: OrderSide) -> float:
-        return price * (1 + self.slip) if side is OrderSide.BUY else price * (1 - self.slip)
+        return slipped(price, side, self.cfg.slippage_bps)
 
     def _atr(self, symbol: str, sl: StopLossConfig) -> pd.Series:
         if symbol not in self._atr_cache:
@@ -191,11 +191,7 @@ class Backtester:
                     continue
                 limit, stop = idea.levels.entry, idea.levels.stop
                 long = idea.direction is Direction.LONG
-                o, hi, lo = float(b["open"]), float(b["high"]), float(b["low"])
-                if long:
-                    fill = o if o <= limit else (limit if lo <= limit else None)
-                else:
-                    fill = o if o >= limit else (limit if hi >= limit else None)
+                fill = limit_fill(OrderSide.BUY if long else OrderSide.SELL, limit, _bar(b))
                 if fill is None:
                     continue  # limit not reached: order expires
                 if (long and fill <= stop) or (not long and fill >= stop):
@@ -233,26 +229,19 @@ class Backtester:
                 if b is None:
                     continue
                 # A position opened today at its limit could not have seen the open.
-                o = fill_prices.get(pos.symbol, float(b["open"]))
-                hi, lo = float(b["high"]), float(b["low"])
-                if pos.direction is Direction.LONG:
-                    if o <= pos.stop:
-                        close_position(pos, self._slipped(o, OrderSide.SELL), ts, "stop (gap)")
-                    elif lo <= pos.stop:
-                        close_position(pos, self._slipped(pos.stop, OrderSide.SELL), ts, "stop")
-                    elif pos.target is not None and o >= pos.target:
-                        close_position(pos, o, ts, "target (gap)")
-                    elif pos.target is not None and hi >= pos.target:
-                        close_position(pos, pos.target, ts, "target")
-                else:
-                    if o >= pos.stop:
-                        close_position(pos, self._slipped(o, OrderSide.BUY), ts, "stop (gap)")
-                    elif hi >= pos.stop:
-                        close_position(pos, self._slipped(pos.stop, OrderSide.BUY), ts, "stop")
-                    elif pos.target is not None and o <= pos.target:
-                        close_position(pos, o, ts, "target (gap)")
-                    elif pos.target is not None and lo <= pos.target:
-                        close_position(pos, pos.target, ts, "target")
+                opened_at = fill_prices.get(pos.symbol)
+                exit_side = OrderSide.SELL if pos.direction is Direction.LONG else OrderSide.BUY
+                bar_today = _bar(b)
+                if hit := stop_fill(exit_side, pos.stop, bar_today, opened_at):
+                    price, gapped = hit
+                    close_position(
+                        pos, self._slipped(price, exit_side), ts, "stop (gap)" if gapped else "stop"
+                    )
+                elif pos.target is not None and (
+                    hit := target_fill(exit_side, pos.target, bar_today, opened_at)
+                ):
+                    price, gapped = hit
+                    close_position(pos, price, ts, "target (gap)" if gapped else "target")
 
             # 4. Mark to market, borrow fees.
             marked = 0.0
@@ -346,6 +335,10 @@ class Backtester:
             trades=trades,
             open_positions=list(positions.values()),
         )
+
+
+def _bar(row: pd.Series) -> Bar:
+    return Bar(float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"]))
 
 
 def _last_close(bars: pd.DataFrame, ts: pd.Timestamp) -> float:

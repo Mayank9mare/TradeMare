@@ -52,6 +52,17 @@ class MarketClock:
             return self.calendar.previous_session(ts).date()
         return self.calendar.date_to_session(ts, direction="previous").date()
 
+    def sessions_between(self, after: date, through: date) -> list[date]:
+        """Sessions strictly after ``after`` up to and including ``through``."""
+        if through <= after:
+            return []
+        start = self.next_session(after)
+        if start > through:
+            return []
+        return [
+            ts.date() for ts in self.calendar.sessions_in_range(pd.Timestamp(start), pd.Timestamp(through))
+        ]
+
     def session_close(self, day: date) -> datetime:
         """Close time of the session on ``day`` (timezone-aware, market tz)."""
         ts = self._check_range(day)

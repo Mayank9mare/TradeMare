@@ -1,3 +1,4 @@
+from trademare.execution.brokers import paper as _paper  # noqa: F401  (registers "paper")
 from trademare.execution.brokers.base import (
     BrokerAdapter,
     BrokerError,

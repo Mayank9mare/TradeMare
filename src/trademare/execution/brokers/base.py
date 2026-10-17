@@ -24,6 +24,7 @@ class BrokerAdapter(ABC):
     name: ClassVar[str]
     markets: ClassVar[frozenset[Market]]
     supports_short_delivery: ClassVar[bool] = False
+    simulated: ClassVar[bool] = False  # True for the paper broker: no real orders
 
     def __init__(self, market: Market, config: MarketConfig, secrets: Secrets) -> None:
         if market not in self.markets:
