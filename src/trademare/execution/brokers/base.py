@@ -2,22 +2,51 @@
 
 Each broker (Zerodha, Dhan, Alpaca, Paper) implements ``BrokerAdapter`` and
 registers itself under the name used in ``settings.yaml`` (``markets.<M>.broker``).
-The executor only ever talks to this interface.
+The trading desk only ever talks to this interface.
+
+Two kinds of orders:
+- regular day orders (entries as LIMIT, exits as MARKET) via ``place_order``;
+- *protection* for an open position: a stop (and optional target) that
+  survives across sessions. Indian exchange orders are day-only, so this
+  maps to a Zerodha GTT, a Dhan Forever order, or an Alpaca GTC stop/OCO.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import ClassVar
 
 from trademare.config.schema import MarketConfig
 from trademare.config.secrets import Secrets
-from trademare.core.models import Funds, Market, Order, Position
+from trademare.core.models import Funds, Market, Order, OrderSide, OrderStatus, Position
 
 
 class BrokerError(Exception):
     """Raised for broker API failures and rejected requests."""
+
+
+class LoginRequired(BrokerError):
+    """The broker session is missing or expired; the user must log in again."""
+
+
+@dataclass(frozen=True)
+class OrderUpdate:
+    """Broker-side state of an order (or of a triggered protection)."""
+
+    status: OrderStatus
+    filled_quantity: int = 0
+    average_price: float | None = None
+    message: str | None = None
+
+    @property
+    def is_filled(self) -> bool:
+        return self.status is OrderStatus.FILLED
+
+    @property
+    def is_dead(self) -> bool:
+        return self.status in (OrderStatus.CANCELLED, OrderStatus.REJECTED)
 
 
 class BrokerAdapter(ABC):
@@ -35,18 +64,51 @@ class BrokerAdapter(ABC):
 
     @abstractmethod
     def connect(self) -> None:
-        """Authenticate / refresh session tokens."""
+        """Authenticate / load session tokens. Raises LoginRequired if the user must log in."""
 
     @abstractmethod
     def place_order(self, order: Order) -> str:
-        """Submit ``order``; return the broker's order id."""
+        """Submit a day order (LIMIT or MARKET); return the broker's order id."""
 
     @abstractmethod
     def cancel_order(self, broker_order_id: str) -> None: ...
 
     @abstractmethod
-    def get_order(self, broker_order_id: str) -> Order:
-        """Current state of an order as reported by the broker."""
+    def get_order(self, broker_order_id: str) -> OrderUpdate:
+        """Current state of a day order as reported by the broker."""
+
+    def place_protection(
+        self,
+        symbol: str,
+        side: OrderSide,
+        quantity: int,
+        stop: float,
+        target: float | None,
+        last_price: float,
+    ) -> str:
+        """Standing stop (OCO with ``target`` if given) that survives sessions; returns its id."""
+        raise BrokerError(f"{self.name} does not support standing protective orders")
+
+    def modify_protection(
+        self,
+        protection_id: str,
+        symbol: str,
+        side: OrderSide,
+        quantity: int,
+        stop: float,
+        target: float | None,
+        last_price: float,
+    ) -> str:
+        """Move the stop/target; returns the (possibly new) protection id."""
+        self.cancel_protection(protection_id)
+        return self.place_protection(symbol, side, quantity, stop, target, last_price)
+
+    def cancel_protection(self, protection_id: str) -> None:
+        raise BrokerError(f"{self.name} does not support standing protective orders")
+
+    def protection_status(self, protection_id: str) -> OrderUpdate:
+        """OPEN while armed; FILLED with the execution price once triggered and executed."""
+        raise BrokerError(f"{self.name} does not support standing protective orders")
 
     @abstractmethod
     def get_positions(self) -> list[Position]: ...

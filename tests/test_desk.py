@@ -9,7 +9,7 @@ from tests.conftest import REPO_CONFIG
 from tests.helpers import make_bars
 from trademare.config import Secrets, load_config
 from trademare.core.clock import MarketClock
-from trademare.core.models import Market
+from trademare.core.models import Market, OrderStatus
 from trademare.data.fields import normalize_financials
 from trademare.data.service import DataService
 from trademare.execution.brokers import base as broker_base
@@ -219,3 +219,143 @@ def test_signal_expiry_is_stored_in_utc(desk):
     close = CLOCK.session_close(CLOCK.next_session(DAY0)).astimezone(UTC)  # 15:30 IST = 10:00 UTC
     assert sig.expires_at.replace(tzinfo=UTC) == close
     assert sig.expires_at.hour == 10
+
+
+# ---------------------------------------------------------------- live broker reconciliation
+class ScriptedBroker(broker_base.BrokerAdapter):
+    """A non-simulated broker whose order states the test scripts."""
+
+    name = "scripted"
+    markets = frozenset({Market.IN})
+
+    def __init__(self, market, config, secrets):
+        super().__init__(market, config, secrets)
+        self.orders: dict[str, broker_base.OrderUpdate] = {}
+        self.protections: dict[str, broker_base.OrderUpdate] = {}
+        self.placed, self.cancelled = [], []
+        self.fail_login = False
+
+    def connect(self): ...
+
+    def place_order(self, order):
+        bid = f"B{len(self.placed)}"
+        self.placed.append((bid, order))
+        self.orders[bid] = broker_base.OrderUpdate(OrderStatus.OPEN)
+        return bid
+
+    def cancel_order(self, broker_order_id):
+        self.cancelled.append(broker_order_id)
+
+    def get_order(self, broker_order_id):
+        if self.fail_login:
+            raise broker_base.LoginRequired("session expired")
+        return self.orders[broker_order_id]
+
+    def place_protection(self, symbol, side, quantity, stop, target, last_price):
+        pid = f"P{len(self.protections)}"
+        self.protections[pid] = broker_base.OrderUpdate(OrderStatus.OPEN)
+        return pid
+
+    def cancel_protection(self, protection_id):
+        self.cancelled.append(protection_id)
+
+    def protection_status(self, protection_id):
+        return self.protections[protection_id]
+
+    def get_positions(self):
+        return []
+
+    def get_funds(self): ...
+    def get_ltp(self, symbols):
+        return {}
+
+
+@pytest.fixture
+def live_desk(desk):
+    desk.cfg = desk.cfg.model_copy(update={"validated": True})
+    desk.broker = ScriptedBroker(Market.IN, desk.cfg, Secrets(_env_file=None))
+    return desk
+
+
+def test_live_fill_places_protection_then_stop_closes(live_desk):
+    desk, broker = live_desk, live_desk.broker
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    bid, placed = broker.placed[0]
+    assert placed.order_type.value == "LIMIT" and placed.limit_price == sig.entry_price
+
+    day1, day2 = SESSIONS[SESSIONS.index(DAY0) + 1], SESSIONS[SESSIONS.index(DAY0) + 2]
+    broker.orders[bid] = broker_base.OrderUpdate(OrderStatus.FILLED, placed.quantity, sig.entry_price - 1)
+    report = desk.run_daily(day1, generate=False)
+    assert any("(broker)" in f for f in report.fills)
+    assert list(broker.protections) == ["P0"]
+    with desk.db.session() as s:
+        pos = s.query(PositionRow).one()
+        assert pos.entry_price == sig.entry_price - 1 and pos.status == "open"
+
+    broker.protections["P0"] = broker_base.OrderUpdate(OrderStatus.FILLED, placed.quantity, sig.stop_price)
+    desk.run_daily(day2, generate=False)
+    with desk.db.session() as s:
+        pos = s.query(PositionRow).one()
+        assert pos.status == "closed" and pos.exit_reason == "stop" and pos.realized_pnl < 0
+
+
+def test_live_sync_survives_login_expiry_and_flags_lost_stop(live_desk):
+    desk, broker = live_desk, live_desk.broker
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    day1, day2, day3 = SESSIONS[SESSIONS.index(DAY0) + 1 : SESSIONS.index(DAY0) + 4]
+    broker.fail_login = True
+    report = desk.run_daily(day1, generate=False)
+    assert any("login required" in n for n in report.notes) and report.processed == [day1]
+
+    broker.fail_login = False
+    bid, placed = broker.placed[0]
+    broker.orders[bid] = broker_base.OrderUpdate(OrderStatus.FILLED, placed.quantity, sig.entry_price)
+    desk.run_daily(day2, generate=False)
+    broker.protections["P0"] = broker_base.OrderUpdate(OrderStatus.CANCELLED, message="GTT deleted")
+    report = desk.run_daily(day3, generate=False)
+    assert any("unprotected" in n for n in report.notes)
+
+
+def test_live_exit_cancels_protection(live_desk):
+    desk, broker = live_desk, live_desk.broker
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    day1, day2 = SESSIONS[SESSIONS.index(DAY0) + 1 : SESSIONS.index(DAY0) + 3]
+    bid, placed = broker.placed[0]
+    broker.orders[bid] = broker_base.OrderUpdate(OrderStatus.FILLED, placed.quantity, sig.entry_price)
+    desk.run_daily(day1, generate=False)
+    with desk.db.session() as s:
+        pos_id = s.query(PositionRow).one().id
+        exit_sig = SignalRow(
+            id="exit1",
+            market="IN",
+            symbol=placed.symbol,
+            direction="LONG",
+            action="EXIT",
+            quantity=placed.quantity,
+            entry_price=sig.entry_price,
+            score=0.0,
+            confidence=1.0,
+            reasons={},
+            position_id=pos_id,
+            status="PENDING",
+            scan_date=day1,
+            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+        )
+        s.add(exit_sig)
+    desk.approve("exit1", now=datetime(2025, 6, 3, tzinfo=UTC))
+    exit_bid, exit_order = broker.placed[1]
+    assert exit_order.order_type.value == "MARKET"
+    broker.orders[exit_bid] = broker_base.OrderUpdate(
+        OrderStatus.FILLED, placed.quantity, sig.entry_price * 1.05
+    )
+    desk.run_daily(day2, generate=False)
+    assert "P0" in broker.cancelled and exit_bid not in broker.cancelled
+    with desk.db.session() as s:
+        pos = s.query(PositionRow).one()
+        assert pos.status == "closed" and pos.exit_reason == "signal" and pos.realized_pnl > 0

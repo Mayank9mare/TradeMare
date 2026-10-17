@@ -24,3 +24,6 @@ venv/
 # Personal config overrides
 config/*.local.yaml
 /data/
+
+# Agent worktrees
+/.claude/worktrees/

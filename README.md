@@ -87,6 +87,21 @@ markets:
   US: { budget: 3000 }
 ```
 
+## Brokers
+
+Paper trading needs no broker. To connect a real account, set `markets.<M>.broker` and the keys in `.env`:
+
+| Broker | Market | `.env` | Session |
+|---|---|---|---|
+| Zerodha (Kite Connect) | IN | `ZERODHA_API_KEY`, `ZERODHA_API_SECRET` | Daily: `uv run trademare broker login zerodha` (tokens expire ~6 AM IST) |
+| Dhan (DhanHQ v2) | IN | `DHAN_CLIENT_ID`, `DHAN_ACCESS_TOKEN` | Token from the Dhan web console (~30 days) |
+| Alpaca | US | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `ALPACA_PAPER=true` | Keys; start with Alpaca's paper environment |
+
+- **Protective stops** are standing broker orders that survive across sessions: GTT on Zerodha, Forever orders on Dhan, and GTC stop/OCO on Alpaca. Indian exchange stop orders are day-only, which is why these are used instead.
+- **Reconciliation:** `uv run trademare broker check` compares broker holdings with TradeMare's records and flags any mismatch.
+- **Safety:** a market with `validated: false` refuses all real orders. Zerodha, Dhan and Alpaca-live are only usable for a strategy that has passed its out-of-sample test. Alpaca's *paper* environment is a broker too, so it is also blocked until `validated: true`; use `broker: paper` for simulation.
+- **SEBI (India):** API orders must come from a broker-whitelisted static IP, which means a VPS rather than a home connection.
+
 ## Configuration
 
 All tunable values live in `config/settings.yaml`, so you can change them without touching code:
@@ -117,7 +132,7 @@ Secrets such as broker API keys and SMTP credentials go in `.env`, which is neve
 | 4 ✅ | Risk and budget manager, kill switch |
 | 5 ✅ | Daily signals: email digest, dashboard approve/reject, scheduler |
 | 6 ✅ | Paper execution with the approve flow |
-| 7 | Live trading with a small budget (Zerodha / Dhan / Alpaca) |
+| 7 🔄 | Broker adapters built (Zerodha / Dhan / Alpaca); live use waits for a validated strategy |
 | 8 | LLM sentiment analyst |
 
 The full design, decisions and risks are in **[PLAN.md](PLAN.md)**.

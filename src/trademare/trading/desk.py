@@ -45,7 +45,7 @@ from trademare.core.models import (
 )
 from trademare.data.service import DataService
 from trademare.data.universe import load_universe
-from trademare.execution.brokers import BrokerError, create_broker
+from trademare.execution.brokers import BrokerError, LoginRequired, OrderUpdate, create_broker
 from trademare.execution.fills import Bar, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.manager import Exposure, RiskManager
 from trademare.storage.db import Database, EquityRow, OrderRow, PositionRow, SignalRow
@@ -308,7 +308,13 @@ class TradingDesk:
     # ------------------------------------------------------------------ session processing (paper fills)
     def process_session(self, s: Session, day: date, report: DailyReport) -> None:
         if not self.broker.simulated:
-            raise NotImplementedError("live order sync arrives with the broker adapters (phase 7)")
+            try:
+                self._sync_live(s, day, report)
+            except LoginRequired as e:
+                report.notes.append(f"broker login required — orders not synced: {e}")
+            except BrokerError as e:
+                report.notes.append(f"broker error — orders not fully synced: {e}")
+            return
         state = self.account_state(s)
         fresh_entries: dict[int, float] = {}
 
@@ -421,6 +427,127 @@ class TradingDesk:
                 self.broker.cancel_order(o.broker_order_id or "")
                 report.notes.append(f"{o.symbol}: {o.purpose} order expired unfilled")
 
+    # ------------------------------------------------------------------ live reconciliation
+    def _sync_live(self, s: Session, day: date, report: DailyReport) -> None:
+        """Reconcile open orders with the broker (fills happened at the exchange, not here)."""
+        state = self.account_state(s)
+        for o in self._orders(s, status=OPEN):
+            if o.purpose in ("entry", "exit"):
+                update = self.broker.get_order(o.broker_order_id)
+                expired = o.valid_until is not None and o.valid_until <= day
+                if update.status is OrderStatus.PARTIALLY_FILLED and expired and update.filled_quantity:
+                    o.quantity = update.filled_quantity  # day order ended part-filled: keep what we got
+                    update = OrderUpdate(OrderStatus.FILLED, update.filled_quantity, update.average_price)
+                if update.is_filled and update.average_price:
+                    self._fill(o, update.average_price, day)
+                    if o.purpose == "entry":
+                        self._open_live_position(s, state, o, day, report)
+                    else:
+                        pos = s.get(PositionRow, o.position_id)
+                        self._cancel_protection(s, pos, report)
+                        self._close(s, state, pos, update.average_price, day, o.costs, "signal", report)
+                elif update.is_dead:
+                    o.status = update.status.value
+                    report.notes.append(
+                        f"{o.symbol}: {o.purpose} order {update.status.value} ({update.message})"
+                    )
+                elif expired:
+                    o.status = "EXPIRED"
+                    report.notes.append(f"{o.symbol}: {o.purpose} order expired unfilled")
+            elif o.purpose == "stop":
+                update = self.broker.protection_status(o.broker_order_id)
+                pos = s.get(PositionRow, o.position_id)
+                if update.is_filled and update.average_price and pos is not None:
+                    self._fill(o, update.average_price, day)
+                    hit_target = pos.target_price is not None and abs(
+                        update.average_price - pos.target_price
+                    ) < abs(update.average_price - (pos.stop_price or 0))
+                    self._close(
+                        s,
+                        state,
+                        pos,
+                        update.average_price,
+                        day,
+                        o.costs,
+                        "target" if hit_target else "stop",
+                        report,
+                    )
+                elif update.is_dead:
+                    o.status = update.status.value
+                    report.notes.append(
+                        f"WARNING {o.symbol}: protective stop no longer active at the broker "
+                        f"({update.message}); the position is unprotected — re-place it in the broker app"
+                    )
+
+    def _open_live_position(self, s: Session, state, o: OrderRow, day: date, report: DailyReport) -> None:
+        sig = s.get(SignalRow, o.signal_id)
+        price = o.average_fill_price
+        long = OrderSide(o.side) is OrderSide.BUY
+        state.cash -= (price * o.quantity if long else -price * o.quantity) + o.costs
+        pos = PositionRow(
+            market=self.market.value,
+            symbol=o.symbol,
+            sector=self.sector(o.symbol),
+            direction=sig.direction,
+            quantity=o.quantity,
+            entry_price=price,
+            entry_date=day,
+            stop_price=sig.stop_price,
+            target_price=sig.target_price,
+            initial_risk=abs(price - sig.stop_price),
+            entry_score=sig.score,
+            entry_costs=o.costs,
+            status="open",
+            last_price=price,
+            entry_signal_id=sig.id,
+        )
+        s.add(pos)
+        s.flush()
+        exit_side = _side(sig.direction, False)
+        try:
+            protection_id = self.broker.place_protection(
+                o.symbol, exit_side, o.quantity, sig.stop_price, sig.target_price, price
+            )
+        except BrokerError as e:
+            report.notes.append(f"WARNING {o.symbol}: filled but the protective stop was NOT placed: {e}")
+            protection_id = None
+        if protection_id:
+            s.add(
+                OrderRow(
+                    id=uuid.uuid4().hex,
+                    signal_id=sig.id,
+                    position_id=pos.id,
+                    market=self.market.value,
+                    symbol=o.symbol,
+                    side=exit_side.value,
+                    purpose="stop",
+                    quantity=o.quantity,
+                    order_type=OrderType.STOP.value,
+                    limit_price=sig.target_price,
+                    trigger_price=sig.stop_price,
+                    status=OPEN,
+                    broker=self.broker.name,
+                    broker_order_id=protection_id,
+                    placed_on=day,
+                    valid_until=None,
+                )
+            )
+        report.fills.append(f"{o.symbol}: {sig.direction} {o.quantity} @ {price:,.2f} (broker)")
+        self.db.log(
+            s, "fill", f"live entry {o.symbol} x{o.quantity} @ {price}", self.market.value, order=o.id
+        )
+
+    def _cancel_protection(self, s: Session, pos: PositionRow, report: DailyReport) -> None:
+        for o in self._orders(s, position_id=pos.id, purpose="stop", status=OPEN):
+            try:
+                self.broker.cancel_protection(o.broker_order_id)
+            except BrokerError as e:
+                report.notes.append(
+                    f"WARNING {pos.symbol}: could not cancel protective stop {o.broker_order_id}: {e}"
+                )
+            # Marked here so _close does not treat the GTT/Forever id as a regular order.
+            o.status = OrderStatus.CANCELLED.value
+
     def _fill(self, o: OrderRow, price: float, day: date) -> None:
         o.status = OrderStatus.FILLED.value
         o.filled_quantity = o.quantity
@@ -481,6 +608,19 @@ class TradingDesk:
                 pos.stop_price = round(candidate, 2)
                 for o in self._orders(s, position_id=pos.id, purpose="stop", status=OPEN):
                     o.trigger_price = pos.stop_price
+                    if not self.broker.simulated:
+                        try:
+                            o.broker_order_id = self.broker.modify_protection(
+                                o.broker_order_id,
+                                pos.symbol,
+                                OrderSide(o.side),
+                                pos.quantity,
+                                pos.stop_price,
+                                pos.target_price,
+                                close,
+                            )
+                        except BrokerError as e:
+                            report.notes.append(f"{pos.symbol}: could not move stop at broker: {e}")
 
     def _snapshot(self, s: Session, day: date, report: DailyReport) -> None:
         state = self.account_state(s)

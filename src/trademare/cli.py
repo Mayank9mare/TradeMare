@@ -341,6 +341,67 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_broker_login(args: argparse.Namespace) -> int:
+    from datetime import datetime
+    from urllib.parse import parse_qs, urlparse
+    from zoneinfo import ZoneInfo
+
+    from trademare.execution.brokers.tokens import save_token
+    from trademare.execution.brokers.zerodha import ZerodhaBroker
+
+    config = load_config(args.config)
+    broker = ZerodhaBroker(Market.IN, config.markets[Market.IN], Secrets())
+    print("1. Open this URL and log in to Kite:\n   " + broker.login_url())
+    print("2. After login you are redirected to your app's redirect URL.")
+    raw = input("3. Paste the full redirect URL (or just the request_token): ").strip()
+    token = parse_qs(urlparse(raw).query).get("request_token", [raw])[0]
+    access = broker.exchange_request_token(token)
+    path = save_token("zerodha", access, datetime.now(ZoneInfo("Asia/Kolkata")).date())
+    print(f"Logged in. Session saved to {path} (valid until ~06:00 IST tomorrow).")
+    return 0
+
+
+def cmd_broker_check(args: argparse.Namespace) -> int:
+    from trademare.execution.brokers import BrokerError, create_broker
+    from trademare.storage.db import PositionRow
+    from trademare.trading.pipeline import database
+
+    config = load_config(args.config)
+    status = 0
+    for market in _markets(args, config):
+        cfg = config.markets[market]
+        broker = create_broker(market, cfg, Secrets())
+        mode = (
+            "simulated"
+            if broker.simulated
+            else ("validated" if cfg.validated else "NOT validated: orders blocked")
+        )
+        print(f"[{market}] broker {broker.name} ({mode})")
+        if broker.simulated:
+            continue
+        try:
+            broker.connect()
+            funds = broker.get_funds()
+            held = {p.symbol: p.quantity for p in broker.get_positions()}
+        except BrokerError as e:
+            print(f"  ERROR: {e}")
+            status = 1
+            continue
+        print(f"  cash available {funds.cash_available:,.2f}")
+        with database(config).session() as s:
+            ours = {
+                p.symbol: p.quantity
+                for p in s.query(PositionRow).filter_by(market=market.value, status="open")
+            }
+        for symbol in sorted(set(held) | set(ours)):
+            a, b = held.get(symbol, 0), ours.get(symbol, 0)
+            flag = "" if a == b else "  <-- MISMATCH"
+            print(f"  {symbol:<14} broker {a:>6}  trademare {b:>6}{flag}")
+        if not held and not ours:
+            print("  no positions at broker or in TradeMare")
+    return status
+
+
 def cmd_web(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -443,6 +504,16 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
     serve.set_defaults(func=cmd_serve)
+
+    broker = sub.add_parser("broker", help="broker sessions and reconciliation").add_subparsers(
+        dest="sub", required=True
+    )
+    login = broker.add_parser("login", help="daily Zerodha Kite login (stores today's access token)")
+    login.add_argument("name", choices=["zerodha"])
+    login.set_defaults(func=cmd_broker_login)
+    check = broker.add_parser("check", help="connect, show funds, compare broker holdings with TradeMare")
+    check.add_argument("-m", "--market", choices=[m.value for m in Market])
+    check.set_defaults(func=cmd_broker_check)
 
     web = sub.add_parser("web", help="run the local dashboard")
     web.add_argument("--host", default="127.0.0.1")

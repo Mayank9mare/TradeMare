@@ -1,0 +1,230 @@
+"""Zerodha Kite Connect adapter (India, equity delivery / CNC).
+
+- Login: Kite access tokens expire every morning (~6 AM IST). Run
+  ``trademare broker login zerodha`` once per trading day: it prints the login
+  URL, you paste the ``request_token`` from the redirect, and the access token
+  is stored in data/tokens/zerodha.json.
+- Entries/exits: regular CNC orders (LIMIT entries, MARKET exits), DAY validity.
+- Protection: GTT (single-leg stop, or two-leg OCO when a target is set),
+  which persists across sessions unlike exchange SL orders.
+- SEBI retail-algo rules require API orders from a broker-whitelisted static
+  IP; that is an account/network setting, not something this code can do.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, time, timedelta
+from typing import Any, ClassVar
+from zoneinfo import ZoneInfo
+
+from trademare.core.models import Funds, Market, Order, OrderSide, OrderStatus, OrderType, Position
+from trademare.execution.brokers.base import (
+    BrokerAdapter,
+    BrokerError,
+    LoginRequired,
+    OrderUpdate,
+    register_broker,
+)
+from trademare.execution.brokers.tokens import load_token
+
+IST = ZoneInfo("Asia/Kolkata")
+TOKEN_ROLLOVER = time(6, 0)  # Kite tokens are invalidated around 6 AM IST
+
+_STATUS = {
+    "COMPLETE": OrderStatus.FILLED,
+    "CANCELLED": OrderStatus.CANCELLED,
+    "REJECTED": OrderStatus.REJECTED,
+    "OPEN": OrderStatus.OPEN,
+    "TRIGGER PENDING": OrderStatus.OPEN,
+}
+
+
+def token_valid_for(token_day: date, now: datetime | None = None) -> bool:
+    """A token obtained on IST day D is valid until 06:00 IST on D+1."""
+    now = (now or datetime.now(IST)).astimezone(IST)
+    return now < datetime.combine(token_day + timedelta(days=1), TOKEN_ROLLOVER, IST)
+
+
+@register_broker
+class ZerodhaBroker(BrokerAdapter):
+    name = "zerodha"
+    markets: ClassVar[frozenset[Market]] = frozenset({Market.IN})
+
+    def __init__(self, market, config, secrets, client: Any = None) -> None:
+        super().__init__(market, config, secrets)
+        self._kite = client
+
+    # ------------------------------------------------------------------ session
+    def login_url(self) -> str:
+        return self._client(require_token=False).login_url()
+
+    def exchange_request_token(self, request_token: str) -> str:
+        if self.secrets.zerodha_api_secret is None:
+            raise BrokerError("ZERODHA_API_SECRET is not set in .env")
+        kite = self._client(require_token=False)
+        session = kite.generate_session(
+            request_token, api_secret=self.secrets.zerodha_api_secret.get_secret_value()
+        )
+        return session["access_token"]
+
+    def connect(self) -> None:
+        self._client()
+
+    def _client(self, require_token: bool = True):
+        if self._kite is not None:
+            return self._kite
+        if self.secrets.zerodha_api_key is None:
+            raise BrokerError("ZERODHA_API_KEY is not set in .env")
+        from kiteconnect import KiteConnect
+
+        kite = KiteConnect(api_key=self.secrets.zerodha_api_key.get_secret_value())
+        if require_token:
+            stored = load_token(self.name)
+            if stored is None or not token_valid_for(stored[1]):
+                raise LoginRequired("Zerodha session expired: run `trademare broker login zerodha`")
+            kite.set_access_token(stored[0])
+            self._kite = kite
+        return kite
+
+    def _call(self, fn, *args, **kwargs):
+        from kiteconnect import exceptions as kex
+
+        try:
+            return fn(*args, **kwargs)
+        except kex.TokenException as e:
+            raise LoginRequired(f"Zerodha session rejected: {e}") from e
+        except kex.KiteException as e:
+            raise BrokerError(f"Zerodha: {e}") from e
+
+    # ------------------------------------------------------------------ orders
+    def place_order(self, order: Order) -> str:
+        kite = self._client()
+        if order.side is OrderSide.SELL and not self._holds(order.symbol, order.quantity):
+            raise BrokerError("short selling equity delivery is not possible in India (use futures)")
+        kwargs = dict(
+            variety=kite.VARIETY_REGULAR,
+            exchange=kite.EXCHANGE_NSE,
+            tradingsymbol=order.symbol,
+            transaction_type=kite.TRANSACTION_TYPE_BUY
+            if order.side is OrderSide.BUY
+            else kite.TRANSACTION_TYPE_SELL,
+            quantity=order.quantity,
+            product=kite.PRODUCT_CNC,
+            validity=kite.VALIDITY_DAY,
+            tag="trademare",
+        )
+        if order.order_type is OrderType.LIMIT:
+            kwargs.update(order_type=kite.ORDER_TYPE_LIMIT, price=order.limit_price)
+        elif order.order_type is OrderType.MARKET:
+            # Kite requires market protection for API market orders; -1 = exchange default.
+            kwargs.update(order_type=kite.ORDER_TYPE_MARKET, market_protection=-1)
+        else:
+            raise BrokerError(f"unsupported day order type {order.order_type}")
+        return str(self._call(kite.place_order, **kwargs))
+
+    def _holds(self, symbol: str, quantity: int) -> bool:
+        kite = self._client()
+        held = sum(
+            h["quantity"] + h.get("t1_quantity", 0)
+            for h in self._call(kite.holdings)
+            if h["tradingsymbol"] == symbol
+        )
+        return held >= quantity
+
+    def cancel_order(self, broker_order_id: str) -> None:
+        kite = self._client()
+        self._call(kite.cancel_order, variety=kite.VARIETY_REGULAR, order_id=broker_order_id)
+
+    def get_order(self, broker_order_id: str) -> OrderUpdate:
+        kite = self._client()
+        history = self._call(kite.order_history, broker_order_id)
+        if not history:
+            raise BrokerError(f"Zerodha has no order {broker_order_id}")
+        last = history[-1]
+        return OrderUpdate(
+            status=_STATUS.get(last["status"], OrderStatus.OPEN),
+            filled_quantity=int(last.get("filled_quantity") or 0),
+            average_price=float(last["average_price"]) if last.get("average_price") else None,
+            message=last.get("status_message"),
+        )
+
+    # ------------------------------------------------------------------ protection (GTT)
+    def place_protection(self, symbol, side, quantity, stop, target, last_price) -> str:
+        kite = self._client()
+        txn = kite.TRANSACTION_TYPE_SELL if side is OrderSide.SELL else kite.TRANSACTION_TYPE_BUY
+        leg = lambda price: {  # noqa: E731
+            "exchange": kite.EXCHANGE_NSE,
+            "tradingsymbol": symbol,
+            "transaction_type": txn,
+            "quantity": quantity,
+            "order_type": kite.ORDER_TYPE_LIMIT,
+            "product": kite.PRODUCT_CNC,
+            "price": price,
+        }
+        # A stop leg is a limit order slightly through the trigger so it fills in a fast market.
+        stop_limit = round(stop * (0.99 if side is OrderSide.SELL else 1.01), 1)
+        if target is None:
+            result = self._call(
+                kite.place_gtt,
+                trigger_type=kite.GTT_TYPE_SINGLE,
+                tradingsymbol=symbol,
+                exchange=kite.EXCHANGE_NSE,
+                trigger_values=[stop],
+                last_price=last_price,
+                orders=[leg(stop_limit)],
+            )
+        else:
+            result = self._call(
+                kite.place_gtt,
+                trigger_type=kite.GTT_TYPE_OCO,
+                tradingsymbol=symbol,
+                exchange=kite.EXCHANGE_NSE,
+                trigger_values=[stop, target],
+                last_price=last_price,
+                orders=[leg(stop_limit), leg(target)],
+            )
+        return str(result["trigger_id"])
+
+    def cancel_protection(self, protection_id: str) -> None:
+        self._call(self._client().delete_gtt, int(protection_id))
+
+    def protection_status(self, protection_id: str) -> OrderUpdate:
+        kite = self._client()
+        gtt = self._call(kite.get_gtt, int(protection_id))
+        status = gtt.get("status")
+        if status == "active":
+            return OrderUpdate(OrderStatus.OPEN)
+        if status != "triggered":
+            return OrderUpdate(OrderStatus.CANCELLED, message=f"GTT {status}")
+        for leg in gtt.get("orders", []):
+            order_id = ((leg.get("result") or {}).get("order_result") or {}).get("order_id")
+            if order_id:
+                return self.get_order(str(order_id))
+        return OrderUpdate(OrderStatus.OPEN, message="GTT triggered; order pending")
+
+    # ------------------------------------------------------------------ account
+    def get_positions(self) -> list[Position]:
+        from trademare.core.models import Direction
+
+        kite = self._client()
+        return [
+            Position(
+                market=Market.IN,
+                symbol=h["tradingsymbol"],
+                direction=Direction.LONG,
+                quantity=h["quantity"] + h.get("t1_quantity", 0),
+                average_price=h["average_price"],
+            )
+            for h in self._call(kite.holdings)
+            if h["quantity"] + h.get("t1_quantity", 0) > 0 and h["average_price"] > 0
+        ]
+
+    def get_funds(self) -> Funds:
+        kite = self._client()
+        equity = self._call(kite.margins, "equity")
+        return Funds(market=Market.IN, cash_available=float(equity["available"]["live_balance"]))
+
+    def get_ltp(self, symbols: list[str]) -> dict[str, float]:
+        kite = self._client()
+        data = self._call(kite.ltp, [f"NSE:{s}" for s in symbols])
+        return {k.split(":", 1)[1]: float(v["last_price"]) for k, v in data.items()}
