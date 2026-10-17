@@ -167,6 +167,43 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backtest(args: argparse.Namespace) -> int:
+    from trademare.backtest.report import format_summary, run_backtest
+    from trademare.data.service import DataService
+
+    config = load_config(args.config)
+    setup_logging("WARNING")
+    start = date.fromisoformat(args.start) if args.start else None
+    end = date.fromisoformat(args.end) if args.end else None
+    for market in _markets(args, config):
+
+        def progress(done: int, total: int, market: Market = market) -> None:
+            if done % 50 == 0 or done == total:
+                print(f"\r  [{market}] {done}/{total} sessions", end="", flush=True)
+
+        _, meta = run_backtest(DataService(config, Secrets()), market, start, end, args.set or [], progress)
+        print("\n\n" + format_summary(meta))
+    return 0
+
+
+def cmd_research(args: argparse.Namespace) -> int:
+    from datetime import timedelta
+
+    from trademare.backtest.diagnostics import format_study, signal_study
+    from trademare.data.service import DataService
+    from trademare.strategy.scanner import ScanContext
+
+    config = load_config(args.config)
+    setup_logging("WARNING")
+    for market in _markets(args, config):
+        ctx = ScanContext(DataService(config, Secrets()), market)
+        end = date.fromisoformat(args.end) if args.end else ctx.last_date()
+        start = date.fromisoformat(args.start) if args.start else end - timedelta(days=round(365.25 * 5))
+        study = signal_study(ctx, start, end, horizon=args.horizon, step=args.step)
+        print(format_study(market.value, study) + "\n")
+    return 0
+
+
 def cmd_web(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -214,6 +251,24 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("-m", "--market", choices=[m.value for m in Market])
     scan.add_argument("--date", help="as-of date YYYY-MM-DD (default: latest cached session)")
     scan.set_defaults(func=cmd_scan)
+
+    bt = sub.add_parser("backtest", help="replay the strategy over history (cached data only)")
+    bt.add_argument("-m", "--market", choices=[m.value for m in Market])
+    bt.add_argument("--start", help="YYYY-MM-DD (default: backtest.years before --end)")
+    bt.add_argument("--end", help="YYYY-MM-DD (default: latest cached session)")
+    bt.add_argument(
+        "--set", action="append", metavar="KEY=VALUE",
+        help="override config for this run, e.g. --set strategy.min_composite_score=0.5",
+    )  # fmt: skip
+    bt.set_defaults(func=cmd_backtest)
+
+    research = sub.add_parser("research", help="measure whether analyst scores predict forward returns")
+    research.add_argument("-m", "--market", choices=[m.value for m in Market])
+    research.add_argument("--start", help="YYYY-MM-DD (default: 5 years before --end)")
+    research.add_argument("--end", help="YYYY-MM-DD (default: latest cached session)")
+    research.add_argument("--horizon", type=int, default=20, help="forward return horizon in sessions")
+    research.add_argument("--step", type=int, default=5, help="sample every N sessions")
+    research.set_defaults(func=cmd_research)
 
     web = sub.add_parser("web", help="run the local dashboard")
     web.add_argument("--host", default="127.0.0.1")

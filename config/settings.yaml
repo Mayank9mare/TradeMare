@@ -21,6 +21,7 @@ markets:
     fundamentals_source: yfinance  # filing dates estimated from SEBI reporting deadlines
     benchmark: "^NSEI"             # Nifty 50: relative strength + market regime
     min_avg_traded_value: 100000000  # ₹10 Cr/day average turnover
+    slippage_bps: 5                # assumed adverse slippage on market/stop fills
     budget: 100000             # INR — hard cap on deployed capital
     cash_buffer_pct: 10
 
@@ -63,6 +64,7 @@ markets:
     fundamentals_source: edgar     # point-in-time via SEC filing dates; needs SEC_USER_AGENT in .env
     benchmark: "^GSPC"             # S&P 500 index
     min_avg_traded_value: 20000000   # $20M/day average dollar volume
+    slippage_bps: 5
     budget: 1000               # USD
     cash_buffer_pct: 10
 
@@ -103,6 +105,14 @@ strategy:
   regime_penalty: 0.15         # extra score needed to trade against the market regime
   max_ideas: 10                # per direction, per market
   avoid_extended_entries: true # don't chase overextended moves
+  exit_score: 0.0              # exit a long when its composite falls to this (shorts: rises to -this)
+  fundamentals_refresh_days: 7 # recompute fundamental scores weekly
+
+backtest:
+  years: 5                     # default length, ending at the latest cached session
+  out_of_sample_fraction: 0.4  # last 40% reported separately (never used for tuning)
+  compound: true               # size positions from current equity
+  short_borrow_rate_pct: 0.5   # annual borrow fee on shorts
 
 notifications:
   email:

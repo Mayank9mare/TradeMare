@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Backtest {{ run.market }} · TradeMare{% endblock %}
+{% block content %}
+{% set s = run.summary %}{% set st = s.strategy %}{% set bm = s.benchmark %}
+<p class="crumbs"><a href="/backtests">Backtests</a> / {{ run.id }}</p>
+<h1>{{ "India" if run.market == "IN" else "US" }} backtest <small class="muted">{{ run.start }} → {{ run.end }}</small></h1>
+<p class="muted">Capital {{ run.initial_capital | money(market, False) }} → <b>{{ run.final_equity | money(market, False) }}</b>
+  · {{ run.open_positions }} positions open at end{% if run.overrides %} · overrides: <code>{{ run.overrides | join(" ") }}</code>{% endif %}</p>
+
+<section class="card chart-card">
+  <div class="chart-controls"><span class="legend"><i class="sw" style="background:var(--accent)"></i>Strategy <i class="sw" style="background:var(--muted)"></i>Index (buy &amp; hold)</span></div>
+  <div id="equity" data-run="{{ run.id }}" style="height:360px"></div>
+  <div id="drawdown" style="height:140px;margin-top:.5rem"></div>
+</section>
+
+<div class="grid two" style="margin-top:1rem">
+  <section class="card">
+    <h2 style="margin-top:0">Performance</h2>
+    <table class="data">
+      <thead><tr><th></th><th class="num">Strategy</th><th class="num">Index</th></tr></thead>
+      <tbody>
+      {% for key, label, kind in [("total_return","Total return","pct"),("cagr","CAGR","pct"),("volatility","Volatility","pct0"),("sharpe","Sharpe","num"),("sortino","Sortino","num"),("max_drawdown","Max drawdown","pct0"),("calmar","Calmar","num"),("longest_drawdown_days","Longest drawdown (days)","int")] %}
+        <tr><td>{{ label }}</td>
+        {% for d in [st, bm] %}{% set v = d.get(key) %}<td class="num {{ (v | tone) if kind == 'pct' else '' }}">{{ (v | pct(1, True)) if kind == "pct" else (v | pct(1)) if kind == "pct0" else (v | num(0)) if kind == "int" else (v | num(2)) }}</td>{% endfor %}</tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2 style="margin-top:0">Trades</h2>
+    <dl class="kv">
+      <dt>Trades</dt><dd>{{ st.trades | num(0) }}</dd>
+      <dt>Win rate</dt><dd>{{ st.win_rate | pct(1) }}</dd>
+      <dt>Avg win / loss</dt><dd><span class="up">{{ st.avg_win_pct | pct(1, True) }}</span> / <span class="down">{{ st.avg_loss_pct | pct(1, True) }}</span></dd>
+      <dt>Profit factor</dt><dd>{{ st.profit_factor | num(2) }}</dd>
+      <dt>Avg R per trade</dt><dd>{{ st.avg_r | num(2) }}</dd>
+      <dt>Avg holding</dt><dd>{{ st.avg_bars_held | num(1) }} sessions</dd>
+      <dt>Exposure</dt><dd>{{ s.exposure_avg | pct(0) }} avg · in market {{ s.time_in_market | pct(0) }} of days</dd>
+      <dt>Costs paid</dt><dd>{{ st.total_costs | money(market, False) }}</dd>
+      <dt>Exits</dt><dd>{% for k, v in s.exit_reasons.items() %}{{ k }} {{ v }}{{ ", " if not loop.last }}{% endfor %}</dd>
+    </dl>
+  </section>
+</div>
+
+<div class="grid two" style="margin-top:1rem">
+  <section class="card">
+    <h2 style="margin-top:0">By year</h2>
+    <table class="data"><thead><tr><th>Year</th><th class="num">Strategy</th><th class="num">Index</th><th class="num">Trades</th></tr></thead><tbody>
+    {% for y, r in s.by_year.items() %}<tr><td>{{ y }}</td><td class="num {{ r.strategy | tone }}">{{ r.strategy | pct(1, True) }}</td><td class="num {{ r.benchmark | tone }}">{{ r.benchmark | pct(1, True) }}</td><td class="num">{{ r.trades }}</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
+  {% if s.in_sample %}
+  <section class="card">
+    <h2 style="margin-top:0">In-sample vs out-of-sample <small class="muted">split {{ s.split_date }}</small></h2>
+    <table class="data"><thead><tr><th></th><th class="num">CAGR</th><th class="num">Index</th><th class="num">Sharpe</th><th class="num">Index</th><th class="num">Max DD</th><th class="num">Trades</th></tr></thead><tbody>
+    {% for label in ["in_sample", "out_of_sample"] %}{% set seg = s[label] %}
+      <tr><td>{{ label.replace("_", "-") }}</td>
+        <td class="num {{ seg.strategy.cagr | tone }}">{{ seg.strategy.cagr | pct(1, True) }}</td><td class="num">{{ seg.benchmark.cagr | pct(1, True) }}</td>
+        <td class="num">{{ seg.strategy.sharpe | num(2) }}</td><td class="num">{{ seg.benchmark.sharpe | num(2) }}</td>
+        <td class="num down">{{ seg.strategy.max_drawdown | pct(1) }}</td><td class="num">{{ seg.strategy.trades | num(0) }}</td></tr>
+    {% endfor %}
+    </tbody></table>
+    <p class="muted small">Out-of-sample is the trailing {{ (run.settings.backtest.out_of_sample_fraction * 100) | round | int }}% of the period. Tune parameters on in-sample results only.</p>
+  </section>
+  {% endif %}
+</div>
+
+<h2>Trades <small class="muted">{{ trades | length }}, newest first</small></h2>
+<div class="table-wrap" style="max-height:520px;overflow-y:auto"><table class="data sortable">
+  <thead><tr><th data-type="text">Symbol</th><th data-type="text">Side</th><th data-type="text">Entry</th><th data-type="text">Exit</th>
+    <th class="num">Entry px</th><th class="num">Exit px</th><th class="num">Qty</th><th class="num">P&amp;L</th><th class="num">Return</th><th class="num">R</th><th class="num">Days</th><th data-type="text">Exit reason</th></tr></thead>
+  <tbody>
+  {% for t in trades %}
+    <tr><td data-v="{{ t.symbol }}"><a href="/m/{{ run.market }}/{{ t.symbol | urlencode }}">{{ t.symbol }}</a></td><td>{{ t.direction }}</td>
+      <td data-v="{{ t.entry_date }}">{{ t.entry_date }}</td><td data-v="{{ t.exit_date }}">{{ t.exit_date }}</td>
+      <td class="num" data-v="{{ t.entry_price }}">{{ t.entry_price | num(2) }}</td><td class="num" data-v="{{ t.exit_price }}">{{ t.exit_price | num(2) }}</td>
+      <td class="num" data-v="{{ t.qty }}">{{ t.qty }}</td>
+      <td class="num {{ t.pnl | tone }}" data-v="{{ t.pnl }}">{{ t.pnl | money(market, False) }}</td>
+      <td class="num {{ t.return_pct | tone }}" data-v="{{ t.return_pct }}">{{ t.return_pct | pct(1, True) }}</td>
+      <td class="num {{ t.r_multiple | tone }}" data-v="{{ t.r_multiple }}">{{ t.r_multiple | num(2) }}</td>
+      <td class="num" data-v="{{ t.bars_held }}">{{ t.bars_held }}</td><td class="sub">{{ t.exit_reason }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="muted small">Backtests use current index constituents (survivorship bias) and modelled costs/slippage. Past results do not predict future returns.</p>
+{% endblock %}
+{% block scripts %}
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="/static/backtest.js"></script>
+{% endblock %}

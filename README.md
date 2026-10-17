@@ -53,6 +53,11 @@ uv run trademare data status               # what is cached
 uv run trademare scan                      # latest session, both markets
 uv run trademare scan -m IN --date 2025-06-30   # any past date (point-in-time)
 
+# Backtesting and research (cached data only; results in data/backtests/)
+uv run trademare backtest -m US                                   # last 5 years, settings.yaml
+uv run trademare backtest -m IN --set strategy.min_composite_score=0.5   # try a variation
+uv run trademare research -m US --horizon 20                      # do the scores predict returns?
+
 # Dashboard (local only)
 uv run trademare web                       # http://127.0.0.1:8000
 ```
@@ -94,7 +99,7 @@ Secrets such as broker API keys and SMTP credentials go in `.env`, which is neve
 | 0 ✅ | Project scaffold, config, core models |
 | 1 ✅ | Data layer (prices and fundamentals for India and the US) |
 | 2 ✅ | Technical and fundamental analysts, aggregator |
-| 3 | Backtester with costs and walk-forward validation |
+| 3 ✅ | Backtester with costs, in/out-of-sample split, signal research ([v1 results](docs/research/2026-10-17-strategy-v1-baseline.md)) |
 | 4 | Risk and budget manager, kill switch |
 | 5 🔄 | Live signals: email and dashboard, no orders (data dashboard already built) |
 | 6 | Paper execution with the approve flow |

@@ -12,6 +12,7 @@
     <nav>
       <a href="/">Overview</a>
       {% for m in markets %}<a href="/m/{{ m.value }}">{{ "India" if m.value == "IN" else "US" }}</a>{% endfor %}
+      <a href="/backtests">Backtests</a>
       <a href="/settings">Settings</a>
     </nav>
   </header>

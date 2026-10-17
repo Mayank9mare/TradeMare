@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from trademare import __version__
 from trademare.analysis.ratios import key_ratios
+from trademare.backtest.report import list_backtests, load_backtest
 from trademare.config import Secrets, load_config
 from trademare.config.schema import AppConfig
 from trademare.core.clock import MarketClock
@@ -198,6 +199,40 @@ def create_app(config: AppConfig | None = None, service: DataService | None = No
                 "sma200": _line(times, sma200[window]),
             }
         )
+
+    @app.get("/backtests", response_class=HTMLResponse)
+    def backtests_page(request: Request):
+        return templates.TemplateResponse(request, "backtests.html", {"runs": list_backtests(config)})
+
+    @app.get("/backtests/{run_id}", response_class=HTMLResponse)
+    def backtest_page(request: Request, run_id: str):
+        loaded = load_backtest(config, run_id)
+        if loaded is None:
+            raise HTTPException(404, f"no backtest {run_id}")
+        meta, _, trades = loaded
+        trades = trades.sort_values("exit_date", ascending=False) if len(trades) else trades
+        return templates.TemplateResponse(
+            request,
+            "backtest.html",
+            {"run": meta, "market": Market(meta["market"]), "trades": trades.to_dict("records")},
+        )
+
+    @app.get("/api/backtests/{run_id}")
+    def backtest_api(run_id: str):
+        loaded = load_backtest(config, run_id)
+        if loaded is None:
+            raise HTTPException(404, f"no backtest {run_id}")
+        _, curves, _ = loaded
+        times = [d.strftime("%Y-%m-%d") for d in curves.index]
+        equity = curves["equity"]
+        drawdown = equity / equity.cummax() - 1
+        payload = {
+            "equity": _line(times, equity),
+            "drawdown": _line(times, drawdown * 100),
+        }
+        if "benchmark" in curves:
+            payload["benchmark"] = _line(times, curves["benchmark"])
+        return JSONResponse(payload)
 
     @app.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request):

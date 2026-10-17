@@ -15,7 +15,7 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from trademare.analysis.fundamental import FundamentalScore, score_universe
-from trademare.analysis.ratios import key_ratios
+from trademare.analysis.ratios import finalize_ratios, statement_ratios
 from trademare.analysis.regime import Regime, RegimeLabel, compute_regime
 from trademare.analysis.technical import TechnicalScore, score_features, technical_features
 from trademare.config.schema import AppConfig, MarketConfig
@@ -137,118 +137,211 @@ def decide(
     return None
 
 
-def run_scan(service: DataService, market: Market, asof: date | None = None) -> ScanResult:
-    config = service.config
-    cfg = config.markets[market]
-    universe = load_universe(cfg.universe)
-    store = service.store
-    financials = service.market(market).financials
+class ScanContext:
+    """All inputs for scanning one market, loaded once.
 
-    benchmark_bars = store.read_bars(market, cfg.benchmark) if cfg.benchmark else None
-    if asof is None:
-        last_dates = [
-            b.index[-1] for s in universe["symbol"] if (b := store.read_bars(market, s)) is not None
-        ]
-        if not last_dates:
-            raise ValueError(f"no cached bars for {market}; run: trademare data update -m {market}")
-        asof = max(last_dates).date()
-    cutoff = pd.Timestamp(asof)
-    if benchmark_bars is not None:
-        benchmark_bars = benchmark_bars.loc[:cutoff]
+    Indicators are computed over each symbol's full history (they are causal),
+    so ``evaluate`` can be called for many dates cheaply — this is what the
+    backtester does. Statement ratios are cached per set of public filings.
+    """
 
-    weights = config.strategy.weights.model_dump()
-    if not config.llm.enabled:
-        weights["sentiment"] = 0.0
+    def __init__(self, service: DataService, market: Market) -> None:
+        self.service = service
+        self.config = service.config
+        self.market = market
+        self.cfg = self.config.markets[market]
+        universe = load_universe(self.cfg.universe)
+        self.symbols: list[str] = universe["symbol"].tolist()
+        self.names = dict(zip(universe["symbol"], universe["name"], strict=True))
+        self.sectors = dict(zip(universe["symbol"], universe["sector"], strict=True))
+        store = service.store
 
-    # Technical pass (per symbol) + inputs for the cross-sectional fundamental pass.
-    tech: dict[str, TechnicalScore] = {}
-    bars_by_symbol: dict[str, pd.DataFrame] = {}
-    feature_rows: dict[str, pd.Series] = {}
-    ratios: dict[str, dict] = {}
-    above_200 = counted = 0
-    for symbol in universe["symbol"]:
-        bars = store.read_bars(market, symbol)
-        if bars is None:
-            continue
-        bars = bars.loc[:cutoff]
-        if bars.empty or bars.index[-1] < cutoff - pd.Timedelta(days=7):
-            continue  # stale or not yet listed on asof
-        bars_by_symbol[symbol] = bars
-        row = technical_features(bars, benchmark_bars).iloc[-1]
-        feature_rows[symbol] = row
-        if pd.notna(row["sma200"]):
-            counted += 1
-            above_200 += bool(row["close"] > row["sma200"])
-        if (t := score_features(row)) is not None:
-            tech[symbol] = t
-        fin = financials.get_financials(market, symbol)
-        if not fin.empty:
-            ratios[symbol] = key_ratios(fin, asof, float(row["close"]))
+        self.benchmark: pd.DataFrame | None = None
+        self.benchmark_features: pd.DataFrame | None = None
+        if self.cfg.benchmark and (b := store.read_bars(market, self.cfg.benchmark)) is not None and len(b):
+            self.benchmark = b
+            self.benchmark_features = technical_features(b)
 
-    sectors = dict(zip(universe["symbol"], universe["sector"], strict=True))
-    fund = score_universe(ratios, sectors)
-    index_row = (
-        technical_features(benchmark_bars).iloc[-1]
-        if benchmark_bars is not None and len(benchmark_bars)
-        else None
-    )
-    regime = compute_regime(index_row, above_200 / counted if counted else None)
+        self.bars: dict[str, pd.DataFrame] = {}
+        self.features: dict[str, pd.DataFrame] = {}
+        # Row lookups via numpy are ~50x faster than pandas .iloc in the backtest loop.
+        self._feature_arrays: dict[str, tuple[pd.DatetimeIndex, list[str], object]] = {}
+        for symbol in self.symbols:
+            bars = store.read_bars(market, symbol)
+            if bars is None or bars.empty:
+                continue
+            self.bars[symbol] = bars
+            f = technical_features(bars, self.benchmark)
+            self.features[symbol] = f
+            self._feature_arrays[symbol] = (f.index, list(f.columns), f.to_numpy())
 
-    names = dict(zip(universe["symbol"], universe["name"], strict=True))
-    scores: list[SymbolScore] = []
-    ideas: list[Idea] = []
-    for symbol in universe["symbol"]:
-        row = feature_rows.get(symbol)
-        results: dict[str, AnalystResult] = {}
-        if symbol in tech:
-            results["technical"] = _tech_result(tech[symbol])
-        if symbol in fund:
-            results["fundamental"] = _fund_result(fund[symbol])
-        composite, confidence = combine(results, weights)
-        liquid = (
-            row is not None
-            and pd.notna(row["traded_value_20"])
-            and row["traded_value_20"] >= cfg.min_avg_traded_value
+        source = service.market(market).financials
+        self.financials: dict[str, pd.DataFrame] = {}
+        self._available: dict[str, pd.Series] = {}
+        for symbol in self.symbols:
+            fin = source.get_financials(market, symbol)
+            if not fin.empty:
+                self.financials[symbol] = fin
+                self._available[symbol] = fin["available_from"].sort_values().reset_index(drop=True)
+        self._statement_cache: dict[tuple[str, int, int], dict | None] = {}
+
+        self.weights = self.config.strategy.weights.model_dump()
+        if not self.config.llm.enabled:
+            self.weights["sentiment"] = 0.0
+
+    def last_date(self) -> date:
+        if not self.bars:
+            raise ValueError(f"no cached bars for {self.market}; run: trademare data update -m {self.market}")
+        return max(b.index[-1] for b in self.bars.values()).date()
+
+    def sessions(self, start: date, end: date) -> pd.DatetimeIndex:
+        """Trading days in [start, end], taken from the benchmark (or all bars)."""
+        if self.benchmark is not None:
+            idx = self.benchmark.index
+        else:
+            idx = pd.DatetimeIndex(sorted({d for b in self.bars.values() for d in b.index}))
+        return idx[(idx >= pd.Timestamp(start)) & (idx <= pd.Timestamp(end))]
+
+    def feature_row(self, symbol: str, asof: pd.Timestamp) -> dict[str, float] | None:
+        """Latest feature row at or before ``asof``; None if stale or not yet listed."""
+        entry = self._feature_arrays.get(symbol)
+        if entry is None:
+            return None
+        index, columns, values = entry
+        i = index.searchsorted(asof, side="right") - 1
+        if i < 0 or index[i] < asof - pd.Timedelta(days=7):
+            return None
+        return dict(zip(columns, values[i], strict=True))
+
+    def bars_until(self, symbol: str, asof: pd.Timestamp) -> pd.DataFrame:
+        return self.bars[symbol].loc[:asof]
+
+    def ratios(self, symbol: str, asof: date, price: float) -> dict | None:
+        if symbol not in self.financials:
+            return None
+        avail = self._available[symbol]
+        # The statement ratios only change when the set of public filings changes.
+        key = (
+            symbol,
+            int(avail.searchsorted(pd.Timestamp(asof), side="right")),
+            int(avail.searchsorted(pd.Timestamp(asof) - pd.Timedelta(days=365), side="right")),
         )
-        score = SymbolScore(
-            symbol=symbol,
-            name=names[symbol],
-            sector=sectors[symbol],
-            close=None if row is None else float(row["close"]),
-            composite=None if composite is None else round(composite, 4),
-            confidence=round(confidence, 4),
-            liquid=bool(liquid),
-            analysts=results,
-        )
-        scores.append(score)
-        direction = decide(score, cfg, config, regime)
-        if direction is None:
-            continue
-        levels = compute_levels(market, direction, bars_by_symbol[symbol], cfg.stop_loss, cfg.take_profit)
-        if levels is None:
-            continue
-        ideas.append(
-            Idea(
-                symbol=symbol,
-                name=score.name,
-                sector=score.sector,
-                direction=direction,
-                composite=score.composite,
-                confidence=score.confidence,
-                levels=levels,
-                reasons={k: r.reasons for k, r in results.items()},
+        if key not in self._statement_cache:
+            self._statement_cache[key] = statement_ratios(self.financials[symbol], asof)
+        return finalize_ratios(self._statement_cache[key], asof, price)
+
+    def fundamental_scores(self, asof: date) -> dict[str, FundamentalScore]:
+        ts = pd.Timestamp(asof)
+        ratios = {}
+        for symbol in self.financials:
+            row = self.feature_row(symbol, ts)
+            if row is not None:
+                ratios[symbol] = self.ratios(symbol, asof, float(row["close"]))
+        return score_universe(ratios, self.sectors)
+
+    def evaluate(
+        self,
+        asof: date,
+        fundamentals: dict[str, FundamentalScore] | None = None,
+        keep_scores: bool = True,
+    ) -> ScanResult:
+        """Score the universe and pick ideas as of ``asof`` (after that day's close)."""
+        ts = pd.Timestamp(asof)
+        fund = self.fundamental_scores(asof) if fundamentals is None else fundamentals
+
+        rows: dict[str, dict[str, float]] = {}
+        above_200 = counted = 0
+        for symbol in self.symbols:
+            row = self.feature_row(symbol, ts)
+            if row is None:
+                continue
+            rows[symbol] = row
+            if pd.notna(row["sma200"]):
+                counted += 1
+                above_200 += bool(row["close"] > row["sma200"])
+        index_row = None
+        if self.benchmark_features is not None:
+            i = self.benchmark_features.index.searchsorted(ts, side="right") - 1
+            index_row = self.benchmark_features.iloc[i] if i >= 0 else None
+        regime = compute_regime(index_row, above_200 / counted if counted else None)
+
+        scores: list[SymbolScore] = []
+        ideas: list[Idea] = []
+        for symbol in self.symbols:
+            row = rows.get(symbol)
+            results: dict[str, AnalystResult] = {}
+            if row is not None and (t := score_features(row)) is not None:
+                results["technical"] = _tech_result(t)
+            if row is not None and symbol in fund:
+                results["fundamental"] = _fund_result(fund[symbol])
+            composite, confidence = combine(results, self.weights)
+            liquid = (
+                row is not None
+                and pd.notna(row["traded_value_20"])
+                and row["traded_value_20"] >= self.cfg.min_avg_traded_value
             )
+            score = SymbolScore(
+                symbol=symbol,
+                name=self.names[symbol],
+                sector=self.sectors[symbol],
+                close=None if row is None else float(row["close"]),
+                composite=None if composite is None else round(composite, 4),
+                confidence=round(confidence, 4),
+                liquid=bool(liquid),
+                analysts=results,
+            )
+            scores.append(score)
+            direction = decide(score, self.cfg, self.config, regime)
+            if direction is None:
+                continue
+            # Reuse the precomputed 14-period ATR when the stop uses the same period.
+            atr_now = row["atr"] if self.cfg.stop_loss.atr_period == 14 else None
+            levels = compute_levels(
+                self.market,
+                direction,
+                self.bars_until(symbol, ts),
+                self.cfg.stop_loss,
+                self.cfg.take_profit,
+                atr_value=atr_now,
+            )
+            if levels is None:
+                continue
+            ideas.append(
+                Idea(
+                    symbol=symbol,
+                    name=score.name,
+                    sector=score.sector,
+                    direction=direction,
+                    composite=score.composite,
+                    confidence=score.confidence,
+                    levels=levels,
+                    reasons={k: r.reasons for k, r in results.items()},
+                )
+            )
+
+        limit = self.config.strategy.max_ideas
+        ranked: list[Idea] = []
+        for direction in Direction:
+            side = sorted(
+                (i for i in ideas if i.direction is direction), key=lambda i: i.rank_key, reverse=True
+            )
+            ranked += side[:limit]
+        if not keep_scores:
+            # Backtests only need composites; drop analyst detail to save memory.
+            scores = [s.model_copy(update={"analysts": {}}) for s in scores if s.composite is not None]
+        return ScanResult(
+            market=self.market, asof=asof, regime=regime, weights=self.weights, ideas=ranked, scores=scores
         )
 
-    limit = config.strategy.max_ideas
-    ranked = []
-    for direction in Direction:
-        side = sorted((i for i in ideas if i.direction is direction), key=lambda i: i.rank_key, reverse=True)
-        ranked += side[:limit]
+
+def run_scan(service: DataService, market: Market, asof: date | None = None) -> ScanResult:
+    ctx = ScanContext(service, market)
+    result = ctx.evaluate(asof or ctx.last_date())
     log.info(
-        "%s scan %s: %d scored, %d ideas, regime %s", market, asof, len(scores), len(ranked), regime.label
-    )
-    return ScanResult(market=market, asof=asof, regime=regime, weights=weights, ideas=ranked, scores=scores)
+        "%s scan %s: %d scored, %d ideas, regime %s",
+        market, result.asof, len(result.scores), len(result.ideas), result.regime.label,
+    )  # fmt: skip
+    return result
 
 
 # Persistence: one JSON file per market per scan date.

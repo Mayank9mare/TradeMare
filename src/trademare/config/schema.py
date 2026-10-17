@@ -100,6 +100,7 @@ class MarketConfig(_Strict):
     min_avg_traded_value: float = Field(
         0.0, ge=0, description="Skip symbols whose 20-day average traded value is below this"
     )
+    slippage_bps: float = Field(5.0, ge=0, description="Assumed adverse slippage per market/stop fill")
     budget: float = Field(gt=0, description="Hard cap on deployed capital, in market currency")
     cash_buffer_pct: float = Field(10.0, ge=0, lt=100)
 
@@ -157,6 +158,12 @@ class StrategyConfig(_Strict):
     avoid_extended_entries: bool = Field(
         True, description="Skip entries whose technical setup argues against the direction (don't chase)"
     )
+    exit_score: float = Field(
+        0.0, ge=-1, le=1, description="Exit a long when its composite falls to this (short: rises to -this)"
+    )
+    fundamentals_refresh_days: int = Field(
+        7, ge=1, description="How often fundamental scores are recomputed (prices still update daily)"
+    )
 
 
 class EmailConfig(_Strict):
@@ -188,6 +195,15 @@ class DataConfig(_Strict):
     batch_size: int = Field(50, ge=1, le=500, description="Symbols per bulk price request")
 
 
+class BacktestConfig(_Strict):
+    years: float = Field(5, gt=0, description="Default test length ending at the latest cached session")
+    out_of_sample_fraction: float = Field(
+        0.4, ge=0, lt=1, description="Trailing share of the period reported separately as out-of-sample"
+    )
+    compound: bool = Field(True, description="Size from current equity (True) or the fixed budget (False)")
+    short_borrow_rate_pct: float = Field(0.5, ge=0, description="Annual stock-borrow fee for shorts")
+
+
 class AppConfig(_Strict):
     database_url: str = "sqlite:///data/trademare.db"
     log_level: str = "INFO"
@@ -196,6 +212,7 @@ class AppConfig(_Strict):
     strategy: StrategyConfig = StrategyConfig()
     notifications: NotificationsConfig = NotificationsConfig()
     llm: LLMConfig = LLMConfig()
+    backtest: BacktestConfig = BacktestConfig()
 
     @model_validator(mode="after")
     def _market_rules(self) -> Self:

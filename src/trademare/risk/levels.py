@@ -34,8 +34,12 @@ def compute_levels(
     bars: pd.DataFrame,
     stop_cfg: StopLossConfig,
     tp_cfg: TakeProfitConfig,
+    atr_value: float | None = None,
 ) -> Levels | None:
     """Levels for an entry at the last close. ``bars`` must end at the signal date.
+
+    ``atr_value`` may be passed when the caller already has ATR(atr_period)
+    for the last bar, avoiding a recomputation over the full history.
 
     Returns None when the stop cannot be placed sensibly (e.g. too close).
     """
@@ -47,7 +51,7 @@ def compute_levels(
 
     match stop_cfg.method:
         case StopLossMethod.ATR:
-            atr_now = atr(bars, stop_cfg.atr_period).iloc[-1]
+            atr_now = atr_value if atr_value is not None else atr(bars, stop_cfg.atr_period).iloc[-1]
             if pd.isna(atr_now):
                 return None
             distance = stop_cfg.atr_multiple * float(atr_now)

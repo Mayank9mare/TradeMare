@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Backtests · TradeMare{% endblock %}
+{% block content %}
+<h1>Backtests</h1>
+{% if not runs %}
+<div class="card"><p>No backtests yet. Run <code>uv run trademare backtest -m US</code>.</p></div>
+{% else %}
+<div class="table-wrap"><table class="data sortable">
+  <thead><tr><th data-type="text">Run</th><th data-type="text">Market</th><th data-type="text">Period</th>
+    <th class="num">CAGR</th><th class="num">Index CAGR</th><th class="num">Sharpe</th><th class="num">Index Sharpe</th>
+    <th class="num">Max DD</th><th class="num">Trades</th><th class="num">Win rate</th><th class="num">OOS CAGR</th><th data-type="text">Overrides</th></tr></thead>
+  <tbody>
+  {% for r in runs %}{% set st = r.summary.strategy %}{% set bm = r.summary.benchmark %}{% set oos = r.summary.get("out_of_sample", {}).get("strategy", {}) %}
+    <tr>
+      <td data-v="{{ r.created_at }}"><a href="/backtests/{{ r.id }}">{{ r.created_at.replace("T", " ") }}</a></td>
+      <td>{{ r.market }}</td><td>{{ r.start }} → {{ r.end }}</td>
+      <td class="num {{ st.cagr | tone }}" data-v="{{ st.cagr }}">{{ st.cagr | pct(1, True) }}</td>
+      <td class="num" data-v="{{ bm.cagr }}">{{ bm.cagr | pct(1, True) }}</td>
+      <td class="num" data-v="{{ st.sharpe }}">{{ st.sharpe | num(2) }}</td>
+      <td class="num" data-v="{{ bm.sharpe }}">{{ bm.sharpe | num(2) }}</td>
+      <td class="num down" data-v="{{ st.max_drawdown }}">{{ st.max_drawdown | pct(1) }}</td>
+      <td class="num" data-v="{{ st.trades }}">{{ st.trades | num(0) }}</td>
+      <td class="num" data-v="{{ st.win_rate }}">{{ st.win_rate | pct(0) }}</td>
+      <td class="num {{ oos.cagr | tone }}" data-v="{{ oos.cagr }}">{{ oos.cagr | pct(1, True) }}</td>
+      <td class="sub">{{ r.overrides | join(", ") or "—" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}
+{% endblock %}
