@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from trademare.config.schema import MarketConfig
 from trademare.core.clock import MarketClock
 from trademare.core.models import Market
-from trademare.storage.db import Database, EquityRow, MarketStateRow, PositionRow, SignalRow
+from trademare.storage.db import Database, EquityRow, MarketStateRow, OrderRow, PositionRow, SignalRow
 
 EXCHANGE = {Market.IN: "NSE", Market.US: "NYSE"}
 TZ_LABEL = {Market.IN: "IST", Market.US: "New York"}
@@ -128,3 +128,17 @@ def pending_signals(db: Database) -> list[SignalRow]:
     with db.session() as s:
         rows = list(s.scalars(select(SignalRow).where(SignalRow.status == "PENDING")))
     return [r for r in rows if r.expires_at is None or r.expires_at.replace(tzinfo=UTC) > now]
+
+
+def working_entries(db: Database) -> list[OrderRow]:
+    """Approved buy/sell orders not filled yet (protective stops are excluded)."""
+    with db.session() as s:
+        rows = list(
+            s.scalars(
+                select(OrderRow)
+                .where(OrderRow.status == "OPEN", OrderRow.purpose.in_(("entry", "exit")))
+                .order_by(OrderRow.placed_on)
+            )
+        )
+        s.expunge_all()
+    return rows

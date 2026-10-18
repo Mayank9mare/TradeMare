@@ -13,14 +13,30 @@
 {% endif %}
 <div class="ideas">
 {% for s in pending %}{% set m = s.market %}
-  <article class="card idea{{ ' expired' if s.is_expired }}" id="sig-{{ s.id }}">
+  <article class="card idea{{ ' expired' if s.is_expired }}" id="sig-{{ s.id }}" data-currency="{{ 'INR' if m == 'IN' else 'USD' }}">
     <div class="idea-head">
       <div>
-        <span class="badge">{{ m }}</span> <b>{{ s.action }}</b>
-        <a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b class="sym">{{ s.symbol }}</b></a> {{ direction_badge(s.direction) }}{{ tip("long_short", "long and short") }}{% if s.action == "EXIT" %}{{ tip("exit_signal", "an exit signal") }}{% endif %}
-        <div class="sub">scan {{ s.scan_date }} · expires {{ s.expires_at.strftime("%Y-%m-%d %H:%M") }} UTC{{ tip("expires", "expiry") }}{% if s.is_expired %} · <b class="down">expired</b>{% endif %}</div>
+        <div class="sig-title">
+          <span class="badge">{{ m }}</span>
+          <span class="action-word {{ 'buy' if (s.action == 'ENTRY') == (s.direction == 'LONG') else 'sell' }}">{{ ("Buy" if s.direction == "LONG" else "Short") if s.action == "ENTRY" else ("Sell" if s.direction == "LONG" else "Cover") }}</span>
+          <a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b class="sym">{{ s.symbol }}</b></a>
+          {{ direction_badge(s.direction) }}{{ tip("long_short", "long and short") }}{% if s.action == "EXIT" %}{{ tip("exit_signal", "an exit signal") }}{% endif %}
+        </div>
+        <div class="sub">{% if s.is_expired %}<b class="down">expired</b>{% else %}decide by <b>{{ s.expires_at | local_time(m) }}</b>{% endif %}{{ tip("expires", "the deadline") }} · scanned {{ s.scan_date }}</div>
       </div>
       <div class="idea-score">{{ score_bar(s.score) }}{{ tip("score") }}</div>
+    </div>
+    <div class="levels sig-levels">
+      {% if s.action == "ENTRY" %}{% set risk_amt = s.quantity * (s.entry_price - s.stop_price) | abs %}
+      <div><span>Shares</span><b data-live="qty">{{ s.quantity }}</b><small>at most <span data-live="limit">{{ s.entry_price | money(m, False) }}</span> each{{ tip("entry_limit", "the limit price") }}</small></div>
+      <div><span>Cost</span><b data-live="cost">{{ (s.quantity * s.entry_price) | money(m, False) }}</b>{% if s.evidence and s.evidence.risk and s.evidence.risk.position_pct is not none %}<small>{{ s.evidence.risk.position_pct | pct(1) }} of capital</small>{% endif %}</div>
+      <div><span>Stop-loss{{ tip("stop", "the stop-loss") }}</span><b class="down" data-live="stop">{{ s.stop_price | money(m, False) }}</b><small><span data-live="stoppct">{{ (s.stop_price / s.entry_price - 1) | pct(1, True) }}</span> from entry</small></div>
+      <div><span>Most you can lose{{ tip("risk") }}</span><b class="down" data-live="risk">{{ risk_amt | money(m, False) }}</b><small>if the stop is hit</small></div>
+      {% else %}
+      <div><span>Shares</span><b>{{ s.quantity }}</b><small>sold at the next open</small></div>
+      <div><span>Last price</span><b>{{ s.entry_price | money(m, False) }}</b><small>value {{ (s.quantity * s.entry_price) | money(m, False) }}</small></div>
+      <div><span>Why sell</span><b class="small-b">{{ s.exit_reason or "signal" }}</b></div>
+      {% endif %}
     </div>
     {% set warns = s.reasons.get("events", []) + s.reasons.get("tax", []) %}
     {% if warns %}<p class="sub" style="margin:8px 0 0">Warnings{{ tip("event_alerts", "these warnings") }}</p><ul class="event-alerts">{% for w in warns %}<li class="{{ 'red' if w.startswith('RED FLAG') else 'note' if w.startswith(('Note', 'Tax')) else 'amber' }}">{{ w }}</li>{% endfor %}</ul>{% endif %}
@@ -50,9 +66,8 @@
       {% if s.action == "ENTRY" %}
       <label>Limit{{ tip("entry_limit", "the limit price") }} <input type="number" name="limit" step="any" value="{{ '%.2f' | format(s.entry_price) }}"></label>
       <label>Stop{{ tip("stop", "the stop-loss") }} <input type="number" name="stop" step="any" value="{{ '%.2f' | format(s.stop_price) }}"></label>
-      <span class="sub">value {{ (s.quantity * s.entry_price) | money(m, False) }} · risk {{ (s.quantity * (s.entry_price - s.stop_price) | abs) | money(m, False) }}{{ tip("risk") }}</span>
       {% else %}
-      <span class="sub">exit at next open · last {{ s.entry_price | money(m, False) }} · {{ s.exit_reason }}</span>
+      <span class="sub">sells at the next open, at market</span>
       {% endif %}
       <button type="submit" class="primary">Approve</button>
       <button type="submit" formaction="/signals/{{ s.id }}/reject">Reject</button>

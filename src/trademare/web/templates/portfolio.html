@@ -9,7 +9,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Re-arm</button>{{ tip("rearm", "re-arming") }}</form></div>
 {% endif %}
 
-<div class="ratios">
+<div class="ratios four">
   <div class="ratio"><span>Equity{{ tip("equity") }}</span><b>{{ equity | money(market, False) }}</b></div>
   <div class="ratio"><span>Cash{{ tip("cash") }}</span><b>{{ cash | money(market, False) }}</b></div>
   <div class="ratio"><span>Budget{{ tip("budget") }}</span><b>{{ cfg.budget | money(market, False) }}</b></div>
@@ -67,7 +67,11 @@
   if (!el || !window.LightweightCharts) return;
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const data = await (await fetch(`/api/portfolio/${el.dataset.market}/equity`)).json();
-  if (!data.equity.length) { el.innerHTML = '<p class="muted" style="padding:1rem">Equity history appears after the first daily run.</p>'; return; }
+  if (data.equity.length < 2) {
+    el.style.height = "auto";
+    el.innerHTML = `<div class="empty">The equity chart starts after two daily runs${data.equity.length ? " (one recorded so far)" : ""}.</div>`;
+    return;
+  }
   const chart = LightweightCharts.createChart(el, { autoSize: true,
     layout: { background: { color: css("--surface") }, textColor: css("--muted") },
     grid: { vertLines: { color: css("--border") }, horzLines: { color: css("--border") } } });

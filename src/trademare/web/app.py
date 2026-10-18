@@ -28,7 +28,13 @@ from trademare.storage.db import Database
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
 from trademare.web.glossary import tip
-from trademare.web.overview_data import account_summary, market_status, pending_signals, sparkline
+from trademare.web.overview_data import (
+    account_summary,
+    market_status,
+    pending_signals,
+    sparkline,
+    working_entries,
+)
 from trademare.web.settings_form import GLOBAL_FIELDS, MARKET_FIELDS, apply_form, current_values
 from trademare.web.snapshot import SnapshotCache
 from trademare.web.trading_routes import register_trading_routes
@@ -66,6 +72,8 @@ def create_app(
         num=formatting.num,
         tone=formatting.tone,
         metric=formatting.metric,
+        local_time=formatting.local_time,
+        run_label=formatting.run_label,
     )
     # Cache-busting: static URLs carry the files' modification time, so browsers fetch new versions.
     asset_v = max(int(f.stat().st_mtime) for f in (HERE / "static").iterdir())
@@ -140,11 +148,17 @@ def create_app(
                     pending=[p for p in pending if p.market == market.value],
                 )
             )
-        first_expiry = min((p.expires_at for p in pending if p.expires_at), default=None)
+        first_expiry = min((p for p in pending if p.expires_at), key=lambda p: p.expires_at, default=None)
         return templates.TemplateResponse(
             request,
             "overview.html",
-            {"cards": cards, "config": config, "pending": pending, "first_expiry": first_expiry},
+            {
+                "cards": cards,
+                "config": config,
+                "pending": pending,
+                "first_expiry": first_expiry,
+                "working": working_entries(db),
+            },
         )
 
     @app.get("/m/{code}", response_class=HTMLResponse)

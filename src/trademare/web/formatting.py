@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from jinja2 import Undefined
 
@@ -71,3 +73,46 @@ def metric(value: float | None, kind: str, market: Market | str) -> str:
             return f"{value:,.0f}"
         case _:
             return f"{value:,.2f}"
+
+
+MARKET_TZ = {Market.IN: ("Asia/Kolkata", "IST"), Market.US: ("America/New_York", "New York")}
+
+
+def local_time(value: datetime | None, market: Market | str) -> str:
+    """A UTC timestamp in the market's own time, e.g. 'Mon 19 Oct, 15:30 IST'."""
+    if value is None or isinstance(value, Undefined):
+        return DASH
+    tz, label = MARKET_TZ[Market(market)]
+    aware = value if value.tzinfo else value.replace(tzinfo=UTC)
+    return f"{aware.astimezone(ZoneInfo(tz)):%a %d %b, %H:%M} {label}"
+
+
+_RUN_NAMES = {
+    "mom_12_1": "momentum",
+    "earnings_yield": "earnings yield",
+    "gross_profitability": "gross profitability",
+    "high_52w": "52-week high",
+    "low_vol": "low volatility",
+    "vol_target": "vol targeting",
+}
+_RUN_SKIP = {"budget", "max_open_positions", "atr_multiple", "trailing", "method", "time_stop_days"}
+
+
+def run_label(overrides: list[str] | None) -> str:
+    """Short description of a backtest from its overrides, e.g. 'mom_12_1 + earnings_yield · vol_target'."""
+    parts: list[str] = []
+    for item in overrides or []:
+        key, _, value = item.partition("=")
+        leaf = key.rsplit(".", 1)[-1]
+        if leaf == "factors":
+            names = [_RUN_NAMES.get(v.strip(), v.strip()) for v in value.strip("[] ").split(",") if v.strip()]
+            parts.insert(0, " + ".join(names))
+        elif leaf == "exclude_high_vol_pct" and value not in ("0", "0.0", "null"):
+            parts.append(f"skip top {float(value):.0%} volatile")
+        elif leaf == "strategy_mode" or leaf in _RUN_SKIP:
+            continue
+        elif value.lower() == "true":
+            parts.append(_RUN_NAMES.get(leaf, leaf.replace("_", " ")))
+        elif value.lower() not in ("false", "null"):
+            parts.append(f"{leaf} {value}")
+    return " · ".join(parts) or "settings as configured"

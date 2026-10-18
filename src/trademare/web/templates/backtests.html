@@ -6,13 +6,13 @@
 <div class="card"><p>No backtests yet. Run <code>uv run trademare backtest -m US</code>.</p></div>
 {% else %}
 <div class="table-wrap"><table class="data sortable">
-  <thead><tr><th data-type="text">Run</th><th data-type="text">Market</th><th data-type="text">Period</th>
+  <thead><tr><th data-type="text">Run{{ tip("overrides", "what each run tested") }}</th><th data-type="text">Market</th><th data-type="text">Period</th>
     <th class="num">CAGR{{ tip("cagr", "CAGR") }}</th><th class="num">Index CAGR</th><th class="num">Sharpe{{ tip("sharpe", "Sharpe") }}</th><th class="num">Index Sharpe</th>
-    <th class="num">Max DD{{ tip("max_drawdown", "max drawdown") }}</th><th class="num">Trades</th><th class="num">Win rate{{ tip("win_rate", "win rate") }}</th><th class="num">OOS CAGR{{ tip("oos", "out-of-sample") }}</th><th data-type="text">Overrides{{ tip("overrides") }}</th></tr></thead>
+    <th class="num">Max DD{{ tip("max_drawdown", "max drawdown") }}</th><th class="num">Trades</th><th class="num">Win rate{{ tip("win_rate", "win rate") }}</th><th class="num">OOS CAGR{{ tip("oos", "out-of-sample") }}</th></tr></thead>
   <tbody>
   {% for r in runs %}{% set st = r.summary.strategy %}{% set bm = r.summary.benchmark %}{% set oos = r.summary.get("out_of_sample", {}).get("strategy", {}) %}
     <tr>
-      <td data-v="{{ r.created_at }}"><a href="/backtests/{{ r.id }}">{{ r.created_at.replace("T", " ") }}</a></td>
+      <td class="run-cell" data-v="{{ r.created_at }}"><a href="/backtests/{{ r.id }}"><b>{{ r.overrides | run_label }}</b></a><div class="sub">{{ r.created_at.replace("T", " ")[:16] }}</div></td>
       <td>{{ r.market }}</td><td>{{ r.start }} → {{ r.end }}</td>
       <td class="num {{ st.cagr | tone }}" data-v="{{ st.cagr }}">{{ st.cagr | pct(1, True) }}</td>
       <td class="num" data-v="{{ bm.cagr }}">{{ bm.cagr | pct(1, True) }}</td>
@@ -22,7 +22,6 @@
       <td class="num" data-v="{{ st.trades }}">{{ st.trades | num(0) }}</td>
       <td class="num" data-v="{{ st.win_rate }}">{{ st.win_rate | pct(0) }}</td>
       <td class="num {{ oos.cagr | tone }}" data-v="{{ oos.cagr }}">{{ oos.cagr | pct(1, True) }}</td>
-      <td class="sub">{{ r.overrides | join(", ") or "—" }}</td>
     </tr>
   {% endfor %}
   </tbody>

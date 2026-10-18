@@ -312,3 +312,36 @@ tr.muted td { color: var(--muted); }
 .newcomer ol { margin: 6px 0 0; padding-left: 20px; }
 .newcomer li { margin: 3px 0; }
 .newcomer .dismiss { float: right; }
+
+/* Signal cards: action word and trade summary */
+.sig-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 1.05rem; }
+.sig-title .sym { font-size: 1.15rem; }
+.action-word { font-weight: 700; letter-spacing: -0.01em; }
+.action-word.buy { color: var(--up); }
+.action-word.sell { color: var(--down); }
+.sig-levels { margin: 4px 0 12px; }
+.sig-levels b { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
+.sig-levels .small-b { font-size: .9rem; font-weight: 600; }
+
+/* Overview: approved orders waiting to fill */
+.working { margin-bottom: 20px; }
+.working .card-head h2 { margin: 0; font-size: 1rem; }
+.working-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.working-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+.working-list li:first-child { border-top: none; }
+.working-list .sub { flex-basis: 100%; }
+@media (min-width: 700px) { .working-list .sub { flex-basis: auto; margin-left: auto; } }
+
+.ratios.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 760px) { .ratios.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Backtests list: the run description wraps instead of pushing the results off-screen */
+table.data td.run-cell { white-space: normal; min-width: 210px; width: 230px; }
+table.data td.run-cell .sub { white-space: nowrap; }
+table.data td.run-cell b { white-space: normal; font-weight: 600; line-height: 1.3; overflow-wrap: break-word; display: block; }
+
+/* Phones: compact score bars so three-column tables fit */
+@media (max-width: 520px) {
+  .score .track { width: 26px; }
+  .card table.data th, .card table.data td { padding: 8px 4px; }
+}

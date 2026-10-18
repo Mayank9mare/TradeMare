@@ -109,3 +109,23 @@
     document.getElementById("show-newcomer")?.addEventListener("click", e => { e.preventDefault(); intro.hidden = false; });
   }
 })();
+
+// Signal cards: keep the trade summary in step with the quantity, limit and stop being edited.
+(function () {
+  for (const card of document.querySelectorAll("article.idea[data-currency]")) {
+    const form = card.querySelector(".approve-form");
+    if (!form || !form.limit) continue; // exits have no limit or stop to edit
+    const money = new Intl.NumberFormat(card.dataset.currency === "INR" ? "en-IN" : "en-US",
+      { style: "currency", currency: card.dataset.currency });
+    const set = (k, v) => { const el = card.querySelector(`[data-live="${k}"]`); if (el) el.textContent = v; };
+    const update = () => {
+      const q = +form.quantity.value, lim = +form.limit.value, stop = +form.stop.value;
+      if (!(q > 0 && lim > 0 && stop > 0)) return;
+      set("qty", q); set("limit", money.format(lim)); set("cost", money.format(q * lim));
+      set("stop", money.format(stop)); set("risk", money.format(q * Math.abs(lim - stop)));
+      const pct = (stop / lim - 1) * 100;
+      set("stoppct", (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%");
+    };
+    form.addEventListener("input", update);
+  }
+})();
