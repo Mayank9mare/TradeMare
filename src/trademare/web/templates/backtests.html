@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Backtests · TradeMare{% endblock %}
 {% block content %}
-<h1>Backtests</h1>
+<h1>Backtests{{ tip("backtest", "a backtest") }}</h1>
 {% if not runs %}
 <div class="card"><p>No backtests yet. Run <code>uv run trademare backtest -m US</code>.</p></div>
 {% else %}
 <div class="table-wrap"><table class="data sortable">
   <thead><tr><th data-type="text">Run</th><th data-type="text">Market</th><th data-type="text">Period</th>
-    <th class="num">CAGR</th><th class="num">Index CAGR</th><th class="num">Sharpe</th><th class="num">Index Sharpe</th>
-    <th class="num">Max DD</th><th class="num">Trades</th><th class="num">Win rate</th><th class="num">OOS CAGR</th><th data-type="text">Overrides</th></tr></thead>
+    <th class="num">CAGR{{ tip("cagr", "CAGR") }}</th><th class="num">Index CAGR</th><th class="num">Sharpe{{ tip("sharpe", "Sharpe") }}</th><th class="num">Index Sharpe</th>
+    <th class="num">Max DD{{ tip("max_drawdown", "max drawdown") }}</th><th class="num">Trades</th><th class="num">Win rate{{ tip("win_rate", "win rate") }}</th><th class="num">OOS CAGR{{ tip("oos", "out-of-sample") }}</th><th data-type="text">Overrides{{ tip("overrides") }}</th></tr></thead>
   <tbody>
   {% for r in runs %}{% set st = r.summary.strategy %}{% set bm = r.summary.benchmark %}{% set oos = r.summary.get("out_of_sample", {}).get("strategy", {}) %}
     <tr>

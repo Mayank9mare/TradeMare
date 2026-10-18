@@ -6,18 +6,18 @@
 {% if state.kill_switch %}
 <div class="flash bad"><b>Kill switch active</b> since {{ state.kill_at.strftime("%Y-%m-%d %H:%M") if state.kill_at else "?" }}: {{ state.kill_reason }}. New entries are blocked; exits and stops still work.
   <form method="post" action="/portfolio/{{ market.value }}/rearm" style="display:inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Re-arm</button></form></div>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit">Re-arm</button>{{ tip("rearm", "re-arming") }}</form></div>
 {% endif %}
 
 <div class="ratios">
-  <div class="ratio"><span>Equity</span><b>{{ equity | money(market, False) }}</b></div>
-  <div class="ratio"><span>Cash</span><b>{{ cash | money(market, False) }}</b></div>
-  <div class="ratio"><span>Budget</span><b>{{ cfg.budget | money(market, False) }}</b></div>
-  <div class="ratio"><span>Gross exposure</span><b>{{ (gross / equity) | pct(0) if equity else "—" }}</b></div>
-  <div class="ratio"><span>From peak</span><b class="{{ drawdown | tone }}">{{ drawdown | pct(1) }}</b></div>
-  <div class="ratio"><span>Realised P&amp;L</span><b class="{{ realized | tone }}">{{ realized | money(market, False) }}</b></div>
-  <div class="ratio"><span>Kill switch</span><b class="{{ 'down' if state.kill_switch else 'up' }}">{{ "TRIPPED" if state.kill_switch else "armed" }}</b></div>
-  <div class="ratio"><span>Last processed</span><b>{{ state.last_processed or "—" }}</b></div>
+  <div class="ratio"><span>Equity{{ tip("equity") }}</span><b>{{ equity | money(market, False) }}</b></div>
+  <div class="ratio"><span>Cash{{ tip("cash") }}</span><b>{{ cash | money(market, False) }}</b></div>
+  <div class="ratio"><span>Budget{{ tip("budget") }}</span><b>{{ cfg.budget | money(market, False) }}</b></div>
+  <div class="ratio"><span>Gross exposure{{ tip("gross_exposure", "gross exposure") }}</span><b>{{ (gross / equity) | pct(0) if equity else "—" }}</b></div>
+  <div class="ratio"><span>From peak{{ tip("from_peak", "from peak") }}</span><b class="{{ drawdown | tone }}">{{ drawdown | pct(1) }}</b></div>
+  <div class="ratio"><span>Realised P&amp;L{{ tip("realised_pnl", "realised P&L") }}</span><b class="{{ realized | tone }}">{{ realized | money(market, False) }}</b></div>
+  <div class="ratio"><span>Kill switch{{ tip("kill_switch", "the kill switch") }}</span><b class="{{ 'down' if state.kill_switch else 'up' }}">{{ "TRIPPED" if state.kill_switch else "armed" }}</b></div>
+  <div class="ratio"><span>Last processed{{ tip("last_processed", "last processed") }}</span><b>{{ state.last_processed or "—" }}</b></div>
 </div>
 
 <section class="card chart-card" style="margin-top:1rem"><div id="equity" data-market="{{ market.value }}" style="height:260px"></div></section>
@@ -25,7 +25,7 @@
 <h2>Open positions <small class="muted">{{ positions | length }} / {{ cfg.max_open_positions }}</small></h2>
 {% if positions %}
 <div class="table-wrap"><table class="data">
-  <thead><tr><th>Symbol</th><th>Side</th><th>Entered</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Last</th><th class="num">Stop</th><th class="num">Target</th><th class="num">P&amp;L</th><th class="num">Return</th></tr></thead>
+  <thead><tr><th>Symbol</th><th>Side{{ tip("long_short", "side") }}</th><th>Entered</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Last</th><th class="num">Stop{{ tip("stop", "the stop-loss") }}</th><th class="num">Target{{ tip("target") }}</th><th class="num">P&amp;L{{ tip("unrealised_pnl", "unrealised P&L") }}</th><th class="num">Return{{ tip("return") }}</th></tr></thead>
   <tbody>{% for p in positions %}
     <tr><td><a href="/m/{{ market.value }}/{{ p.symbol | urlencode }}"><b>{{ p.symbol }}</b></a><div class="sub">{{ p.sector }}</div></td><td>{{ p.direction }}</td><td>{{ p.entry_date }}</td>
       <td class="num">{{ p.quantity }}</td><td class="num">{{ p.entry_price | num(2) }}</td><td class="num">{{ p.last_price | num(2) }}</td>
@@ -35,10 +35,10 @@
 </table></div>
 {% else %}<p class="muted">No open positions.</p>{% endif %}
 
-<h2>Open orders</h2>
+<h2>Open orders{{ tip("limit_order", "order types") }}</h2>
 {% if orders %}
 <div class="table-wrap"><table class="data">
-  <thead><tr><th>Symbol</th><th>Purpose</th><th>Side</th><th>Type</th><th class="num">Qty</th><th class="num">Limit</th><th class="num">Trigger</th><th>Valid until</th><th>Broker id</th></tr></thead>
+  <thead><tr><th>Symbol</th><th>Purpose{{ tip("order_purpose", "order purpose") }}</th><th>Side</th><th>Type</th><th class="num">Qty</th><th class="num">Limit{{ tip("limit_price", "the limit price") }}</th><th class="num">Trigger{{ tip("trigger", "the trigger") }}</th><th>Valid until{{ tip("valid_until", "valid until") }}</th><th>Broker id</th></tr></thead>
   <tbody>{% for o in orders %}
     <tr><td>{{ o.symbol }}</td><td>{{ o.purpose }}</td><td>{{ o.side }}</td><td>{{ o.order_type }}</td><td class="num">{{ o.quantity }}</td>
       <td class="num">{{ o.limit_price | num(2) }}</td><td class="num">{{ o.trigger_price | num(2) }}</td><td>{{ o.valid_until or "until cancelled" }}</td><td class="sub">{{ o.broker_order_id }}</td></tr>
@@ -48,13 +48,13 @@
 
 <div class="grid two" style="margin-top:1rem">
   <section class="card">
-    <h2 style="margin-top:0">Closed trades</h2>
+    <h2 style="margin-top:0">Closed trades{{ tip("realised_pnl", "closed-trade P&L") }}</h2>
     {% if closed %}<table class="data"><thead><tr><th>Symbol</th><th>Exit</th><th>Reason</th><th class="num">P&amp;L</th></tr></thead><tbody>
     {% for p in closed %}<tr><td>{{ p.symbol }}</td><td>{{ p.exit_date }}</td><td class="sub">{{ p.exit_reason }}</td><td class="num {{ p.realized_pnl | tone }}">{{ p.realized_pnl | money(market, False) }}</td></tr>{% endfor %}
     </tbody></table>{% else %}<p class="muted">None yet.</p>{% endif %}
   </section>
   <section class="card">
-    <h2 style="margin-top:0">Audit log</h2>
+    <h2 style="margin-top:0">Audit log{{ tip("audit_log", "the audit log") }}</h2>
     <ul class="reasons">{% for e in events %}<li><span class="sub">{{ e.ts.strftime("%m-%d %H:%M") }}</span> {{ e.message }}</li>{% else %}<li class="muted">Empty</li>{% endfor %}</ul>
   </section>
 </div>

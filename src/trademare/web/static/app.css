@@ -289,3 +289,26 @@ tr.muted td { color: var(--muted); }
 .ask-a { white-space: pre-line; margin: 0 0 6px; }
 .ask-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
 .ask-form input[type=text] { flex: 1 1 260px; min-width: 0; }
+
+/* ⓘ explanations: hover, focus or tap (see app.js) */
+.tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; margin: 0 0 0 4px; padding: 0; vertical-align: 1px;
+  border: 1px solid var(--border-strong); border-radius: 50%;
+  background: var(--surface); color: var(--faint);
+  font: italic 600 10px/1 Georgia, "Times New Roman", serif; cursor: help;
+  flex: none; position: relative;
+}
+.tip::after { content: ""; position: absolute; inset: -6px; } /* bigger touch target */
+.tip:hover, .tip:focus-visible, .tip[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); outline: none; }
+#tipbox {
+  position: fixed; z-index: 1000; max-width: min(320px, calc(100vw - 24px));
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--text); color: var(--surface);
+  font: 400 12.5px/1.45 var(--font); letter-spacing: 0; text-transform: none; text-align: left;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18); pointer-events: none;
+}
+.newcomer { border-left: 3px solid var(--accent); }
+.newcomer ol { margin: 6px 0 0; padding-left: 20px; }
+.newcomer li { margin: 3px 0; }
+.newcomer .dismiss { float: right; }

@@ -3,7 +3,7 @@
 {% block title %}{{ cfg.universe }} · TradeMare{% endblock %}
 {% block content %}
 <h1>{{ "India" if market.value == "IN" else "US" }} · {{ cfg.universe }} <small class="muted">{{ rows | length }} symbols</small></h1>
-{% if scan %}<p class="muted">Scores from scan {{ scan.asof }} · {{ regime_badge(scan.regime) }} · <a href="/m/{{ market.value }}/ideas">{{ scan.ideas | length }} ideas →</a></p>{% endif %}
+{% if scan %}<p class="muted">Scores from scan {{ scan.asof }} · {{ regime_badge(scan.regime) }}{{ tip("regime", "market regime") }} · <a href="/m/{{ market.value }}/ideas">{{ scan.ideas | length }} ideas →</a></p>{% endif %}
 <div class="toolbar">
   <input id="q" type="search" placeholder="Search symbol or name…" autofocus>
   <select id="sector"><option value="">All sectors</option>{% for s in sectors %}<option>{{ s }}</option>{% endfor %}</select>
@@ -12,11 +12,11 @@
 <div class="table-wrap">
 <table class="data sortable" id="universe">
   <thead><tr>
-    <th data-type="text">Symbol</th><th class="num" title="Composite analyst score, -1 to +1">Score</th><th data-type="text">Sector</th>
-    <th class="num">Close</th><th class="num">1D</th><th class="num">1M</th><th class="num">6M</th><th class="num">1Y</th>
-    <th class="num" title="Distance from 52-week high">52W hi</th>
-    <th class="num">Mkt cap</th><th class="num">P/E</th><th class="num" title="TTM revenue growth">Rev gr.</th>
-    <th class="num">Net mgn</th><th class="num">ROE</th><th class="num">D/E</th>
+    <th data-type="text">Symbol</th><th class="num">Score{{ tip("score") }}</th><th data-type="text">Sector{{ tip("sector") }}</th>
+    <th class="num">Close</th><th class="num">1D{{ tip("chg_1d", "1D") }}</th><th class="num">1M{{ tip("chg_1m", "1M") }}</th><th class="num">6M{{ tip("chg_6m", "6M") }}</th><th class="num">1Y{{ tip("chg_1y", "1Y") }}</th>
+    <th class="num">52W hi{{ tip("from_52w_high", "52-week high") }}</th>
+    <th class="num">Mkt cap{{ tip("market_cap", "market cap") }}</th><th class="num">P/E{{ tip("pe", "P/E") }}</th><th class="num">Rev gr.{{ tip("revenue_growth", "revenue growth") }}</th>
+    <th class="num">Net mgn{{ tip("net_margin", "net margin") }}</th><th class="num">ROE{{ tip("roe", "ROE") }}</th><th class="num">D/E{{ tip("debt_to_equity", "debt to equity") }}</th>
   </tr></thead>
   <tbody>
   {% for r in rows %}

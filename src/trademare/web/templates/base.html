@@ -41,7 +41,7 @@
   <div class="content">
     <div class="statusbar">
       {% for s in ui.statuses %}
-      <span class="status-chip"><span class="dot{{ ' open' if s.is_open }}"></span><b>{{ s.exchange }}</b> {{ "open" if s.is_open else "closed" }}{% if s.next_run %} · next run {{ s.next_run.strftime("%a %d %b %H:%M") }} {{ s.tz_label }}{% endif %}</span>
+      <span class="status-chip"><span class="dot{{ ' open' if s.is_open }}"></span><b>{{ s.exchange }}</b> {{ "open" if s.is_open else "closed" }}{% if s.next_run %} · next run {{ s.next_run.strftime("%a %d %b %H:%M") }} {{ s.tz_label }}{{ tip("next_run", "the next run") }}{% endif %}</span>
       {% endfor %}
       {% if ui.pending_total %}<a class="status-chip" href="/signals"><span class="dot open" style="background:var(--accent);box-shadow:none"></span><b>{{ ui.pending_total }}</b> signal{{ "s" if ui.pending_total != 1 }} awaiting you</a>{% endif %}
     </div>

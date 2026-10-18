@@ -5,9 +5,22 @@
 <div class="page-head">
   <div>
     <h1>Overview</h1>
-    <p>Paper trading in {{ cards | length }} market{{ "s" if cards | length != 1 }}. Nothing is ordered without your approval.</p>
+    <p>Paper trading in {{ cards | length }} market{{ "s" if cards | length != 1 }}{{ tip("paper", "paper trading") }}. Nothing is ordered without your approval. <a href="#" id="show-newcomer" class="sub">How this works</a></p>
   </div>
 </div>
+
+<section class="card newcomer" id="newcomer" hidden>
+  <button type="button" class="dismiss">Got it, hide this</button>
+  <h2 style="margin-top:0">New here? How TradeMare works</h2>
+  <ol>
+    <li><b>Every evening</b>, after each market closes, the system downloads prices and company data and ranks the stocks.</li>
+    <li>It proposes trades as <b>signals</b>: what to buy or sell, how many shares, and a <b>stop-loss</b>{{ tip("stop", "stop-loss") }}, the price at which it would sell to cap the loss.</li>
+    <li><b>You decide.</b> Open <a href="/signals">Signals</a>, read "Explain this signal", then approve or reject. Nothing is bought without you.</li>
+    <li>Approved trades fill at the next market open and appear in your <a href="/journal">Trade journal</a> with their profit or loss.</li>
+    <li>Until a strategy is proven on history it was never tuned on, everything is <b>paper trading</b>: real prices, pretend money.</li>
+  </ol>
+  <p class="sub">Look for the <span class="tip" aria-hidden="true" style="cursor:default">i</span> icons: hover or tap one to see what a term means.</p>
+</section>
 
 {% if pending %}
 <section class="action">
@@ -32,23 +45,23 @@
     <div class="card-head">
       <h2>{{ "India" if m.value == "IN" else "United States" }}</h2>
       <div class="pills">
-        <span class="pill {{ 'good' if c.cfg.validated else 'info' }}">{{ "Live, validated" if c.cfg.validated else ("Paper" if c.cfg.broker == "paper" else c.cfg.broker ~ " · not validated") }}</span>
-        {% if c.scan %}{% set rl = c.scan.regime.label.value %}<span class="pill {{ 'good' if rl == 'risk_on' else 'bad' if rl == 'risk_off' else 'warn' }}">{{ {"risk_on": "Risk-on", "neutral": "Neutral", "risk_off": "Risk-off"}[rl] }}</span>{% endif %}
-        <span class="pill {{ 'bad' if a.kill_switch else 'good' }}">{{ "Kill switch tripped" if a.kill_switch else "Kill switch armed" }}</span>
+        <span class="pill {{ 'good' if c.cfg.validated else 'info' }}">{{ "Live, validated" if c.cfg.validated else ("Paper" if c.cfg.broker == "paper" else c.cfg.broker ~ " · not validated") }}{{ tip("validated" if c.cfg.validated else "paper") }}</span>
+        {% if c.scan %}{% set rl = c.scan.regime.label.value %}<span class="pill {{ 'good' if rl == 'risk_on' else 'bad' if rl == 'risk_off' else 'warn' }}">{{ {"risk_on": "Risk-on", "neutral": "Neutral", "risk_off": "Risk-off"}[rl] }}{{ tip("regime", "market regime") }}</span>{% endif %}
+        <span class="pill {{ 'bad' if a.kill_switch else 'good' }}">{{ "Kill switch tripped" if a.kill_switch else "Kill switch armed" }}{{ tip("kill_switch", "the kill switch") }}</span>
       </div>
     </div>
 
     <div class="account">
       <div class="kpi">
-        <span class="label">Equity</span>
+        <span class="label">Equity{{ tip("equity") }}</span>
         <span class="value hero">{{ a.equity | money(m, False) }}</span>
         {% if a.previous_equity %}<span class="delta {{ (a.equity / a.previous_equity - 1) | tone }}">{{ (a.equity / a.previous_equity - 1) | pct(2, True) }} today</span>{% else %}<span class="delta faint">first session recorded</span>{% endif %}
       </div>
       <div class="mini-kpis">
-        <div class="kpi"><span class="label">Cash</span><span class="value">{{ a.cash | money(m) }}</span></div>
-        <div class="kpi"><span class="label">Positions</span><span class="value">{{ a.positions }} <small class="muted">/ {{ c.cfg.max_open_positions }}</small></span></div>
-        <div class="kpi"><span class="label">From peak</span><span class="value {{ ((a.equity / a.peak - 1) if a.peak else 0) | tone }}">{{ ((a.equity / a.peak - 1) if a.peak else 0) | pct(1) }}</span></div>
-        <div class="kpi"><span class="label">Budget</span><span class="value">{{ c.cfg.budget | money(m) }}</span></div>
+        <div class="kpi"><span class="label">Cash{{ tip("cash") }}</span><span class="value">{{ a.cash | money(m) }}</span></div>
+        <div class="kpi"><span class="label">Positions{{ tip("positions_count", "positions") }}</span><span class="value">{{ a.positions }} <small class="muted">/ {{ c.cfg.max_open_positions }}</small></span></div>
+        <div class="kpi"><span class="label">From peak{{ tip("from_peak", "from peak") }}</span><span class="value {{ ((a.equity / a.peak - 1) if a.peak else 0) | tone }}">{{ ((a.equity / a.peak - 1) if a.peak else 0) | pct(1) }}</span></div>
+        <div class="kpi"><span class="label">Budget{{ tip("budget") }}</span><span class="value">{{ c.cfg.budget | money(m) }}</span></div>
       </div>
     </div>
 
@@ -59,7 +72,7 @@
 
     {% if a.kill_switch %}<div class="flash bad" style="margin:14px 0 0">Kill switch: {{ a.kill_reason }} — <a href="/portfolio/{{ m.value }}">review and re-arm</a></div>{% endif %}
 
-    <h3 style="margin-top:20px">Top ideas{% if c.scan %} <span class="faint">· scan {{ c.scan.asof }}</span>{% endif %}</h3>
+    <h3 style="margin-top:20px">Top ideas{{ tip("score", "the score bar") }}{% if c.scan %} <span class="faint">· scan {{ c.scan.asof }}</span>{% endif %}</h3>
     {% if c.ideas %}
     <table class="data">
       <tbody>
@@ -85,10 +98,10 @@
     </div>
 
     <div class="card-foot">
-      <span>Breadth <b class="up">{{ c.advancers }} up</b> / <b class="down">{{ c.decliners }} down</b></span>
+      <span>Breadth{{ tip("breadth") }} <b class="up">{{ c.advancers }} up</b> / <b class="down">{{ c.decliners }} down</b></span>
       <span>Prices <b>{{ c.bars }}/{{ c.universe_size }}</b> to {{ c.last_date or "—" }}</span>
       <span>Fundamentals <b>{{ c.fundamentals }}/{{ c.universe_size }}</b> ({{ c.source }})</span>
-      <span>Last processed <b>{{ a.last_processed or "—" }}</b></span>
+      <span>Last processed{{ tip("last_processed", "last processed") }} <b>{{ a.last_processed or "—" }}</b></span>
     </div>
   </section>
 {% endfor %}

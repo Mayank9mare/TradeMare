@@ -16,7 +16,7 @@
 <details class="explain">
   <summary>
     <svg class="chev" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-    <span>Explain this signal</span>
+    <span>Explain this signal{{ tip("explain", "this panel") }}</span>
     <span class="sub">technical · fundamental · filings · risk{% if ev.asof %} · as of {{ ev.asof }}{% endif %}</span>
   </summary>
   {% if not ev %}
@@ -28,12 +28,12 @@
       {% if t %}
         {% if t.components %}
         <table class="factor-table"><tbody>
-        {% for k, v in t.components.items() %}<tr><td><b>{{ k | capitalize }}</b><div class="sub">{{ tech_help.get(k, "") }}</div></td><td class="num">{{ score_bar(v) }}</td></tr>{% endfor %}
+        {% for k, v in t.components.items() %}<tr><td><b>{{ k | capitalize }}</b>{{ tip(k) }}<div class="sub">{{ tech_help.get(k, "") }}</div></td><td class="num">{{ score_bar(v) }}</td></tr>{% endfor %}
         </tbody></table>
         {% endif %}
         {% if t.reasons %}<ul class="reasons">{% for x in t.reasons %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
         <dl class="metrics">
-        {% for key, spec in tech_metrics.items() %}{% if t.metrics[key] is not none %}<dt>{{ spec[0] }}</dt><dd class="{{ t.metrics[key] | tone if spec[1] == 'pct' and key not in ('atr_pct',) else '' }}">{{ t.metrics[key] | metric(spec[1], m) }}</dd>{% endif %}{% endfor %}
+        {% for key, spec in tech_metrics.items() %}{% if t.metrics[key] is not none %}<dt>{{ spec[0] }}{{ tip(key, spec[0]) }}</dt><dd class="{{ t.metrics[key] | tone if spec[1] == 'pct' and key not in ('atr_pct',) else '' }}">{{ t.metrics[key] | metric(spec[1], m) }}</dd>{% endif %}{% endfor %}
         </dl>
       {% else %}<p class="empty">No technical data on the scan date.</p>{% endif %}
     </section>
@@ -43,24 +43,24 @@
       {% if f %}
         {% if f.factors %}
         <table class="factor-table"><tbody>
-        {% for k, v in f.factors.items() %}<tr><td><b>{{ k | capitalize }}</b><div class="sub">{{ fund_help.get(k, "") }}</div></td><td class="num">{% if v is none %}<span class="faint">no data</span>{% else %}{{ score_bar(v) }}{% endif %}</td></tr>{% endfor %}
+        {% for k, v in f.factors.items() %}<tr><td><b>{{ k | capitalize }}</b>{{ tip(k) }}<div class="sub">{{ fund_help.get(k, "") }}</div></td><td class="num">{% if v is none %}<span class="faint">no data</span>{% else %}{{ score_bar(v) }}{% endif %}</td></tr>{% endfor %}
         </tbody></table>
         {% endif %}
         {% if f.reasons %}<ul class="reasons">{% for x in f.reasons %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}
         <dl class="metrics">
-        {% for key, spec in fund_metrics.items() %}{% if f.metrics[key] is not none %}<dt>{{ spec[0] }}</dt><dd class="{{ f.metrics[key] | tone if key in ('earnings_growth', 'revenue_growth') else '' }}">{{ f.metrics[key] | metric(spec[1], m) }}</dd>{% endif %}{% endfor %}
+        {% for key, spec in fund_metrics.items() %}{% if f.metrics[key] is not none %}<dt>{{ spec[0] }}{{ tip(key, spec[0]) }}</dt><dd class="{{ f.metrics[key] | tone if key in ('earnings_growth', 'revenue_growth') else '' }}">{{ f.metrics[key] | metric(spec[1], m) }}</dd>{% endif %}{% endfor %}
         </dl>
         <p class="sub">Source: {{ f.source }} · scores rank the company against its sector peers (−1 worst, +1 best).</p>
         {% if fx %}
         <div class="evidence-head" style="margin-top:14px"><h4>Forensic checks <small class="faint">FY {{ fx.fiscal_year[:4] if fx.fiscal_year else "?" }}</small></h4></div>
         <dl class="metrics">
-          {% if fx.piotroski is not none %}<dt title="Nine pass/fail tests of profitability, balance-sheet strength and efficiency (Piotroski 2000)">Piotroski F-score</dt>
+          {% if fx.piotroski is not none %}<dt>Piotroski F-score{{ tip("piotroski", "the Piotroski F-score") }}</dt>
           <dd class="{{ 'up' if fx.piotroski >= 0.75 * fx.piotroski_tests else 'down' if fx.piotroski <= 0.35 * fx.piotroski_tests else '' }}">{{ fx.piotroski }} / {{ fx.piotroski_tests }}</dd>{% endif %}
-          {% if fx.altman_z is not none %}<dt title="Bankruptcy-risk score, non-manufacturer version: below 1.1 distress, above 2.6 safe">Altman Z''</dt>
+          {% if fx.altman_z is not none %}<dt>Altman Z''{{ tip("altman", "the Altman Z-score") }}</dt>
           <dd class="{{ 'down' if fx.altman_zone == 'distress' else 'up' if fx.altman_zone == 'safe' else '' }}">{{ "%.2f" | format(fx.altman_z) }} <span class="faint">({{ fx.altman_zone }})</span></dd>{% endif %}
-          {% if fx.beneish_m is not none %}<dt title="Earnings-manipulation screen: above −1.78 resembles past manipulators (Beneish 1999)">Beneish M</dt>
+          {% if fx.beneish_m is not none %}<dt>Beneish M{{ tip("beneish", "the Beneish M-score") }}</dt>
           <dd class="{{ 'down' if fx.beneish_flag else 'up' }}">{{ "%.2f" | format(fx.beneish_m) }} <span class="faint">({{ "flag" if fx.beneish_flag else "no flag" }})</span></dd>{% endif %}
-          {% if fx.accruals is not none %}<dt title="(net income − operating cash flow) / assets: high means profits not turning into cash">Accruals</dt>
+          {% if fx.accruals is not none %}<dt>Accruals{{ tip("accruals") }}</dt>
           <dd class="{{ 'down' if fx.accruals > 0.1 else '' }}">{{ fx.accruals | pct(1, True) }}</dd>{% endif %}
         </dl>
         {% if fx.piotroski_detail %}<ul class="checks">{% for k, ok in fx.piotroski_detail.items() %}<li class="{{ 'pass' if ok else 'fail' }}">{{ "✓" if ok else "✗" }} {{ piotroski_labels.get(k, k) }}</li>{% endfor %}</ul>{% endif %}
@@ -73,8 +73,8 @@
       <div class="evidence-head"><h4>Filings and results</h4></div>
       {% if e %}
         <dl class="metrics">
-          <dt>Next results</dt><dd class="{{ 'down' if e.results_soon else '' }}">{% if e.next_results %}{{ e.next_results }}{% if e.sessions_to_results is not none %} <span class="faint">({{ e.sessions_to_results }} session{{ "s" if e.sessions_to_results != 1 }} after scan · {{ e.results_source }})</span>{% endif %}{% else %}<span class="faint">not announced</span>{% endif %}</dd>
-          <dt>Red flags / cautions</dt><dd class="{{ 'down' if e.red else '' }}">{{ e.red }} / {{ e.amber }}</dd>
+          <dt>Next results{{ tip("next_results", "next results") }}</dt><dd class="{{ 'down' if e.results_soon else '' }}">{% if e.next_results %}{{ e.next_results }}{% if e.sessions_to_results is not none %} <span class="faint">({{ e.sessions_to_results }} session{{ "s" if e.sessions_to_results != 1 }} after scan · {{ e.results_source }})</span>{% endif %}{% else %}<span class="faint">not announced</span>{% endif %}</dd>
+          <dt>Red flags / cautions{{ tip("red_flags", "red flags") }}</dt><dd class="{{ 'down' if e.red else '' }}">{{ e.red }} / {{ e.amber }}</dd>
         </dl>
         {% if e.flags %}<ul class="event-alerts">{% for fl in e.flags %}<li class="{{ fl.level }}"><b>{{ fl.title }}</b>{% if fl.count > 1 %} ×{{ fl.count }}{% endif %} · {{ fl.day }} · {{ fl.source }}{% if fl.url %} · <a href="{{ fl.url }}" target="_blank" rel="noopener">filing</a>{% endif %}<div class="sub">{{ fl.detail }}</div></li>{% endfor %}</ul>
         {% else %}<p class="sub">No red flags in official filings{% if not e.coverage %} (red: last 180 days, cautions: last 90){% endif %}.</p>{% endif %}
@@ -89,12 +89,12 @@
       {% if r %}
       <div class="evidence-head" style="margin-top:16px"><h4>Risk and sizing</h4></div>
       <dl class="metrics">
-        <dt>Position value</dt><dd>{{ r.position_value | money(m, False) }}{% if r.position_pct is not none %} <span class="faint">({{ r.position_pct | pct(1) }} of capital)</span>{% endif %}</dd>
+        <dt>Position value{{ tip("position_value", "position value") }}</dt><dd>{{ r.position_value | money(m, False) }}{% if r.position_pct is not none %} <span class="faint">({{ r.position_pct | pct(1) }} of capital)</span>{% endif %}</dd>
         {% if r.risk_per_share is defined %}
-        <dt>Stop distance</dt><dd>{{ r.risk_per_share | money(m, False) }} <span class="faint">({{ r.stop_distance | pct(1) }}, {{ r.stop_method }} stop)</span></dd>
-        <dt>Loss if stopped</dt><dd class="down">{{ r.risk_amount | money(m, False) }} <span class="faint">({{ r.risk_pct | pct(2) }} of capital; limit {{ r.risk_per_trade_pct }}%)</span></dd>
+        <dt>Stop distance{{ tip("stop_distance", "stop distance") }}</dt><dd>{{ r.risk_per_share | money(m, False) }} <span class="faint">({{ r.stop_distance | pct(1) }}, {{ r.stop_method }} stop)</span></dd>
+        <dt>Loss if stopped{{ tip("loss_if_stopped", "loss if stopped") }}</dt><dd class="down">{{ r.risk_amount | money(m, False) }} <span class="faint">({{ r.risk_pct | pct(2) }} of capital; limit {{ r.risk_per_trade_pct }}%)</span></dd>
         {% endif %}
-        {% if r.reward_risk is defined %}<dt>Reward : risk</dt><dd>{{ "%.1f" | format(r.reward_risk) }} : 1</dd>{% endif %}
+        {% if r.reward_risk is defined %}<dt>Reward : risk{{ tip("reward_risk", "reward to risk") }}</dt><dd>{{ "%.1f" | format(r.reward_risk) }} : 1</dd>{% endif %}
       </dl>
       {% endif %}
     </section>

@@ -27,6 +27,7 @@ from trademare.data.universe import load_universe
 from trademare.storage.db import Database
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
+from trademare.web.glossary import tip
 from trademare.web.overview_data import account_summary, market_status, pending_signals, sparkline
 from trademare.web.settings_form import GLOBAL_FIELDS, MARKET_FIELDS, apply_form, current_values
 from trademare.web.snapshot import SnapshotCache
@@ -68,7 +69,7 @@ def create_app(
     )
     # Cache-busting: static URLs carry the files' modification time, so browsers fetch new versions.
     asset_v = max(int(f.stat().st_mtime) for f in (HERE / "static").iterdir())
-    env.globals.update(version=__version__, markets=list(config.markets), asset_v=asset_v)
+    env.globals.update(version=__version__, markets=list(config.markets), asset_v=asset_v, tip=tip)
 
     register_trading_routes(app, templates, config, service, db, secrets)
     scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}

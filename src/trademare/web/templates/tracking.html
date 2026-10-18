@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Paper vs backtest {{ market.value }} · TradeMare{% endblock %}
 {% block content %}
-<h1>Paper vs backtest <small class="muted">{{ "India" if market.value == "IN" else "US" }}</small></h1>
+<h1>Paper vs backtest{{ tip("tracking", "this comparison") }} <small class="muted">{{ "India" if market.value == "IN" else "US" }}</small></h1>
 <p class="muted">The backtest replayed over exactly the days the {{ "paper account" if simulated else "account" }} has been running. If the backtest is an honest model, both should make the same trades and similar returns.</p>
 
 {% if t.status == "no_history" %}
@@ -14,8 +14,8 @@
   <div class="ratio"><span>Sessions</span><b>{{ t.sessions }}</b></div>
   <div class="ratio"><span>Paper return</span><b class="{{ t.paper_return | tone }}">{{ t.paper_return | pct(2, True) }}</b></div>
   <div class="ratio"><span>Backtest return</span><b class="{{ t.backtest_return | tone }}">{{ t.backtest_return | pct(2, True) }}</b></div>
-  <div class="ratio"><span>Gap</span><b class="{{ t.gap | tone }}">{{ t.gap | pct(2, True) }}</b></div>
-  <div class="ratio"><span>Tracking error (yearly)</span><b>{{ t.tracking_error | pct(1) if t.tracking_error is not none else "—" }}</b></div>
+  <div class="ratio"><span>Gap{{ tip("gap") }}</span><b class="{{ t.gap | tone }}">{{ t.gap | pct(2, True) }}</b></div>
+  <div class="ratio"><span>Tracking error (yearly){{ tip("tracking_error", "tracking error") }}</span><b>{{ t.tracking_error | pct(1) if t.tracking_error is not none else "—" }}</b></div>
 </div>
 
 {% if lines %}
@@ -50,7 +50,7 @@
   {% endfor %}</tbody></table></div>
 {% else %}<div class="empty">None. Every backtest trade was also taken on paper.</div>{% endif %}
 
-<h2>Unexplained differences <small class="muted">{{ t.unexplained | length }}</small></h2>
+<h2>Unexplained differences{{ tip("unexplained", "unexplained differences") }} <small class="muted">{{ t.unexplained | length }}</small></h2>
 {% if t.unexplained %}
 <div class="flash bad">These trades happened on one side only, with no decision of yours behind them. That points at a difference between the backtester and live trading, or at data that changed after the fact. Worth investigating before trusting real money to the strategy.</div>
 <div class="table-wrap"><table class="data">

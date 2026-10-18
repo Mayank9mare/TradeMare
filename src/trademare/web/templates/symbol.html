@@ -11,7 +11,7 @@
 <section class="card chart-card">
   <div class="chart-controls">
     {% for y, label in [(0.5, "6M"), (1, "1Y"), (3, "3Y"), (8, "Max")] %}<button data-years="{{ y }}" {% if y == 1 %}class="active"{% endif %}>{{ label }}</button>{% endfor %}
-    <span class="legend"><i class="sw sma50"></i>SMA 50 <i class="sw sma200"></i>SMA 200</span>
+    <span class="legend"><i class="sw sma50"></i>SMA 50 <i class="sw sma200"></i>SMA 200{{ tip("sma_lines", "the moving averages") }}</span>
   </div>
   <div id="chart" data-market="{{ market.value }}" data-symbol="{{ symbol }}"></div>
 </section>
@@ -20,7 +20,7 @@
 <h2>Analysis <small class="muted">scan {{ scan.asof }} · market {{ regime_badge(scan.regime) }}</small></h2>
 <section class="card analysis">
   <div class="analysis-head">
-    <div><span class="muted">Composite</span> {{ score_bar(score.composite) }} <span class="muted small">confidence {{ "%.0f" | format(score.confidence * 100) }}%</span>
+    <div><span class="muted">Composite{{ tip("score") }}</span> {{ score_bar(score.composite) }} <span class="muted small">confidence {{ "%.0f" | format(score.confidence * 100) }}%{{ tip("confidence") }}</span>
       {% if not score.liquid %}<span class="badge off">below liquidity threshold</span>{% endif %}</div>
     {% if idea %}<div>{{ direction_badge(idea.direction.value) }} idea: entry {{ idea.levels.entry | money(market, False) }} · stop {{ idea.levels.stop | money(market, False) }} · target {{ idea.levels.target | money(market, False) }}</div>{% endif %}
   </div>
@@ -36,18 +36,22 @@
 </section>
 {% endif %}
 
-<h2>Key ratios <small class="muted">TTM, as of {{ last }}</small></h2>
+<h2>Key ratios <small class="muted">TTM{{ tip("ttm", "TTM") }}, as of {{ last }}</small></h2>
 {% set x = ratios %}
 <div class="ratios">
-  {% for label, value in [
-      ("Market cap", x.market_cap | money(market)), ("P/E", x.pe | num(1)), ("P/B", x.price_to_book | num(2)),
-      ("FCF yield", x.fcf_yield | pct(1)), ("Revenue (TTM)", x.revenue_ttm | money(market)),
-      ("Revenue growth", x.revenue_growth | pct(1, True)), ("Gross margin", x.gross_margin | pct(1)),
-      ("Operating margin", x.operating_margin | pct(1)), ("Net margin", x.net_margin | pct(1)),
-      ("ROE", x.roe | pct(1)), ("ROA", x.roa | pct(1)), ("Debt / equity", x.debt_to_equity | num(2)),
-      ("Current ratio", x.current_ratio | num(2)), ("Interest cover", x.interest_coverage | num(1)),
+  {% for label, value, label_key in [
+      ("Market cap", x.market_cap | money(market), "market_cap"), ("P/E", x.pe | num(1), "pe"),
+      ("P/B", x.price_to_book | num(2), "price_to_book"), ("FCF yield", x.fcf_yield | pct(1), "fcf_yield"),
+      ("Revenue (TTM)", x.revenue_ttm | money(market), "ttm"),
+      ("Revenue growth", x.revenue_growth | pct(1, True), "revenue_growth"),
+      ("Gross margin", x.gross_margin | pct(1), "gross_margin"),
+      ("Operating margin", x.operating_margin | pct(1), "operating_margin"),
+      ("Net margin", x.net_margin | pct(1), "net_margin"), ("ROE", x.roe | pct(1), "roe"),
+      ("ROA", x.roa | pct(1), "roa"), ("Debt / equity", x.debt_to_equity | num(2), "debt_to_equity"),
+      ("Current ratio", x.current_ratio | num(2), "current_ratio"),
+      ("Interest cover", x.interest_coverage | num(1), "interest_coverage"),
   ] %}
-  <div class="ratio"><span>{{ label }}</span><b>{{ value }}</b></div>
+  <div class="ratio"><span>{{ label }}{{ tip(label_key, label) }}</span><b>{{ value }}</b></div>
   {% endfor %}
 </div>
 
@@ -59,7 +63,7 @@
   <div class="table-wrap"><table class="data statements">
     <thead>
       <tr><th>Period end</th>{% for p in t.periods %}<th class="num">{{ p }}</th>{% endfor %}</tr>
-      <tr class="sub"><th title="First date the numbers were public">Available from</th>{% for a in t.available %}<th class="num">{{ a }}</th>{% endfor %}</tr>
+      <tr class="sub"><th>Available from{{ tip("available_from", "available from") }}</th>{% for a in t.available %}<th class="num">{{ a }}</th>{% endfor %}</tr>
     </thead>
     <tbody>{% for f in rows %}<tr><td>{{ f.replace("_", " ") | capitalize }}</td>
       {% for v in t["values"][f] %}<td class="num">{{ (v | num(0)) if f == "shares_outstanding" and v is not none else (v | money(market)) }}</td>{% endfor %}</tr>{% endfor %}

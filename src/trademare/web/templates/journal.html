@@ -13,15 +13,15 @@
 {% if summary.open_totals %}
 <div class="ratios">
   {% for mk, t in summary.open_totals.items() %}
-  <div class="ratio"><span>Invested {{ mk }}</span><b>{{ t.invested | money(mk, False) }}</b></div>
-  <div class="ratio"><span>Current value {{ mk }}</span><b>{{ t.value | money(mk, False) }}</b></div>
-  <div class="ratio"><span>Unrealised P&amp;L {{ mk }}</span><b class="{{ t.pnl | tone }}">{{ t.pnl | money(mk, False) }} <small>({{ t["return"] | pct(2, True) }})</small></b></div>
+  <div class="ratio"><span>Invested {{ mk }}{{ tip("invested") }}</span><b>{{ t.invested | money(mk, False) }}</b></div>
+  <div class="ratio"><span>Current value {{ mk }}{{ tip("current_value", "current value") }}</span><b>{{ t.value | money(mk, False) }}</b></div>
+  <div class="ratio"><span>Unrealised P&amp;L {{ mk }}{{ tip("unrealised_pnl", "unrealised P&L") }}</span><b class="{{ t.pnl | tone }}">{{ t.pnl | money(mk, False) }} <small>({{ t["return"] | pct(2, True) }})</small></b></div>
   {% endfor %}
 </div>
 {% endif %}
 {% if open_ %}
 <div class="table-wrap" style="margin-top:.75rem"><table class="data">
-  <thead><tr><th>Stock</th><th>Entered</th><th class="num">Qty</th><th class="num">Bought at</th><th class="num">Invested</th><th class="num">Price now</th><th class="num">Value now</th><th class="num">P&amp;L</th><th class="num">Return</th><th class="num">Stop</th></tr></thead>
+  <thead><tr><th>Stock</th><th>Entered{{ tip("long_term", "long-term holding") }}</th><th class="num">Qty</th><th class="num">Bought at</th><th class="num">Invested{{ tip("invested") }}</th><th class="num">Price now</th><th class="num">Value now{{ tip("current_value", "value now") }}</th><th class="num">P&amp;L{{ tip("pnl", "P&L") }}</th><th class="num">Return{{ tip("return") }}</th><th class="num">Stop{{ tip("stop_away", "distance to stop") }}</th></tr></thead>
   <tbody>{% for e in open_ %}{% set s = e.signal %}{% set m = s.market %}
     <tr>
       <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span><div class="sub">{{ s.direction | lower }}</div></td>
@@ -40,9 +40,9 @@
 
 {# ------------------------------------------------------------------ waiting #}
 {% if waiting %}
-<h2>Approved, waiting to fill <small class="muted">{{ waiting | length }}</small></h2>
+<h2>Approved, waiting to fill{{ tip("awaiting_fill", "waiting to fill") }} <small class="muted">{{ waiting | length }}</small></h2>
 <div class="table-wrap"><table class="data">
-  <thead><tr><th>Stock</th><th>Approved</th><th class="num">Qty</th><th class="num">Limit</th><th class="num">Order value</th><th class="num">Price now</th><th>Status</th></tr></thead>
+  <thead><tr><th>Stock</th><th>Approved</th><th class="num">Qty</th><th class="num">Limit{{ tip("entry_limit", "the limit price") }}</th><th class="num">Order value</th><th class="num">Price now</th><th>Status</th></tr></thead>
   <tbody>{% for e in waiting %}{% set s = e.signal %}{% set m = s.market %}
     <tr>
       <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span></td>
@@ -60,11 +60,11 @@
 <h2>Closed trades <small class="muted">{{ closed | length }}</small></h2>
 {% if closed %}
 <div class="ratios">
-  <div class="ratio"><span>Win rate</span><b>{{ summary.win_rate | pct(0) if summary.win_rate is not none else "—" }}</b></div>
-  {% for mk, v in summary.realised.items() %}<div class="ratio"><span>Realised P&amp;L {{ mk }}</span><b class="{{ v | tone }}">{{ v | money(mk, False) }}</b></div>{% endfor %}
+  <div class="ratio"><span>Win rate{{ tip("win_rate", "win rate") }}</span><b>{{ summary.win_rate | pct(0) if summary.win_rate is not none else "—" }}</b></div>
+  {% for mk, v in summary.realised.items() %}<div class="ratio"><span>Realised P&amp;L {{ mk }}{{ tip("realised_pnl", "realised P&L") }}</span><b class="{{ v | tone }}">{{ v | money(mk, False) }}</b></div>{% endfor %}
 </div>
 <div class="table-wrap" style="margin-top:.75rem"><table class="data">
-  <thead><tr><th>Stock</th><th>Held</th><th class="num">Qty</th><th class="num">Bought at</th><th class="num">Sold at</th><th class="num">P&amp;L</th><th class="num">Return</th><th class="num">R</th><th>Why it closed</th></tr></thead>
+  <thead><tr><th>Stock</th><th>Held</th><th class="num">Qty</th><th class="num">Bought at</th><th class="num">Sold at</th><th class="num">P&amp;L{{ tip("pnl", "P&L") }}</th><th class="num">Return</th><th class="num">R{{ tip("r_multiple", "R multiple") }}</th><th>Why it closed</th></tr></thead>
   <tbody>{% for e in closed %}{% set s = e.signal %}{% set m = s.market %}
     <tr>
       <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span></td>
@@ -81,11 +81,11 @@
 {% else %}<div class="empty">No closed trades yet.</div>{% endif %}
 
 {# ------------------------------------------------------------------ passed on #}
-<h2>Signals you passed on <small class="muted">{{ passed | length }}</small></h2>
+<h2>Signals you passed on{{ tip("passed_on", "signals you passed on") }} <small class="muted">{{ passed | length }}</small></h2>
 {% if passed %}
 <p class="muted">What each would have returned if taken at the signal price, up to the latest close (ignoring the stop).{% if summary.skipped_avg_return is not none %} Average: <b class="{{ summary.skipped_avg_return | tone }}">{{ summary.skipped_avg_return | pct(1, True) }}</b>.{% endif %}</p>
 <div class="table-wrap"><table class="data">
-  <thead><tr><th>Stock</th><th>Signal date</th><th>Decision</th><th class="num">Signal price</th><th class="num">Price now</th><th class="num">Would have returned</th><th class="num">R</th></tr></thead>
+  <thead><tr><th>Stock</th><th>Signal date</th><th>Decision</th><th class="num">Signal price</th><th class="num">Price now</th><th class="num">Would have returned</th><th class="num">R{{ tip("r_multiple", "R multiple") }}</th></tr></thead>
   <tbody>{% for e in passed %}{% set s = e.signal %}{% set m = s.market %}
     <tr class="muted">
       <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span></td>

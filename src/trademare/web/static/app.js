@@ -43,3 +43,69 @@
     });
   }
 })();
+
+// ⓘ explanations. One floating bubble, shown on hover or keyboard focus, toggled by tap/click.
+(function () {
+  const box = document.createElement("div");
+  box.id = "tipbox"; box.setAttribute("role", "tooltip"); box.hidden = true;
+  document.body.append(box);
+  let current = null;
+
+  function show(btn) {
+    current = btn;
+    box.textContent = btn.dataset.tip;
+    box.hidden = false;
+    btn.setAttribute("aria-describedby", "tipbox");
+    btn.setAttribute("aria-expanded", "true");
+    const r = btn.getBoundingClientRect(), b = box.getBoundingClientRect(), pad = 12;
+    let left = Math.min(Math.max(pad, r.left + r.width / 2 - b.width / 2), innerWidth - b.width - pad);
+    let top = r.bottom + 8;
+    if (top + b.height > innerHeight - pad) top = r.top - b.height - 8; // no room below: flip above
+    box.style.left = left + "px"; box.style.top = Math.max(pad, top) + "px";
+  }
+  function hide() {
+    if (!current) return;
+    current.removeAttribute("aria-describedby");
+    current.setAttribute("aria-expanded", "false");
+    current = null; box.hidden = true;
+  }
+
+  // Focus (and mouse hover) open the bubble before the click arrives, so remember the state at
+  // pointerdown: a tap on an open bubble closes it, a mouse click just keeps it open.
+  let wasOpen = false, pointer = "mouse";
+  document.addEventListener("pointerdown", e => {
+    wasOpen = current !== null && current === e.target.closest(".tip");
+    pointer = e.pointerType;
+  }, true);
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".tip");
+    if (!btn) { hide(); return; }
+    e.preventDefault(); e.stopPropagation(); // don't sort a table or open a <details>
+    if (wasOpen && pointer !== "mouse") hide(); else show(btn);
+    wasOpen = false;
+  }, true);
+  document.addEventListener("pointerover", e => {
+    const btn = e.target.closest(".tip");
+    if (btn && e.pointerType === "mouse") show(btn);
+  });
+  document.addEventListener("pointerout", e => {
+    if (e.target.closest(".tip") && e.pointerType === "mouse") hide();
+  });
+  document.addEventListener("focusin", e => { if (e.target.matches(".tip")) show(e.target); });
+  document.addEventListener("focusout", e => { if (e.target.matches(".tip")) hide(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") hide(); });
+  addEventListener("scroll", hide, true);
+
+  // "New here?" card on the overview: dismissed once, remembered in this browser.
+  const intro = document.getElementById("newcomer");
+  if (intro) {
+    let seen = false;
+    try { seen = localStorage.getItem("tm-newcomer-dismissed") === "1"; } catch (_) {}
+    intro.hidden = seen;
+    intro.querySelector(".dismiss")?.addEventListener("click", () => {
+      intro.hidden = true;
+      try { localStorage.setItem("tm-newcomer-dismissed", "1"); } catch (_) {}
+    });
+    document.getElementById("show-newcomer")?.addEventListener("click", e => { e.preventDefault(); intro.hidden = false; });
+  }
+})();

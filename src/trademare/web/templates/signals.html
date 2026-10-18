@@ -2,7 +2,7 @@
 {% from "_macros.html" import direction_badge, score_bar %}
 {% block title %}Signals · TradeMare{% endblock %}
 {% block content %}
-<h1>Signals</h1>
+<h1>Signals{{ tip("signal", "a signal") }}</h1>
 {% include "_flash.html" %}
 <p class="muted">Approving places an order for the next session: entries as a limit order at the signal price
   (a protective stop is placed once filled), exits at the next open.
@@ -17,18 +17,18 @@
     <div class="idea-head">
       <div>
         <span class="badge">{{ m }}</span> <b>{{ s.action }}</b>
-        <a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b class="sym">{{ s.symbol }}</b></a> {{ direction_badge(s.direction) }}
-        <div class="sub">scan {{ s.scan_date }} · expires {{ s.expires_at.strftime("%Y-%m-%d %H:%M") }} UTC{% if s.is_expired %} · <b class="down">expired</b>{% endif %}</div>
+        <a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b class="sym">{{ s.symbol }}</b></a> {{ direction_badge(s.direction) }}{{ tip("long_short", "long and short") }}{% if s.action == "EXIT" %}{{ tip("exit_signal", "an exit signal") }}{% endif %}
+        <div class="sub">scan {{ s.scan_date }} · expires {{ s.expires_at.strftime("%Y-%m-%d %H:%M") }} UTC{{ tip("expires", "expiry") }}{% if s.is_expired %} · <b class="down">expired</b>{% endif %}</div>
       </div>
-      <div class="idea-score">{{ score_bar(s.score) }}</div>
+      <div class="idea-score">{{ score_bar(s.score) }}{{ tip("score") }}</div>
     </div>
     {% set warns = s.reasons.get("events", []) + s.reasons.get("tax", []) %}
-    {% if warns %}<ul class="event-alerts">{% for w in warns %}<li class="{{ 'red' if w.startswith('RED FLAG') else 'note' if w.startswith(('Note', 'Tax')) else 'amber' }}">{{ w }}</li>{% endfor %}</ul>{% endif %}
+    {% if warns %}<p class="sub" style="margin:8px 0 0">Warnings{{ tip("event_alerts", "these warnings") }}</p><ul class="event-alerts">{% for w in warns %}<li class="{{ 'red' if w.startswith('RED FLAG') else 'note' if w.startswith(('Note', 'Tax')) else 'amber' }}">{{ w }}</li>{% endfor %}</ul>{% endif %}
     <ul class="reasons">{% for k, rs in s.reasons.items() if k not in ("events", "tax") %}{% for r in rs[:4] %}<li>{{ r }}</li>{% endfor %}{% endfor %}</ul>
     {% include "_explain.html" %}
     {% set qa = asks.get(s.id, []) %}
     <details class="ask"{% if qa %} open{% endif %}>
-      <summary>Ask Claude about this pick{% if qa %} <span class="faint">({{ qa | length }})</span>{% endif %}</summary>
+      <summary>Ask Claude about this pick{{ tip("ask_claude", "Ask Claude") }}{% if qa %} <span class="faint">({{ qa | length }})</span>{% endif %}</summary>
       {% for a in qa %}<div class="ask-answer">
         <p class="ask-q">{{ a.question }}</p>
         <p class="ask-a">{{ a.answer }}</p>
@@ -46,11 +46,11 @@
     {% if not s.is_expired %}
     <form method="post" action="/signals/{{ s.id }}/approve" class="approve-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <label>Qty <input type="number" name="quantity" min="1" step="1" value="{{ s.quantity }}"></label>
+      <label>Qty{{ tip("quantity") }} <input type="number" name="quantity" min="1" step="1" value="{{ s.quantity }}"></label>
       {% if s.action == "ENTRY" %}
-      <label>Limit <input type="number" name="limit" step="any" value="{{ '%.2f' | format(s.entry_price) }}"></label>
-      <label>Stop <input type="number" name="stop" step="any" value="{{ '%.2f' | format(s.stop_price) }}"></label>
-      <span class="sub">value {{ (s.quantity * s.entry_price) | money(m, False) }} · risk {{ (s.quantity * (s.entry_price - s.stop_price) | abs) | money(m, False) }}</span>
+      <label>Limit{{ tip("entry_limit", "the limit price") }} <input type="number" name="limit" step="any" value="{{ '%.2f' | format(s.entry_price) }}"></label>
+      <label>Stop{{ tip("stop", "the stop-loss") }} <input type="number" name="stop" step="any" value="{{ '%.2f' | format(s.stop_price) }}"></label>
+      <span class="sub">value {{ (s.quantity * s.entry_price) | money(m, False) }} · risk {{ (s.quantity * (s.entry_price - s.stop_price) | abs) | money(m, False) }}{{ tip("risk") }}</span>
       {% else %}
       <span class="sub">exit at next open · last {{ s.entry_price | money(m, False) }} · {{ s.exit_reason }}</span>
       {% endif %}
