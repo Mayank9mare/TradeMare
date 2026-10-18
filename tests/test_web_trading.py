@@ -97,3 +97,9 @@ def test_password_protects_dashboard(tmp_path, monkeypatch, path):
     assert client.get(path).status_code == 401
     assert client.get(path, auth=("me", "wrong")).status_code == 401
     assert client.get(path, auth=("me", "s3cret")).status_code == 200
+
+
+def test_tracking_page_explains_short_history(tmp_path, monkeypatch):
+    client, _ = make_app(tmp_path, monkeypatch)
+    page = client.get("/portfolio/IN/tracking")
+    assert page.status_code == 200 and "Paper vs backtest" in page.text

@@ -257,3 +257,7 @@ details[open] > summary .chev { transform: rotate(90deg); }
 dl.metrics { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 10px 0 6px; font-size: .84rem; }
 dl.metrics dt { color: var(--muted); }
 dl.metrics dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* Paper vs backtest */
+.track-chart { width: 100%; height: 180px; display: block; }
+.legend .key { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-left: .5rem; }

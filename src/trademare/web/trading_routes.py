@@ -18,6 +18,7 @@ from trademare.data.service import DataService
 from trademare.storage.db import Database, EquityRow, EventRow, OrderRow, PositionRow, SignalRow
 from trademare.strategy.evidence import FUND_METRICS, TECH_METRICS
 from trademare.trading.desk import DeskError, TradingDesk
+from trademare.trading.tracking import MIN_SESSIONS, Tracking, compare_with_backtest
 from trademare.web.overview_data import sparkline
 
 
@@ -201,6 +202,44 @@ def register_trading_routes(
                 "simulated": d.broker.simulated,
                 "msg": msg,
                 "err": err,
+            },
+        )
+
+    tracking_cache: dict[tuple[Market, object, int], Tracking] = {}
+
+    @app.get("/portfolio/{code}/tracking", response_class=HTMLResponse)
+    def tracking_page(request: Request, code: str):
+        market = market_of(code)
+        with db.session() as s:
+            days = list(s.scalars(select(EquityRow.day).where(EquityRow.market == market.value)))
+        key = (market, max(days) if days else None, len(days))
+        if key not in tracking_cache:  # the backtest replay is only redone after a new trading day
+            tracking_cache.clear()
+            tracking_cache[key] = compare_with_backtest(service, db, market)
+        t = tracking_cache[key]
+        lines = None
+        if t.curve is not None and len(t.curve) > 1:
+            lo, hi = float(t.curve.min().min()), float(t.curve.max().max())
+            span = (hi - lo) or 1.0
+            n = len(t.curve) - 1
+
+            def path(col: str) -> str:
+                pts = [
+                    (6 + 588 * i / n, 6 + 148 * (1 - (float(v) - lo) / span))
+                    for i, v in enumerate(t.curve[col])
+                ]
+                return "M" + " L".join(f"{x:.1f} {y:.1f}" for x, y in pts)
+
+            lines = {"paper": path("paper"), "backtest": path("backtest"), "low": lo, "high": hi}
+        return templates.TemplateResponse(
+            request,
+            "tracking.html",
+            {
+                "market": market,
+                "t": t,
+                "lines": lines,
+                "min_sessions": MIN_SESSIONS,
+                "simulated": desk(market).broker.simulated,
             },
         )
 

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Paper vs backtest {{ market.value }} · TradeMare{% endblock %}
+{% block content %}
+<h1>Paper vs backtest <small class="muted">{{ "India" if market.value == "IN" else "US" }}</small></h1>
+<p class="muted">The backtest replayed over exactly the days the {{ "paper account" if simulated else "account" }} has been running. If the backtest is an honest model, both should make the same trades and similar returns.</p>
+
+{% if t.status == "no_history" %}
+<div class="empty">No trading days recorded yet. The comparison starts after the first daily run.</div>
+{% elif t.status == "too_short" %}
+<div class="empty">{{ t.sessions }} trading day{{ "s" if t.sessions != 1 }} recorded since {{ t.start }}. The comparison needs at least {{ min_sessions }}; check back after a week of daily runs.</div>
+{% else %}
+<div class="ratios">
+  <div class="ratio"><span>Period</span><b>{{ t.start }} → {{ t.end }}</b></div>
+  <div class="ratio"><span>Sessions</span><b>{{ t.sessions }}</b></div>
+  <div class="ratio"><span>Paper return</span><b class="{{ t.paper_return | tone }}">{{ t.paper_return | pct(2, True) }}</b></div>
+  <div class="ratio"><span>Backtest return</span><b class="{{ t.backtest_return | tone }}">{{ t.backtest_return | pct(2, True) }}</b></div>
+  <div class="ratio"><span>Gap</span><b class="{{ t.gap | tone }}">{{ t.gap | pct(2, True) }}</b></div>
+  <div class="ratio"><span>Tracking error (yearly)</span><b>{{ t.tracking_error | pct(1) if t.tracking_error is not none else "—" }}</b></div>
+</div>
+
+{% if lines %}
+<section class="card" style="margin-top:1rem">
+  <div class="card-head"><h2 style="margin:0">Growth of 1.00</h2>
+    <span class="legend"><span class="key" style="background:var(--accent)"></span>Paper <span class="key" style="background:var(--muted)"></span>Backtest</span></div>
+  <svg class="track-chart" viewBox="0 0 600 160" preserveAspectRatio="none" role="img" aria-label="Paper {{ t.paper_return | pct(1, True) }} vs backtest {{ t.backtest_return | pct(1, True) }}">
+    <path d="{{ lines.backtest }}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></path>
+    <path d="{{ lines.paper }}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+  </svg>
+  <div class="spark-meta"><span>{{ t.start }}</span><span>low {{ '%.3f' | format(lines.low) }} · high {{ '%.3f' | format(lines.high) }}</span><span>{{ t.end }}</span></div>
+</section>
+{% endif %}
+
+<h2>Same trades <small class="muted">{{ t.matched | length }}</small></h2>
+{% if t.matched %}
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Symbol</th><th>Paper entry</th><th>Backtest entry</th><th class="num">Paper price</th><th class="num">Backtest price</th><th class="num">Price gap</th><th>Note</th></tr></thead>
+  <tbody>{% for m in t.matched %}
+    <tr><td><b>{{ m.symbol }}</b></td><td>{{ m.paper_date }}</td><td>{{ m.backtest_date }}</td>
+      <td class="num">{{ m.paper_price | money(market, False) }}</td><td class="num">{{ m.backtest_price | money(market, False) }}</td>
+      <td class="num">{{ m.price_gap | pct(2, True) if m.price_gap is not none else "—" }}</td><td>{{ m.note }}</td></tr>
+  {% endfor %}</tbody></table></div>
+{% else %}<div class="empty">No trades in common yet.</div>{% endif %}
+
+<h2>Differences from your decisions <small class="muted">{{ t.decisions | length }}</small></h2>
+{% if t.decisions %}
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Symbol</th><th>Backtest entry</th><th class="num">Price</th><th>Why paper differs</th></tr></thead>
+  <tbody>{% for m in t.decisions %}
+    <tr><td><b>{{ m.symbol }}</b></td><td>{{ m.backtest_date }}</td><td class="num">{{ m.backtest_price | money(market, False) }}</td><td>{{ m.note }}</td></tr>
+  {% endfor %}</tbody></table></div>
+{% else %}<div class="empty">None. Every backtest trade was also taken on paper.</div>{% endif %}
+
+<h2>Unexplained differences <small class="muted">{{ t.unexplained | length }}</small></h2>
+{% if t.unexplained %}
+<div class="flash bad">These trades happened on one side only, with no decision of yours behind them. That points at a difference between the backtester and live trading, or at data that changed after the fact. Worth investigating before trusting real money to the strategy.</div>
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Symbol</th><th>Paper</th><th>Backtest</th><th>Note</th></tr></thead>
+  <tbody>{% for m in t.unexplained %}
+    <tr><td><b>{{ m.symbol }}</b></td>
+      <td>{% if m.paper_date %}{{ m.paper_date }} @ {{ m.paper_price | money(market, False) }}{% else %}—{% endif %}</td>
+      <td>{% if m.backtest_date %}{{ m.backtest_date }} @ {{ m.backtest_price | money(market, False) }}{% else %}—{% endif %}</td>
+      <td>{{ m.note }}</td></tr>
+  {% endfor %}</tbody></table></div>
+{% else %}<div class="empty">None. The backtester and paper trading agree.</div>{% endif %}
+{% endif %}
+{% endblock %}

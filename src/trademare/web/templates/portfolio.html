@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Portfolio {{ market.value }} · TradeMare{% endblock %}
 {% block content %}
-<h1>{{ "India" if market.value == "IN" else "US" }} portfolio <small class="muted">{{ "paper account" if simulated else cfg.broker }}{{ "" if cfg.validated else " · not validated" }}</small></h1>
+<h1>{{ "India" if market.value == "IN" else "US" }} portfolio <small class="muted">{{ "paper account" if simulated else cfg.broker }}{{ "" if cfg.validated else " · not validated" }} · <a href="/portfolio/{{ market.value }}/tracking">compare with backtest →</a></small></h1>
 {% include "_flash.html" %}
 {% if state.kill_switch %}
 <div class="flash bad"><b>Kill switch active</b> since {{ state.kill_at.strftime("%Y-%m-%d %H:%M") if state.kill_at else "?" }}: {{ state.kill_reason }}. New entries are blocked; exits and stops still work.
