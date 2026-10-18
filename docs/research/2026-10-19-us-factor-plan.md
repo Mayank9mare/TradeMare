@@ -69,3 +69,82 @@ series must also meet the pass bar against the S&P 500 over the same sessions.
   dividends (about 2% a year). This flatters the strategy against the benchmark, by roughly the
   index's dividend yield in return and a little in Sharpe.
 - Yahoo prices for older years can have gaps; symbols without history simply are not tradeable then.
+
+---
+
+# Results (appended after the runs; the plan above was committed first, in 9ea04c3)
+
+Before any test, US prices were extended from 2018-10 back to 2008-10. Only the date range was checked.
+
+## Step 1: selection, in-sample 2019-10-15 → 2024-10-15
+
+| Variant | CAGR | Sharpe | Max DD | Trades |
+|---|---|---|---|---|
+| U0 momentum | +14.4% | 0.8131 | −23.5% | 84 |
+| U1 + gross profitability | +0.8% | 0.1299 | −35.9% | 99 |
+| **U2 + earnings yield** | +12.9% | **0.8192** | −22.3% | 59 |
+| S&P 500 | +14.2% | 0.73 | −33.9% | |
+
+All three meet the drawdown condition (U1 is 2 points worse than the index, inside the 5-point limit).
+**U2 is selected** on the best Sharpe. Its margin over U0 is 0.006, effectively a tie.
+
+## Step 2: decisive holdout, 2010-01-04 → 2019-10-14, U2, one run
+
+| | U2 | S&P 500 |
+|---|---|---|
+| Total return | +240.2% | +161.8% |
+| CAGR | +13.3% | +10.3% |
+| Sharpe | **0.89** | 0.74 |
+| Max drawdown | **−23.9%** | −19.8% |
+
+**Pass:** Sharpe is above the index's, and the drawdown is 4.1 points worse, inside the 5-point limit.
+The edge sits in the first half: 2010-01 → 2015-11 Sharpe 1.01 vs 0.70, but 2015-11 → 2019-10 only
+0.68 vs 0.81. The kill switch tripped 16 times.
+
+## Step 3: walk-forward, 2010 → 2026-10 (choices from 2012)
+
+| Year | Pick | Return | S&P 500 |
+|---|---|---|---|
+| 2012 | U2 | +1.5% | +13.4% |
+| 2013 | U2 | +43.0% | +29.6% |
+| 2014 | U2 | +6.0% | +11.4% |
+| 2015 | U1 | +1.8% | −0.7% |
+| 2016 | U2 | −5.6% | +9.5% |
+| 2017 | U1 | +20.6% | +19.4% |
+| 2018 | U0 | −6.3% | −6.2% |
+| 2019 | U0 | −1.9% | +28.9% |
+| 2020 | U2 | −18.5% | +16.3% |
+| 2021 | U2 | +29.3% | +26.9% |
+| 2022 | U2 | −15.0% | −19.4% |
+| 2023 | U0 | +22.9% | +24.2% |
+| 2024 | U2 | +32.3% | +23.3% |
+| 2025 | U2 | +2.5% | +16.4% |
+| 2026 (to Oct) | U2 | +7.5% | +11.9% |
+
+| | Walk-forward | S&P 500 (same sessions) |
+|---|---|---|
+| CAGR | +6.8% | +12.9% |
+| Sharpe | **0.49** | 0.82 |
+| Max drawdown | −38.6% | −33.9% |
+
+**Fail.** The Sharpe is well below the index's, and the drawdown is 4.7 points worse (inside the limit,
+but the Sharpe condition alone fails the step). The strategy lagged the index in 9 of 15 years.
+
+Full-span reference (not part of the bar), each variant 2010-01 → 2026-10:
+- U0: CAGR +10.8%, Sharpe 0.67, DD −26.3%
+- U1: +7.0%, 0.51, −27.2%
+- U2: +11.6%, 0.76, −29.7%
+- S&P 500: Sharpe 0.75, DD −33.9%
+
+## Verdict
+**The US fails the pre-registered bar.** The holdout passed, but the walk-forward check failed: chosen
+year by year from past results, the strategy made about half the index's return with a deeper
+drawdown. Even the best single variant over the whole span (U2) only matched the S&P 500's Sharpe,
+and that is before the survivorship bias, which flatters it.
+
+- **Applied:** nothing. The US stays **signals-only** on its current settings.
+- **Not done:** no re-tuning on any examined period, as the plan requires.
+
+This matches the published evidence that momentum in US large caps has added little since about 2009.
+A future US round should test a different idea (for example, a broader universe or a
+trend-following allocation between stocks and bonds), with its own plan written first.
