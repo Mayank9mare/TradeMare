@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from trademare.core.models import Direction, Market
 from trademare.data.store import ParquetStore
+from trademare.risk.tax import long_term_from
 from trademare.storage.db import Database, OrderRow, PositionRow, SignalRow
 
 
@@ -38,6 +39,7 @@ class JournalEntry:
     price_date: date | None = None  # date of the price used for open trades
     stop: float | None = None
     costs: float | None = None  # brokerage, taxes and fees paid so far
+    long_term_on: date | None = None  # open longs: first day a sale counts as a long-term gain
 
     @property
     def market(self) -> Market:
@@ -141,6 +143,7 @@ def build_journal(
                     price_date=px_day,
                     stop=pos.stop_price,
                     costs=costs,
+                    long_term_on=long_term_from(pos.entry_date) if not closed and sign > 0 else None,
                 )
             )
         else:

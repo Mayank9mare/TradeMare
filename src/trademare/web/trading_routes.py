@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets as pysecrets
 from datetime import UTC, datetime
+from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -11,7 +12,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
+from trademare.analysis.explain import SignalExplainer, llm_ready
 from trademare.analysis.forensic import PIOTROSKI_LABELS
+from trademare.analysis.llm import LLMError
 from trademare.config.schema import AppConfig
 from trademare.config.secrets import Secrets
 from trademare.core.models import Direction, Market
@@ -35,6 +38,7 @@ def register_trading_routes(
     csrf = pysecrets.token_urlsafe(32)
     templates.env.globals["csrf_token"] = csrf
     desks: dict[Market, TradingDesk] = {}
+    explainer: list = []  # built on first question
 
     def desk(market: Market) -> TradingDesk:
         if market not in desks:
@@ -95,6 +99,12 @@ def register_trading_routes(
                 else sig.expires_at
             )
             sig.is_expired = bool(exp and exp < now)  # type: ignore[attr-defined]
+        ids = {sig.id for sig in pending}
+        asks: dict[str, list[dict]] = {}
+        with db.session() as s:
+            for ev in s.scalars(select(EventRow).where(EventRow.kind == "ask").order_by(EventRow.ts)):
+                if ev.data.get("signal") in ids:
+                    asks.setdefault(ev.data["signal"], []).append(ev.data | {"ts": ev.ts})
         charts = {}
         for sig in pending:  # 6-month price line up to the scan date
             bars = service.store.read_bars(Market(sig.market), sig.symbol)
@@ -113,8 +123,37 @@ def register_trading_routes(
                 "tech_metrics": TECH_METRICS,
                 "fund_metrics": FUND_METRICS,
                 "piotroski_labels": PIOTROSKI_LABELS,
+                "asks": asks,
+                "llm_missing": llm_ready(config, secrets),
             },
         )
+
+    @app.post("/signals/{signal_id}/ask")
+    def ask(signal_id: str, csrf_token: str = Form(...), question: str = Form("")):
+        check_csrf(csrf_token)
+        anchor = f"#sig-{signal_id}"
+        if missing := llm_ready(config, secrets):
+            return RedirectResponse(f"/signals?err={quote(missing)}{anchor}", status_code=303)
+        with db.session() as s:
+            sig = s.get(SignalRow, signal_id)
+            if sig is None:
+                raise HTTPException(404, "no such signal")
+            s.expunge(sig)
+        if not explainer:
+            from trademare.analysis.llm import create_llm_client
+
+            ledger = Path(config.data.cache_dir).parent / "sentiment"
+            explainer.append(SignalExplainer(config, create_llm_client(config.llm, secrets), ledger))
+        try:
+            answer = explainer[0].ask(sig, question)
+        except LLMError as e:
+            return RedirectResponse(f"/signals?err={quote(f'Claude: {e}')}{anchor}", status_code=303)
+        with db.session() as s:
+            db.log(
+                s, "ask", f"asked about {sig.symbol}: {answer.question}", sig.market, signal=sig.id,
+                question=answer.question, answer=answer.answer, risks=answer.risks, cost_usd=answer.cost_usd,
+            )  # fmt: skip
+        return RedirectResponse(f"/signals{anchor}", status_code=303)
 
     @app.post("/signals/{signal_id}/approve")
     def approve(

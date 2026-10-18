@@ -25,7 +25,7 @@
   <tbody>{% for e in open_ %}{% set s = e.signal %}{% set m = s.market %}
     <tr>
       <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span><div class="sub">{{ s.direction | lower }}</div></td>
-      <td>{{ e.entry_date }}<div class="sub">{{ (e.price_date - e.entry_date).days if e.price_date else "?" }} days</div></td>
+      <td>{{ e.entry_date }}<div class="sub">{{ (e.price_date - e.entry_date).days if e.price_date else "?" }} days{% if e.long_term_on and e.price_date %}{% set lt = (e.long_term_on - e.price_date).days %}{% if lt > 0 %} · long-term in {{ lt }}d{% else %} · long-term{% endif %}{% endif %}</div></td>
       <td class="num">{{ e.quantity }}</td>
       <td class="num">{{ e.entry_price | money(m, False) }}</td>
       <td class="num">{{ e.invested | money(m, False) }}</td>

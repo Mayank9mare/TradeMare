@@ -72,6 +72,7 @@ def format_alerts(reports: list[DailyReport], dashboard_url: str) -> str | None:
             lines += [f"    ⚠️ {html.escape(w)}" for w in (s.reasons or {}).get("events", [])]
         for s in exits:
             lines.append(f"🔴 EXIT {html.escape(s.symbol)} ({html.escape(s.exit_reason or 'signal')})")
+            lines += [f"    💰 {html.escape(t)}" for t in (s.reasons or {}).get("tax", [])]
         if r.equity is not None:
             lines.append(f"Equity {r.equity:,.0f} · {r.open_positions} open")
         lines.append("")

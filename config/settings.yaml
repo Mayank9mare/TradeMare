@@ -61,6 +61,11 @@ markets:
       daily_loss_pct: 3
       max_drawdown_pct: 10
 
+    tax:                       # hint on exit signals when a gain turns long-term soon (info only)
+      warn_within_days: 60
+      short_term_rate_pct: 20  # listed equity STCG (Finance Act 2024)
+      long_term_rate_pct: 12.5 # LTCG, above the yearly ₹1.25 lakh exemption
+
   US:
     enabled: true
     validated: false           # no factor passed selection (v2); swing v1 has no edge: signals only
@@ -100,6 +105,11 @@ markets:
     kill_switch:
       daily_loss_pct: 3
       max_drawdown_pct: 10
+
+    tax:                       # federal rates depend on your bracket: set both to see a $ estimate
+      warn_within_days: 60
+      short_term_rate_pct: null
+      long_term_rate_pct: null
 
 strategy:
   weights:

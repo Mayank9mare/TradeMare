@@ -13,7 +13,7 @@
 {% endif %}
 <div class="ideas">
 {% for s in pending %}{% set m = s.market %}
-  <article class="card idea{{ ' expired' if s.is_expired }}">
+  <article class="card idea{{ ' expired' if s.is_expired }}" id="sig-{{ s.id }}">
     <div class="idea-head">
       <div>
         <span class="badge">{{ m }}</span> <b>{{ s.action }}</b>
@@ -22,10 +22,27 @@
       </div>
       <div class="idea-score">{{ score_bar(s.score) }}</div>
     </div>
-    {% set warns = s.reasons.get("events", []) %}
-    {% if warns %}<ul class="event-alerts">{% for w in warns %}<li class="{{ 'red' if w.startswith('RED FLAG') else 'note' if w.startswith('Note') else 'amber' }}">{{ w }}</li>{% endfor %}</ul>{% endif %}
-    <ul class="reasons">{% for k, rs in s.reasons.items() if k != "events" %}{% for r in rs[:4] %}<li>{{ r }}</li>{% endfor %}{% endfor %}</ul>
+    {% set warns = s.reasons.get("events", []) + s.reasons.get("tax", []) %}
+    {% if warns %}<ul class="event-alerts">{% for w in warns %}<li class="{{ 'red' if w.startswith('RED FLAG') else 'note' if w.startswith(('Note', 'Tax')) else 'amber' }}">{{ w }}</li>{% endfor %}</ul>{% endif %}
+    <ul class="reasons">{% for k, rs in s.reasons.items() if k not in ("events", "tax") %}{% for r in rs[:4] %}<li>{{ r }}</li>{% endfor %}{% endfor %}</ul>
     {% include "_explain.html" %}
+    {% set qa = asks.get(s.id, []) %}
+    <details class="ask"{% if qa %} open{% endif %}>
+      <summary>Ask Claude about this pick{% if qa %} <span class="faint">({{ qa | length }})</span>{% endif %}</summary>
+      {% for a in qa %}<div class="ask-answer">
+        <p class="ask-q">{{ a.question }}</p>
+        <p class="ask-a">{{ a.answer }}</p>
+        {% if a.risks %}<ul class="reasons">{% for r in a.risks %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+        <p class="sub">{{ a.ts.strftime("%Y-%m-%d %H:%M") }} UTC · ${{ "%.3f" | format(a.cost_usd or 0) }} · from the evidence above only</p>
+      </div>{% endfor %}
+      {% if llm_missing %}<p class="sub">To use this, {{ llm_missing }}.</p>
+      {% else %}<form method="post" action="/signals/{{ s.id }}/ask" class="ask-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="question" maxlength="500" placeholder="Why this pick, and what could go wrong?">
+        <button type="submit">Ask</button>
+        <span class="sub">Takes ~10–30 s. Uses only the evidence on this card; counts toward llm.max_daily_cost_usd.</span>
+      </form>{% endif %}
+    </details>
     {% if not s.is_expired %}
     <form method="post" action="/signals/{{ s.id }}/approve" class="approve-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

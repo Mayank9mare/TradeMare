@@ -106,6 +106,16 @@ ALLOWED_FUNDAMENTALS_SOURCES: dict[Market, set[str]] = {
 }
 
 
+class TaxConfig(_Strict):
+    """Capital-gains timing hint on exit signals (information only, never blocks a trade)."""
+
+    warn_within_days: int = Field(
+        60, ge=0, le=365, description="Hint when a profitable holding turns long-term within this many days"
+    )
+    short_term_rate_pct: float | None = Field(None, ge=0, le=100, description="For the saving estimate")
+    long_term_rate_pct: float | None = Field(None, ge=0, le=100, description="For the saving estimate")
+
+
 class MarketConfig(_Strict):
     enabled: bool = True
     validated: bool = Field(
@@ -153,6 +163,7 @@ class MarketConfig(_Strict):
     time_stop_days: int | None = Field(15, ge=1)
     signal_expiry_sessions: int = Field(1, ge=1)
     kill_switch: KillSwitchConfig = KillSwitchConfig()
+    tax: TaxConfig = TaxConfig()
 
     @property
     def deployable_capital(self) -> float:

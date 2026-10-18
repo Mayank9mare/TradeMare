@@ -51,6 +51,7 @@ from trademare.data.universe import load_universe
 from trademare.execution.brokers import BrokerError, LoginRequired, OrderUpdate, create_broker
 from trademare.execution.fills import Bar, gapped_past_limit, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.manager import Exposure, RiskManager
+from trademare.risk.tax import tax_hint
 from trademare.storage.db import Database, EquityRow, EventRow, OrderRow, PositionRow, SignalRow
 from trademare.strategy.evidence import (
     build_evidence,
@@ -1049,7 +1050,7 @@ class TradingDesk:
             target_price=None,
             score=score or 0.0,
             confidence=1.0,
-            reasons={"exit": [f"{reason}: composite {score:+.2f}" if score is not None else reason]},
+            reasons=self._exit_reasons(pos, day, reason, score),
             exit_reason=reason,
             evidence=evidence,
             position_id=pos.id,
@@ -1059,6 +1060,16 @@ class TradingDesk:
         )
         s.add(sig)
         return sig
+
+    def _exit_reasons(self, pos: PositionRow, day: date, reason: str, score: float | None) -> dict:
+        reasons = {"exit": [f"{reason}: composite {score:+.2f}" if score is not None else reason]}
+        price = pos.last_price or pos.entry_price
+        long = pos.direction == Direction.LONG.value
+        gain = (price - pos.entry_price) * pos.quantity
+        currency = "₹" if self.market is Market.IN else "$"
+        if hint := tax_hint(self.cfg.tax, pos.entry_date, day, gain, long, currency):
+            reasons["tax"] = [hint.text]
+        return reasons
 
     def events_for(self, symbol: str, day: date) -> dict | None:
         """Results date and red flags from official filings; None when the check is off."""

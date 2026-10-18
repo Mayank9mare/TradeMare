@@ -280,3 +280,12 @@ dl.metrics dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums
 .stage.closed { color: var(--text); }
 .stage.awaiting-fill { color: var(--warning); }
 tr.muted td { color: var(--muted); }
+
+/* Ask Claude about a signal */
+.ask { margin-top: 10px; }
+.ask summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+.ask-answer { border-left: 2px solid var(--border); padding: 2px 0 2px 12px; margin: 10px 0; }
+.ask-q { font-weight: 600; margin: 0 0 4px; }
+.ask-a { white-space: pre-line; margin: 0 0 6px; }
+.ask-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.ask-form input[type=text] { flex: 1 1 260px; min-width: 0; }

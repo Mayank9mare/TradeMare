@@ -19,6 +19,10 @@ An automated swing-trading engine for **Indian (NSE/BSE)** and **US** equities. 
   - 🇮🇳 Zerodha (Kite Connect), Dhan (DhanHQ)
   - 🇺🇸 Alpaca
   - Built-in paper broker for simulation
+- **Corporate events and forensic checks:** NSE/SEC filings scanned for red flags (news headlines for BSE-only filers), upcoming results dates, and Piotroski, Altman and Beneish scores on every signal.
+- **Alerts and safety nets:** Telegram and email alerts, an intraday stop check every 15 minutes in market hours, nightly database backups, and a watchdog that alerts you if a daily run is missed.
+- **Trade journal:** entry price, current profit and loss, closed-trade results, and how the signals you passed on did, plus a hint when a gain turns long-term for tax within 60 days.
+- **Ask Claude:** each signal has a box to ask Claude about it, answered only from that signal's evidence (needs `ANTHROPIC_API_KEY`).
 - **Same code in backtest, paper and live:** only the data feed and the broker adapter change between modes.
 
 ## Architecture
@@ -80,6 +84,11 @@ uv run trademare scan -m IN --date 2025-06-30   # any past date (point-in-time)
 uv run trademare backtest -m US                                   # last 5 years, settings.yaml
 uv run trademare backtest -m IN --set strategy.min_composite_score=0.5   # try a variation
 uv run trademare research -m US --horizon 20                      # do the scores predict returns?
+
+# Operations
+uv run trademare health                     # missed runs, kill switch, backup age
+uv run trademare db backup                  # also runs nightly under serve
+uv run trademare db restore [FILE]          # list backups, or restore one (stop serve first)
 
 # Daily trading (paper unless a market is validated)
 uv run trademare serve                     # dashboard + daily job after each close (keep running)

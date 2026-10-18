@@ -111,3 +111,29 @@ def test_journal_page_sections(tmp_path, monkeypatch):
     assert page.status_code == 200
     for heading in ("Open trades", "Closed trades", "Signals you passed on"):
         assert heading in page.text
+
+
+def test_ask_claude_about_a_signal(tmp_path, monkeypatch):
+    from trademare.core.interfaces import LLMResult
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    client, _ = make_app(tmp_path, monkeypatch)
+    page = client.get("/signals").text
+    assert "Ask Claude about this pick" in page and "add ANTHROPIC_API_KEY" in page
+
+    prompts = []
+
+    class FakeClaude:
+        def complete_json(self, system, prompt, schema):
+            prompts.append(prompt)
+            return LLMResult(
+                data={"answer": "Momentum ranks #1 of 200.", "risks": ["Stop is 6.7% away"]},
+                input_tokens=1000, output_tokens=200, cost_usd=0.008,
+            )  # fmt: skip
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    monkeypatch.setattr("trademare.analysis.llm.create_llm_client", lambda cfg, sec: FakeClaude())
+    r = client.post("/signals/sig1/ask", data={"csrf_token": token(page), "question": "Why INFY?"})
+    assert r.status_code == 200 and "Momentum ranks #1 of 200." in r.text and "Stop is 6.7% away" in r.text
+    assert "Owner's question: Why INFY?" in prompts[0] and "12-1 month momentum" in prompts[0]
+    assert client.post("/signals/sig1/ask", data={"csrf_token": "bad"}).status_code == 403
