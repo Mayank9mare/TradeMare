@@ -39,7 +39,8 @@ def money(value: float | None, market: Market | str, compact: bool = True) -> st
 def pct(value: float | None, digits: int = 1, signed: bool = False) -> str:
     if _missing(value):
         return DASH
-    return f"{value * 100:+.{digits}f}%" if signed else f"{value * 100:.{digits}f}%"
+    shown = round(value * 100, digits) + 0.0  # + 0.0 turns -0.0 into 0.0, so tiny losses don't print "-0.0%"
+    return f"{shown:+.{digits}f}%" if signed else f"{shown:.{digits}f}%"
 
 
 def num(value: float | None, digits: int = 1) -> str:

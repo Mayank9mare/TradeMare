@@ -103,3 +103,11 @@ def test_tracking_page_explains_short_history(tmp_path, monkeypatch):
     client, _ = make_app(tmp_path, monkeypatch)
     page = client.get("/portfolio/IN/tracking")
     assert page.status_code == 200 and "Paper vs backtest" in page.text
+
+
+def test_journal_page_sections(tmp_path, monkeypatch):
+    client, _ = make_app(tmp_path, monkeypatch)
+    page = client.get("/journal")
+    assert page.status_code == 200
+    for heading in ("Open trades", "Closed trades", "Signals you passed on"):
+        assert heading in page.text

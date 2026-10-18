@@ -1,36 +1,101 @@
 {% extends "base.html" %}
 {% block title %}Trade journal · TradeMare{% endblock %}
 {% block content %}
+{% set open_ = entries | selectattr("stage", "equalto", "open") | list %}
+{% set waiting = entries | selectattr("stage", "in", ["awaiting fill", "not filled"]) | list %}
+{% set closed = entries | selectattr("stage", "equalto", "closed") | list %}
+{% set passed = entries | selectattr("hypothetical") | list %}
 <h1>Trade journal</h1>
-<p class="muted">Every entry signal you decided on, from signal to outcome. Rejected and expired signals show what would have happened if you had taken them (signal price to the latest close, ignoring the stop).</p>
+<p class="muted">Your trades from signal to outcome. Prices are the latest cached close; profit and loss is after brokerage, taxes and fees paid so far.</p>
 
+{# ------------------------------------------------------------------ open trades #}
+<h2>Open trades <small class="muted">{{ open_ | length }}</small></h2>
+{% if summary.open_totals %}
 <div class="ratios">
-  <div class="ratio"><span>Trades taken</span><b>{{ summary.taken }}</b></div>
-  <div class="ratio"><span>Closed</span><b>{{ summary.closed }}</b></div>
+  {% for mk, t in summary.open_totals.items() %}
+  <div class="ratio"><span>Invested {{ mk }}</span><b>{{ t.invested | money(mk, False) }}</b></div>
+  <div class="ratio"><span>Current value {{ mk }}</span><b>{{ t.value | money(mk, False) }}</b></div>
+  <div class="ratio"><span>Unrealised P&amp;L {{ mk }}</span><b class="{{ t.pnl | tone }}">{{ t.pnl | money(mk, False) }} <small>({{ t["return"] | pct(2, True) }})</small></b></div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if open_ %}
+<div class="table-wrap" style="margin-top:.75rem"><table class="data">
+  <thead><tr><th>Stock</th><th>Entered</th><th class="num">Qty</th><th class="num">Bought at</th><th class="num">Invested</th><th class="num">Price now</th><th class="num">Value now</th><th class="num">P&amp;L</th><th class="num">Return</th><th class="num">Stop</th></tr></thead>
+  <tbody>{% for e in open_ %}{% set s = e.signal %}{% set m = s.market %}
+    <tr>
+      <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span><div class="sub">{{ s.direction | lower }}</div></td>
+      <td>{{ e.entry_date }}<div class="sub">{{ (e.price_date - e.entry_date).days if e.price_date else "?" }} days</div></td>
+      <td class="num">{{ e.quantity }}</td>
+      <td class="num">{{ e.entry_price | money(m, False) }}</td>
+      <td class="num">{{ e.invested | money(m, False) }}</td>
+      <td class="num">{{ e.last_price | money(m, False) }}<div class="sub">{{ e.price_date or "" }}</div></td>
+      <td class="num">{{ e.current_value | money(m, False) }}</td>
+      <td class="num {{ e.pnl | tone }}"><b>{{ e.pnl | money(m, False) }}</b></td>
+      <td class="num {{ e.return_pct | tone }}">{{ e.return_pct | pct(2, True) }}</td>
+      <td class="num">{{ e.stop | money(m, False) if e.stop else "—" }}{% if e.stop and e.last_price %}<div class="sub">{{ (e.stop / e.last_price - 1) | pct(1, True) }} away</div>{% endif %}</td>
+    </tr>
+  {% endfor %}</tbody></table></div>
+{% else %}<div class="empty">No open trades. Approved orders appear here once they fill.</div>{% endif %}
+
+{# ------------------------------------------------------------------ waiting #}
+{% if waiting %}
+<h2>Approved, waiting to fill <small class="muted">{{ waiting | length }}</small></h2>
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Stock</th><th>Approved</th><th class="num">Qty</th><th class="num">Limit</th><th class="num">Order value</th><th class="num">Price now</th><th>Status</th></tr></thead>
+  <tbody>{% for e in waiting %}{% set s = e.signal %}{% set m = s.market %}
+    <tr>
+      <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span></td>
+      <td>{{ s.decided_at.strftime("%Y-%m-%d") if s.decided_at else "—" }}</td>
+      <td class="num">{{ e.quantity }}</td>
+      <td class="num">{{ s.entry_price | money(m, False) }}</td>
+      <td class="num">{{ (s.entry_price * e.quantity) | money(m, False) if e.quantity else "—" }}</td>
+      <td class="num">{{ e.last_price | money(m, False) if e.last_price else "—" }}{% if e.last_price %}<div class="sub">{{ (e.last_price / s.entry_price - 1) | pct(1, True) }} vs limit</div>{% endif %}</td>
+      <td><span class="stage {{ e.stage | replace(' ', '-') }}">{{ e.stage }}</span>{% if e.stage == "awaiting fill" %}<div class="sub">fills at the next open if the price is at or below the limit</div>{% endif %}</td>
+    </tr>
+  {% endfor %}</tbody></table></div>
+{% endif %}
+
+{# ------------------------------------------------------------------ closed #}
+<h2>Closed trades <small class="muted">{{ closed | length }}</small></h2>
+{% if closed %}
+<div class="ratios">
   <div class="ratio"><span>Win rate</span><b>{{ summary.win_rate | pct(0) if summary.win_rate is not none else "—" }}</b></div>
   {% for mk, v in summary.realised.items() %}<div class="ratio"><span>Realised P&amp;L {{ mk }}</span><b class="{{ v | tone }}">{{ v | money(mk, False) }}</b></div>{% endfor %}
-  <div class="ratio"><span>Signals you passed on</span><b>{{ summary.skipped }}</b></div>
-  <div class="ratio"><span>…their average return since</span><b class="{{ summary.skipped_avg_return | tone }}">{{ summary.skipped_avg_return | pct(1, True) if summary.skipped_avg_return is not none else "—" }}</b></div>
 </div>
-
-{% if not entries %}
-<div class="empty" style="margin-top:1rem">No decisions yet. Approve or reject signals on the <a href="/signals">Signals</a> page and they will appear here.</div>
-{% else %}
-<div class="table-wrap" style="margin-top:1rem"><table class="data">
-  <thead><tr><th>Signal</th><th>Decided</th><th>Stage</th><th class="num">Signal price</th><th>Filled</th><th class="num">Now / exit</th><th class="num">Return</th><th class="num">P&amp;L</th><th class="num">R</th><th>Exit</th></tr></thead>
-  <tbody>{% for e in entries %}{% set s = e.signal %}{% set m = s.market %}
-    <tr class="{{ 'muted' if e.hypothetical }}">
-      <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span> <span class="faint">{{ s.direction }}</span><div class="sub">scan {{ s.scan_date }} · score {{ "%+.2f" | format(s.score) }}</div></td>
-      <td>{{ s.decided_at.strftime("%Y-%m-%d") if s.decided_at else "—" }}</td>
-      <td><span class="stage {{ e.stage | replace(' ', '-') }}">{{ e.stage }}</span>{% if e.hypothetical %}<div class="sub">if taken</div>{% endif %}</td>
-      <td class="num">{{ s.entry_price | money(m, False) }}<div class="sub">stop {{ s.stop_price | money(m, False) if s.stop_price else "—" }}</div></td>
-      <td>{% if e.entry_date %}{{ e.entry_date }}<div class="sub">@ {{ e.entry_price | money(m, False) }}</div>{% elif e.order_status %}<span class="faint">order {{ e.order_status | lower }}</span>{% else %}—{% endif %}</td>
-      <td class="num">{{ (e.exit_price or e.last_price) | money(m, False) if (e.exit_price or e.last_price) else "—" }}{% if e.exit_date %}<div class="sub">{{ e.exit_date }}</div>{% endif %}</td>
-      <td class="num {{ e.return_pct | tone }}">{{ e.return_pct | pct(1, True) if e.return_pct is not none else "—" }}</td>
-      <td class="num {{ e.pnl | tone }}">{{ e.pnl | money(m, False) if e.pnl is not none else "—" }}</td>
+<div class="table-wrap" style="margin-top:.75rem"><table class="data">
+  <thead><tr><th>Stock</th><th>Held</th><th class="num">Qty</th><th class="num">Bought at</th><th class="num">Sold at</th><th class="num">P&amp;L</th><th class="num">Return</th><th class="num">R</th><th>Why it closed</th></tr></thead>
+  <tbody>{% for e in closed %}{% set s = e.signal %}{% set m = s.market %}
+    <tr>
+      <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span></td>
+      <td>{{ e.entry_date }} → {{ e.exit_date }}<div class="sub">{{ (e.exit_date - e.entry_date).days }} days</div></td>
+      <td class="num">{{ e.quantity }}</td>
+      <td class="num">{{ e.entry_price | money(m, False) }}</td>
+      <td class="num">{{ e.exit_price | money(m, False) }}</td>
+      <td class="num {{ e.pnl | tone }}"><b>{{ e.pnl | money(m, False) }}</b></td>
+      <td class="num {{ e.return_pct | tone }}">{{ e.return_pct | pct(2, True) }}</td>
       <td class="num {{ e.r_multiple | tone }}">{{ "%+.1f" | format(e.r_multiple) if e.r_multiple is not none else "—" }}</td>
       <td>{{ e.exit_reason or "" }}</td>
     </tr>
   {% endfor %}</tbody></table></div>
-{% endif %}
+{% else %}<div class="empty">No closed trades yet.</div>{% endif %}
+
+{# ------------------------------------------------------------------ passed on #}
+<h2>Signals you passed on <small class="muted">{{ passed | length }}</small></h2>
+{% if passed %}
+<p class="muted">What each would have returned if taken at the signal price, up to the latest close (ignoring the stop).{% if summary.skipped_avg_return is not none %} Average: <b class="{{ summary.skipped_avg_return | tone }}">{{ summary.skipped_avg_return | pct(1, True) }}</b>.{% endif %}</p>
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Stock</th><th>Signal date</th><th>Decision</th><th class="num">Signal price</th><th class="num">Price now</th><th class="num">Would have returned</th><th class="num">R</th></tr></thead>
+  <tbody>{% for e in passed %}{% set s = e.signal %}{% set m = s.market %}
+    <tr class="muted">
+      <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span></td>
+      <td>{{ s.scan_date }}</td>
+      <td>{{ e.stage }}</td>
+      <td class="num">{{ s.entry_price | money(m, False) }}</td>
+      <td class="num">{{ e.last_price | money(m, False) if e.last_price else "—" }}</td>
+      <td class="num {{ e.return_pct | tone }}">{{ e.return_pct | pct(1, True) if e.return_pct is not none else "—" }}</td>
+      <td class="num {{ e.r_multiple | tone }}">{{ "%+.1f" | format(e.r_multiple) if e.r_multiple is not none else "—" }}</td>
+    </tr>
+  {% endfor %}</tbody></table></div>
+{% else %}<div class="empty">You haven't rejected or let any signal expire yet.</div>{% endif %}
 {% endblock %}

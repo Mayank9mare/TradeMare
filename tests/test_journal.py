@@ -27,7 +27,16 @@ def test_journal_follows_decisions_to_outcomes(desk):  # noqa: F811
     by = {e.signal.symbol: e for e in entries}
     held = by[taken.symbol]
     assert held.stage == "open" and held.entry_date == SESSIONS[i + 1] and not held.hypothetical
-    assert held.return_pct == pytest.approx(held.last_price / held.entry_price - 1)
+    assert held.invested == pytest.approx(held.entry_price * held.quantity)
+    assert held.current_value == pytest.approx(held.last_price * held.quantity)
+    assert held.pnl == pytest.approx(held.current_value - held.invested - held.costs)  # after entry costs
+    assert held.return_pct == pytest.approx(held.pnl / held.invested)
+    bars = desk.service.store.read_bars(desk.market, taken.symbol)
+    assert (
+        held.price_date == bars.index[-1].date() and held.last_price == bars["close"].iloc[-1]
+    )  # latest close
+    totals = summary.open_totals["IN"]
+    assert totals["count"] == 1 and totals["pnl"] == pytest.approx(held.pnl)
     assert held.r_multiple is not None and summary.taken == 1 and summary.closed == 0
     skipped = by[passed.symbol]
     assert skipped.hypothetical and skipped.return_pct is not None and summary.skipped == 1
