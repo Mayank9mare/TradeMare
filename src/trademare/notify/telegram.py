@@ -105,6 +105,19 @@ def send_alerts(config: AppConfig, secrets: Secrets, reports: list[DailyReport])
     return "telegram sent"
 
 
+def send_text(config: AppConfig, secrets: Secrets, text: str) -> str:
+    """Plain-text alert (escaped); never raises."""
+    tg = config.notifications.telegram
+    if not (tg.enabled and tg.chat_id and secrets.telegram_bot_token):
+        return "telegram off"
+    try:
+        send_message(secrets.telegram_bot_token.get_secret_value(), tg.chat_id, html.escape(text))
+    except Exception as e:
+        log.warning("telegram alert not sent: %s", e)
+        return f"telegram failed: {e}"
+    return "telegram sent"
+
+
 def send_failure(config: AppConfig, secrets: Secrets, market: str, error: str) -> None:
     """The daily run itself failed: worth a phone alert, since no digest will arrive."""
     tg = config.notifications.telegram

@@ -293,6 +293,49 @@ def cmd_notify_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_health(args: argparse.Namespace) -> int:
+    from trademare.ops import alert_health, check_health
+
+    config = load_config(args.config)
+    report = check_health(config)
+    for line in report.checked:
+        print(f"ok       {line}")
+    for line in report.problems:
+        print(f"PROBLEM  {line}")
+    if args.alert and not report.ok:
+        print(alert_health(config, Secrets(), report))
+    return 0 if report.ok else 1
+
+
+def cmd_db_backup(args: argparse.Namespace) -> int:
+    from trademare.ops import backup_database, list_backups
+
+    config = load_config(args.config)
+    print(f"backed up to {backup_database(config)}")
+    print(f"{len(list_backups(config.ops.backup_dir))} backup(s) in {config.ops.backup_dir}")
+    return 0
+
+
+def cmd_db_restore(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from trademare.ops import list_backups, restore_database
+
+    config = load_config(args.config)
+    backups = list_backups(config.ops.backup_dir)
+    if not args.file:
+        for b in backups:
+            print(b)
+        print("pass one of these to restore it (stop `trademare serve` first)" if backups else "no backups")
+        return 0
+    path = Path(args.file)
+    if not path.exists():
+        print(f"not found: {path}")
+        return 1
+    print(f"restored {path} into {restore_database(config, path)} (previous copy kept alongside)")
+    return 0
+
+
 def cmd_daily(args: argparse.Namespace) -> int:
     from trademare.trading.pipeline import run_daily_pipeline
 
@@ -582,6 +625,18 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_telegram_setup
     )
     notify.add_parser("test", help="send a test message").set_defaults(func=cmd_notify_test)
+
+    health = sub.add_parser(
+        "health", help="check for missed daily runs, a tripped kill switch, stale backups"
+    )
+    health.add_argument("--alert", action="store_true", help="send problems by Telegram/email (once a day)")
+    health.set_defaults(func=cmd_health)
+
+    dbp = sub.add_parser("db", help="database backups").add_subparsers(dest="sub", required=True)
+    dbp.add_parser("backup", help="back up the database now").set_defaults(func=cmd_db_backup)
+    restore = dbp.add_parser("restore", help="list backups, or restore one (stop the server first)")
+    restore.add_argument("file", nargs="?", help="backup file to restore")
+    restore.set_defaults(func=cmd_db_restore)
 
     daily = sub.add_parser("daily", help="run the daily process now: data, paper fills, signals, digest")
     daily.add_argument("-m", "--market", choices=[m.value for m in Market])

@@ -70,3 +70,29 @@ def send_digest(
     path = outbox / f"{datetime.now():%Y%m%d-%H%M%S}-{'-'.join(r.market.value for r in reports)}.html"
     path.write_text(f"<title>{subject}</title>\n{html}")
     return f"saved to {path} (email not configured)"
+
+
+def send_text_email(config: AppConfig, secrets: Secrets, subject: str, body: str) -> str:
+    """Plain-text alert email; never raises (falls back to the outbox when SMTP is not set up)."""
+    email = config.notifications.email
+    try:
+        if email.enabled and email.to and secrets.smtp_host and secrets.smtp_user and secrets.smtp_password:
+            msg = EmailMessage()
+            msg["Subject"], msg["From"], msg["To"] = (
+                subject,
+                secrets.smtp_from or secrets.smtp_user,
+                ", ".join(email.to),
+            )
+            msg.set_content(body)
+            with smtplib.SMTP(secrets.smtp_host, secrets.smtp_port, timeout=30) as smtp:
+                smtp.starttls()
+                smtp.login(secrets.smtp_user, secrets.smtp_password.get_secret_value())
+                smtp.send_message(msg)
+            return f"emailed to {', '.join(email.to)}"
+        outbox = Path(config.data.cache_dir).parent / "outbox"
+        outbox.mkdir(parents=True, exist_ok=True)
+        path = outbox / f"{datetime.now():%Y%m%d-%H%M%S}-alert.txt"
+        path.write_text(f"{subject}\n\n{body}\n")
+        return f"saved to {path} (email not configured)"
+    except Exception as e:
+        return f"email failed: {e}"

@@ -38,6 +38,31 @@ def daily_job(market: Market, config_path: str | None = None) -> None:
         send_failure(config, Secrets(), market.value, f"{type(e).__name__}: {e}")
 
 
+def backup_job(config_path: str | None = None) -> None:
+    from trademare.ops import backup_database
+
+    config = load_config(config_path)
+    try:
+        backup_database(config)
+    except Exception as e:
+        log.exception("database backup failed")
+        from trademare.notify.telegram import send_text
+
+        send_text(config, Secrets(), f"TradeMare database backup failed: {type(e).__name__}: {e}")
+
+
+def health_job(config_path: str | None = None) -> None:
+    from trademare.ops import alert_health, check_health
+
+    config = load_config(config_path)
+    try:
+        report = check_health(config)
+        if not report.ok:
+            log.warning("health check: %s -> %s", report.problems, alert_health(config, Secrets(), report))
+    except Exception:
+        log.exception("health check failed")
+
+
 def build_scheduler(config: AppConfig, config_path: str | None = None) -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     for market, cfg in config.enabled_markets().items():
@@ -51,6 +76,18 @@ def build_scheduler(config: AppConfig, config_path: str | None = None) -> Backgr
             coalesce=True,
             max_instances=1,
         )
+    ops = config.ops
+    if ops.backup_enabled:
+        hour, minute = (int(x) for x in ops.backup_time.split(":"))
+        scheduler.add_job(
+            backup_job, CronTrigger(hour=hour, minute=minute), args=[config_path], id="backup",
+            misfire_grace_time=12 * 3600, coalesce=True, max_instances=1,
+        )  # fmt: skip
+    if ops.health_check:
+        scheduler.add_job(
+            health_job, CronTrigger(minute=17), args=[config_path], id="health",
+            misfire_grace_time=3600, coalesce=True, max_instances=1,
+        )  # fmt: skip
     return scheduler
 
 

@@ -10,6 +10,7 @@
 ```
 
 - Dashboard: http://127.0.0.1:8000. Logs go to `logs/serve.log`.
+- It also installs a watchdog (`com.trademare.health`) that runs `trademare health --alert` every 2 hours, so you hear about a missed daily run even if the server itself is down. The database is backed up nightly to `data/backups/`.
 - **A sleeping Mac misses runs.** A run is still made if the Mac wakes within 6 hours of the scheduled time, and missed sessions are caught up on start. To wake the Mac before the India run on weekdays:
   `sudo pmset repeat wakeorpoweron MTWRF 16:55:00`
 - Stop any manually started `trademare serve` first; both use port 8000.
@@ -32,7 +33,8 @@ docker compose run --rm trademare uv run --no-sync trademare data update
 - **Zerodha daily login:** `docker compose run --rm trademare uv run --no-sync trademare broker login zerodha`. The token is saved in `data/tokens/`, which the running service shares.
 - **Broker IP whitelist:** add the server's public IP in your broker's API console (Kite developer console, or Dhan's API settings).
 - **Updates:** `git pull && docker compose up -d --build`. Your data, settings and secrets live outside the image.
-- **Backups:** copy `data/trademare.db` regularly. It holds all signals, orders, positions and the audit log.
+- **Backups:** the server copies `data/trademare.db` to `data/backups/` every night (14 kept; `ops` in settings). Copy that folder off the server too, e.g. a nightly `rsync` to your laptop. Restore with `trademare db restore <file>` after stopping the service.
+- **Missed-run alarm:** `serve` checks hourly and alerts by Telegram/email if a daily run is overdue. If the whole container is down nothing can alert from inside it, so add a host cron entry: `0 */2 * * * cd ~/TradeMare && docker compose run --rm trademare uv run --no-sync trademare health --alert`.
 
 ## Before any real money
 

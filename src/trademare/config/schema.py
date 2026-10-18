@@ -325,6 +325,21 @@ class EventsConfig(_Strict):
     )
 
 
+class OpsConfig(_Strict):
+    """Keeping the system itself healthy: database backups and a missed-run check."""
+
+    backup_enabled: bool = True
+    backup_dir: str = "data/backups"
+    backup_keep: int = Field(14, ge=1, description="Daily database backups to keep")
+    backup_time: str = Field(
+        "23:30", pattern=r"^\d{2}:\d{2}$", description="Local time of the nightly backup (HH:MM)"
+    )
+    health_check: bool = Field(True, description="Alert when a daily run is overdue or backups are stale")
+    health_grace_hours: float = Field(
+        3, gt=0, le=24, description="Hours after daily_run_time before a missing run counts as missed"
+    )
+
+
 class AppConfig(_Strict):
     database_url: str = "sqlite:///data/trademare.db"
     log_level: str = "INFO"
@@ -334,6 +349,7 @@ class AppConfig(_Strict):
     notifications: NotificationsConfig = NotificationsConfig()
     llm: LLMConfig = LLMConfig()
     events: EventsConfig = EventsConfig()
+    ops: OpsConfig = OpsConfig()
     backtest: BacktestConfig = BacktestConfig()
 
     @model_validator(mode="after")

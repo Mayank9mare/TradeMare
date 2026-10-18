@@ -123,6 +123,14 @@ strategy:
   vol_target: true             # fewer slots when the index is more volatile than usual (63d vs 3y median)
   exclude_high_vol_pct: 0.2    # no new entries in the most volatile 20% of stocks
 
+ops:                           # backups and the missed-run alarm
+  backup_enabled: true
+  backup_dir: data/backups     # one SQLite copy per day
+  backup_keep: 14              # days of backups kept
+  backup_time: "23:30"         # local time of the nightly backup
+  health_check: true           # alert (Telegram + email) when a daily run is overdue or backups are stale
+  health_grace_hours: 3        # a run counts as missed this long after daily_run_time
+
 backtest:
   years: 5                     # default length, ending at the latest cached session
   out_of_sample_fraction: 0.4  # last 40% reported separately (never used for tuning)
