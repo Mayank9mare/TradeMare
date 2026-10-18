@@ -31,8 +31,11 @@ def daily_job(market: Market, config_path: str | None = None) -> None:
         log.info(
             "%s daily run done: %d signal(s), equity %.2f", market, len(report.signals), report.equity or 0
         )
-    except Exception:
+    except Exception as e:
         log.exception("%s daily run failed", market)
+        from trademare.notify.telegram import send_failure
+
+        send_failure(config, Secrets(), market.value, f"{type(e).__name__}: {e}")
 
 
 def build_scheduler(config: AppConfig, config_path: str | None = None) -> BackgroundScheduler:

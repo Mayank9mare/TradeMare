@@ -254,6 +254,45 @@ def _backtest_job(config_path, market: Market, start: str, end: str, overrides: 
     return run_id
 
 
+def cmd_telegram_setup(args: argparse.Namespace) -> int:
+    from trademare.notify.telegram import find_chat_ids
+
+    secrets = Secrets()
+    if not secrets.telegram_bot_token:
+        print("TELEGRAM_BOT_TOKEN is not set in .env. Create a bot with @BotFather in Telegram first.")
+        return 1
+    chats = find_chat_ids(secrets.telegram_bot_token.get_secret_value())
+    if not chats:
+        print("No messages found. Open your bot in Telegram, send it any message, then run this again.")
+        return 1
+    for chat_id, name in chats:
+        print(f"chat_id {chat_id}  ({name})")
+    print("\nAdd to config/settings.local.yaml:\nnotifications:\n  telegram:\n    enabled: true")
+    print(f"    chat_id: '{chats[-1][0]}'\nthen run: trademare notify test")
+    return 0
+
+
+def cmd_notify_test(args: argparse.Namespace) -> int:
+    from trademare.notify.telegram import send_message
+
+    config, secrets = load_config(args.config), Secrets()
+    tg = config.notifications.telegram
+    if not (secrets.telegram_bot_token and tg.chat_id):
+        print(
+            "Set TELEGRAM_BOT_TOKEN in .env and notifications.telegram.chat_id first "
+            "(trademare notify telegram-setup)."
+        )
+        return 1
+    send_message(
+        secrets.telegram_bot_token.get_secret_value(), tg.chat_id, "✅ TradeMare alerts are working."
+    )
+    print(
+        "sent"
+        + ("" if tg.enabled else " (note: notifications.telegram.enabled is false, so daily runs won't send)")
+    )
+    return 0
+
+
 def cmd_daily(args: argparse.Namespace) -> int:
     from trademare.trading.pipeline import run_daily_pipeline
 
@@ -537,6 +576,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--lookback", type=int, default=3, help="years of history used to pick each year's variant"
     )
     wf.set_defaults(func=cmd_walkforward)
+
+    notify = sub.add_parser("notify", help="phone alerts").add_subparsers(dest="notify_cmd", required=True)
+    notify.add_parser("telegram-setup", help="find your Telegram chat id").set_defaults(
+        func=cmd_telegram_setup
+    )
+    notify.add_parser("test", help="send a test message").set_defaults(func=cmd_notify_test)
 
     daily = sub.add_parser("daily", help="run the daily process now: data, paper fills, signals, digest")
     daily.add_argument("-m", "--market", choices=[m.value for m in Market])

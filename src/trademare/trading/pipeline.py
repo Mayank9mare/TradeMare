@@ -13,6 +13,7 @@ from trademare.config.secrets import Secrets
 from trademare.core.models import Market
 from trademare.data.service import DataService
 from trademare.notify.email import send_digest
+from trademare.notify.telegram import send_alerts
 from trademare.storage.db import Database
 from trademare.trading.desk import DailyReport, TradingDesk
 
@@ -49,8 +50,9 @@ def run_daily_pipeline(
         desk = TradingDesk(service, db or database(config), market, secrets)
         result = desk.run_daily()
         if notify:
-            where = send_digest(config, secrets, [result])
+            where = send_digest(config, secrets, [result], config.notifications.dashboard_url)
             log.info("%s digest: %s", market, where)
+            log.info("%s %s", market, send_alerts(config, secrets, [result]))
         return result
     finally:
         lock.release()

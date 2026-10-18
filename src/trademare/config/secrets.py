@@ -28,6 +28,7 @@ class Secrets(BaseSettings):
     smtp_from: str | None = None
 
     # LLM
+    telegram_bot_token: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
 

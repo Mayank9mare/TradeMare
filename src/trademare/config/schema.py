@@ -235,8 +235,16 @@ class EmailConfig(_Strict):
     send_empty_digest: bool = False
 
 
+class TelegramConfig(_Strict):
+    enabled: bool = False
+    chat_id: str | None = Field(None, description="Your chat id (run: trademare notify telegram-setup)")
+    send_empty: bool = Field(False, description="Also message on days with no signals or alerts")
+
+
 class NotificationsConfig(_Strict):
     email: EmailConfig = EmailConfig()
+    telegram: TelegramConfig = TelegramConfig()
+    dashboard_url: str = Field("http://127.0.0.1:8000", description="Used for links in emails and messages")
 
 
 class LLMProvider(StrEnum):

@@ -134,6 +134,11 @@ notifications:
     enabled: false
     to: []                     # set in settings.local.yaml
     send_empty_digest: false
+  telegram:                    # phone alerts; bot token in .env (TELEGRAM_BOT_TOKEN)
+    enabled: false
+    chat_id: null              # set in settings.local.yaml (trademare notify telegram-setup finds it)
+    send_empty: false          # message only when there are signals or alerts
+  dashboard_url: http://127.0.0.1:8000   # for links in emails and messages
 
 llm:                           # optional news-sentiment overlay: vetoes entries with red-flag news
   enabled: false
