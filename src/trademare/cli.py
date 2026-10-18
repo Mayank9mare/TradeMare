@@ -211,6 +211,49 @@ def cmd_research(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_walkforward(args: argparse.Namespace) -> int:
+    from concurrent.futures import ProcessPoolExecutor
+
+    import pandas as pd
+
+    from trademare.backtest.report import backtests_dir
+    from trademare.backtest.walkforward import format_walk_forward, walk_forward
+
+    config = load_config(args.config)
+    market = Market(args.market)
+    variants: dict[str, list[str]] = {}
+    for spec in args.variant:  # NAME or NAME:key=value;key=value
+        name, _, rest = spec.partition(":")
+        variants[name] = [kv for kv in rest.split(";") if kv]
+    with ProcessPoolExecutor(max_workers=min(4, len(variants))) as pool:
+        futures = {
+            name: pool.submit(_backtest_job, args.config, market, args.start, args.end, overrides)
+            for name, overrides in variants.items()
+        }
+        run_ids = {name: f.result() for name, f in futures.items()}
+    curves, bench = {}, None
+    for name, run_id in run_ids.items():
+        frame = pd.read_parquet(backtests_dir(config) / run_id / "curves.parquet")
+        curves[name] = frame["equity"]
+        bench = frame.get("benchmark", bench)
+        print(f"{name}: run {run_id}")
+    wf = walk_forward(curves, bench, lookback_years=args.lookback)
+    print("\n" + format_walk_forward(wf))
+    return 0
+
+
+def _backtest_job(config_path, market: Market, start: str, end: str, overrides: list[str]) -> str:
+    from trademare.backtest.report import run_backtest
+    from trademare.data.service import DataService
+
+    setup_logging("WARNING")
+    config = load_config(config_path)
+    run_id, _ = run_backtest(
+        DataService(config, Secrets()), market, date.fromisoformat(start), date.fromisoformat(end), overrides
+    )
+    return run_id
+
+
 def cmd_daily(args: argparse.Namespace) -> int:
     from trademare.trading.pipeline import run_daily_pipeline
 
@@ -481,6 +524,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research.add_argument("--set", action="append", metavar="KEY=VALUE", help="override config for this run")
     research.set_defaults(func=cmd_research)
+
+    wf = sub.add_parser("walkforward", help="run strategy variants and chain yearly trailing-Sharpe picks")
+    wf.add_argument("-m", "--market", required=True, choices=[m.value for m in Market])
+    wf.add_argument("--start", required=True, help="YYYY-MM-DD")
+    wf.add_argument("--end", required=True, help="YYYY-MM-DD")
+    wf.add_argument(
+        "--variant", action="append", required=True, metavar="NAME[:key=value;...]",
+        help="a variant and its config overrides, e.g. V1:strategy.vol_target=true",
+    )  # fmt: skip
+    wf.add_argument(
+        "--lookback", type=int, default=3, help="years of history used to pick each year's variant"
+    )
+    wf.set_defaults(func=cmd_walkforward)
 
     daily = sub.add_parser("daily", help="run the daily process now: data, paper fills, signals, digest")
     daily.add_argument("-m", "--market", choices=[m.value for m in Market])

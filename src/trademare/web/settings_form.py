@@ -58,6 +58,18 @@ GLOBAL_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("notifications.email.enabled", "Email digest enabled", "bool"),
     FieldSpec("notifications.email.to", "Email recipients (comma-separated)", "emails"),
     FieldSpec("strategy.risk_off_exposure", "Risk-off exposure (share of slots)", "float"),
+    FieldSpec(
+        "strategy.vol_target",
+        "Volatility targeting",
+        "bool",
+        help="Fewer positions when the index is more volatile than usual",
+    ),
+    FieldSpec(
+        "strategy.exclude_high_vol_pct",
+        "Exclude most volatile share",
+        "float",
+        help="No new entries in this most-volatile share of stocks (0.2 = top 20%)",
+    ),
 )
 
 

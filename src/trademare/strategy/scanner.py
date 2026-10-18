@@ -11,6 +11,7 @@ import logging
 from datetime import date, datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
@@ -67,6 +68,8 @@ class ScanResult(BaseModel):
     # Held positions exit when their composite crosses these (long: <=, short: >=).
     exit_long_below: float = 0.0
     exit_short_above: float = 0.0
+    # Volatility targeting: share of slots usable now (1.0 when off or calm).
+    vol_scale: float = 1.0
 
     def ideas_for(self, direction: Direction) -> list[Idea]:
         return [i for i in self.ideas if i.direction is direction]
@@ -190,6 +193,7 @@ class ScanContext:
                 self._available[symbol] = fin["available_from"].sort_values().reset_index(drop=True)
         self._statement_cache: dict[tuple[str, int, int], dict | None] = {}
 
+        self._index_vol: tuple[pd.Series, pd.Series] | None = None
         self.weights = self.config.strategy.weights.model_dump()
         if not self.config.llm.enabled:
             self.weights["sentiment"] = 0.0
@@ -243,6 +247,25 @@ class ScanContext:
             if row is not None:
                 ratios[symbol] = self.ratios(symbol, asof, float(row["close"]))
         return score_universe(ratios, self.sectors)
+
+    def vol_scale_at(self, ts: pd.Timestamp) -> float:
+        """min(1, typical / current) index volatility; 1.0 when off or without enough history.
+
+        Current = annualised 63-session realised volatility of the benchmark; typical = its median
+        over the trailing 756 sessions (at least 252). Uses data up to ``ts`` only.
+        """
+        if not self.config.strategy.vol_target or self.benchmark is None:
+            return 1.0
+        if self._index_vol is None:
+            returns = self.benchmark["close"].pct_change()
+            current = returns.rolling(63, min_periods=63).std() * np.sqrt(252)
+            typical = current.rolling(756, min_periods=252).median()
+            self._index_vol = (current, typical)
+        current, typical = self._index_vol
+        now, usual = current.loc[:ts], typical.loc[:ts]
+        if now.empty or pd.isna(now.iloc[-1]) or usual.empty or pd.isna(usual.iloc[-1]) or now.iloc[-1] <= 0:
+            return 1.0
+        return float(min(1.0, usual.iloc[-1] / now.iloc[-1]))
 
     def regime_at(self, ts: pd.Timestamp, rows: dict[str, dict[str, float]] | None = None) -> Regime:
         """Market regime from the index trend and the share of stocks above their SMA200."""
@@ -356,9 +379,16 @@ class ScanContext:
         ts = pd.Timestamp(asof)
         names = self.cfg.factors
         strat = self.config.strategy
-        values = factor_values(self, asof, names)
+        exclude = strat.exclude_high_vol_pct
+        extra = ["low_vol"] if exclude and "low_vol" not in names else []
+        values = factor_values(self, asof, names + extra)
         regime = self.regime_at(ts)
         liquid = values[values["liquid"].astype(bool)] if not values.empty else values
+        too_volatile: set[str] = set()
+        if exclude and not liquid.empty:
+            # low_vol = -volatility, so the most volatile names have the lowest percentile.
+            vol_pct = liquid["low_vol"].rank(pct=True)
+            too_volatile = set(vol_pct[vol_pct <= exclude].index)
         combined = combine_ranks(liquid, names) if not liquid.empty else pd.Series(dtype="float64")
         # Re-rank so composite maps exactly to a percentile: top 10% <=> composite >= 0.8.
         composite = combined.rank(pct=True) * 2 - 1
@@ -412,7 +442,7 @@ class ScanContext:
                 if self.cfg.allow_short and c <= -entry_cut
                 else None
             )
-            if direction is None:
+            if direction is None or symbol in too_volatile:
                 continue
             row = self.feature_row(symbol, ts)
             atr_now = row["atr"] if self.cfg.stop_loss.atr_period == 14 else None
@@ -452,6 +482,7 @@ class ScanContext:
             mode="factor",
             exit_long_below=exit_cut,
             exit_short_above=-exit_cut,
+            vol_scale=self.vol_scale_at(ts),
         )
 
 

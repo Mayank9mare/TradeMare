@@ -208,6 +208,19 @@ class StrategyConfig(_Strict):
     risk_off_exposure: float = Field(
         1.0, ge=0, le=1, description="Share of max_open_positions allowed while the regime is risk-off"
     )
+    # Strategy v3 risk controls (docs/research/2026-10-18-strategy-v3-plan.md)
+    vol_target: bool = Field(
+        False,
+        description="Scale slots by min(1, typical / current index volatility): 63-session realised vol "
+        "vs its trailing 3-year median (Barroso & Santa-Clara 2015)",
+    )
+    exclude_high_vol_pct: float = Field(
+        0.0,
+        ge=0,
+        lt=1,
+        description="Factor mode: no new entries in this most-volatile share of the liquid universe "
+        "(252-session volatility); 0 = off",
+    )
 
     @model_validator(mode="after")
     def _factor_bands(self) -> Self:

@@ -25,12 +25,11 @@ import pandas as pd
 
 from trademare.analysis.fundamental import FundamentalScore
 from trademare.analysis.indicators import atr
-from trademare.analysis.regime import RegimeLabel
 from trademare.backtest.costs import cost_model
 from trademare.config.schema import AppConfig, Rebalance, StopLossConfig, StrategyMode, TrailMethod
 from trademare.core.models import Direction, OrderSide
 from trademare.execution.fills import Bar, gapped_past_limit, limit_fill, slipped, stop_fill, target_fill
-from trademare.risk.manager import RiskManager
+from trademare.risk.manager import RiskManager, slot_limit
 from trademare.risk.sizing import position_size
 from trademare.strategy.scanner import Idea, ScanContext, is_rebalance_day
 
@@ -335,9 +334,7 @@ class Backtester:
                 ):
                     pending_exits[pos.symbol] = "signal"
             # Regime filter: fewer slots in risk-off; trim the weakest holdings beyond them.
-            max_positions = cfg.max_open_positions
-            if scan.regime.label is RegimeLabel.RISK_OFF:
-                max_positions = int(cfg.max_open_positions * strat.risk_off_exposure)
+            max_positions = slot_limit(cfg, strat, scan.regime.label, scan.vol_scale)
             staying = [p for p in positions.values() if p.symbol not in pending_exits]
             excess = len(staying) - max_positions
             if excess > 0:

@@ -185,3 +185,72 @@ def test_earnings_yield_prefers_recurring_earnings():
     ey = FACTORS["earnings_yield"].value
     assert ey({}, {"earnings_ttm": -5.0, "net_income_ttm": 50.0, "market_cap": 100.0}) == pytest.approx(-0.05)
     assert ey({}, {"earnings_ttm": None, "net_income_ttm": 10.0, "market_cap": 100.0}) == pytest.approx(0.10)
+
+
+# ---------------------------------------------------------------- strategy v3 risk controls
+def test_slot_limit_combines_regime_and_volatility(factor_config):
+    from trademare.risk.manager import slot_limit
+
+    cfg, strat = factor_config.markets[Market.IN], factor_config.strategy
+    cfg.max_open_positions, strat.risk_off_exposure = 10, 0.5
+    assert slot_limit(cfg, strat, RegimeLabel.NEUTRAL) == 10
+    assert slot_limit(cfg, strat, RegimeLabel.RISK_OFF) == 5
+    assert slot_limit(cfg, strat, RegimeLabel.NEUTRAL, 0.6) == 6
+    assert slot_limit(cfg, strat, RegimeLabel.RISK_OFF, 0.6) == 3
+    assert slot_limit(cfg, strat, RegimeLabel.NEUTRAL, 1.7) == 10  # never above the maximum
+
+
+def test_vol_scale_shrinks_when_index_turns_volatile(factor_service):
+    idx = pd.bdate_range("2020-01-01", periods=600)
+    rng = __import__("numpy").random.default_rng(1)
+    returns = rng.normal(0, 0.01, 600)
+    returns[-63:] = rng.normal(0, 0.03, 63)  # last quarter three times as volatile
+    close = 100 * (1 + pd.Series(returns, index=idx)).cumprod()
+    bench = pd.DataFrame({"open": close, "high": close, "low": close, "close": close, "volume": 1e6})
+    factor_service.store.write_bars(Market.IN, "^NSEI", bench)
+    factor_service.config.strategy.vol_target = False
+    ctx = ScanContext(factor_service, Market.IN)
+    assert ctx.vol_scale_at(idx[-1]) == 1.0  # switched off
+    factor_service.config.strategy.vol_target = True
+    ctx = ScanContext(factor_service, Market.IN)
+    assert ctx.vol_scale_at(idx[-1]) == pytest.approx(1 / 3, abs=0.08)
+    assert ctx.vol_scale_at(idx[-100]) == 1.0  # calm period
+    assert ctx.vol_scale_at(idx[100]) == 1.0  # not enough history yet
+
+
+def test_high_vol_exclusion_blocks_entries_only(factor_service):
+    asof = make_bars(500).index[-1].date()
+    # Make the top-momentum name S0 the most volatile stock.
+    noisy = make_bars(500, drift=0.003, vol=0.04, volume=1e6, seed=0)
+    factor_service.store.write_bars(Market.IN, "S0", noisy)
+    factor_service.config.strategy.exclude_high_vol_pct = 0.1
+    result = ScanContext(factor_service, Market.IN).evaluate(asof)
+    assert "S0" not in [i.symbol for i in result.ideas]
+    assert any(s.symbol == "S0" and s.composite is not None for s in result.scores)  # still ranked
+
+
+def test_engine_uses_vol_scale_for_slots(factor_config):
+    bars = {s: flat_bars() for s in "ABCD"}
+    lv = Levels(entry=100, stop=90, target=None, risk_per_share=10, stop_method="atr")
+    ideas = [
+        Idea(
+            symbol=s,
+            name=s,
+            sector=s,
+            direction=Direction.LONG,
+            composite=c,
+            confidence=1,
+            levels=lv,
+            reasons={},
+        )
+        for s, c in zip("ABCD", (0.95, 0.9, 0.85, 0.8), strict=True)
+    ]
+    factor_config.markets[Market.IN].max_open_positions = 4
+
+    class Volatile(CountingContext):
+        def evaluate(self, asof, fundamentals=None, keep_scores=True):
+            return super().evaluate(asof, fundamentals, keep_scores).model_copy(update={"vol_scale": 0.5})
+
+    ctx = Volatile(factor_config, bars, {"A": 0.95, "B": 0.9, "C": 0.85, "D": 0.8}, ideas=ideas)
+    result = Backtester(ctx, factor_config).run(date(2025, 1, 1), date(2025, 3, 26))
+    assert {p.symbol for p in result.open_positions} == {"A", "B"}

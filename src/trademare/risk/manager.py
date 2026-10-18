@@ -30,6 +30,17 @@ class KillCheck:
     reason: str | None
 
 
+def slot_limit(
+    cfg: MarketConfig, strategy: StrategyConfig, regime: RegimeLabel, vol_scale: float = 1.0
+) -> int:
+    """Open-position slots: ``max_open_positions`` x regime factor x volatility scale (rounded down).
+
+    Shared by the backtester and the trading desk so both apply the same rule.
+    """
+    factor = strategy.risk_off_exposure if regime is RegimeLabel.RISK_OFF else 1.0
+    return int(cfg.max_open_positions * factor * min(1.0, max(0.0, vol_scale)) + 1e-9)
+
+
 class RiskManager:
     def __init__(self, cfg: MarketConfig, strategy: StrategyConfig) -> None:
         self.cfg = cfg
@@ -38,10 +49,8 @@ class RiskManager:
     def capital(self, equity: float) -> float:
         return min(equity, self.cfg.budget)
 
-    def max_positions(self, regime: RegimeLabel) -> int:
-        if regime is RegimeLabel.RISK_OFF:
-            return int(self.cfg.max_open_positions * self.strategy.risk_off_exposure)
-        return self.cfg.max_open_positions
+    def max_positions(self, regime: RegimeLabel, vol_scale: float = 1.0) -> int:
+        return slot_limit(self.cfg, self.strategy, regime, vol_scale)
 
     def size(
         self, entry: float, stop: float, sector: str | None, equity: float, cash: float, exposure: Exposure

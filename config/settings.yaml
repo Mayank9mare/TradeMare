@@ -8,7 +8,7 @@ log_level: INFO
 
 data:
   cache_dir: data/cache
-  history_years: 8             # daily bars kept: ~5y backtest + indicator warm-up
+  history_years: 18            # daily bars kept: 2008+ (v3 holdout 2010-2019 needs warm-up)
   fundamentals_refresh_days: 7
   batch_size: 50               # symbols per bulk price request
 
@@ -119,6 +119,9 @@ strategy:
   factor_entry_pct: 0.10       # buy names ranked in the top 10%
   factor_exit_pct: 0.30        # sell names that fall out of the top 30%
   risk_off_exposure: 0.5       # in risk-off regimes allow only half of max_open_positions
+  # Strategy v3 risk controls — see docs/research/2026-10-18-strategy-v3-plan.md
+  vol_target: true             # fewer slots when the index is more volatile than usual (63d vs 3y median)
+  exclude_high_vol_pct: 0.2    # no new entries in the most volatile 20% of stocks
 
 backtest:
   years: 5                     # default length, ending at the latest cached session

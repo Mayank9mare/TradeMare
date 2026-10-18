@@ -827,7 +827,7 @@ class TradingDesk:
                 )
             else:
                 staying.append(pos)
-        max_positions = self.risk.max_positions(scan.regime.label)
+        max_positions = self.risk.max_positions(scan.regime.label, scan.vol_scale)
         excess = len(staying) - max_positions
         if excess > 0:
             sign = {p.id: 1 if p.direction == Direction.LONG.value else -1 for p in staying}
