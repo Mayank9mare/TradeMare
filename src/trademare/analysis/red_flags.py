@@ -8,6 +8,10 @@ Two levels:
 
 Rules use the exchange's own category, refined by the announcement text. Routine monthly
 "no default" disclosures are not flagged.
+
+For companies that file only with BSE (whose data cannot be fetched automatically), news headlines
+stand in for filings. Headlines are unverified and often about other firms, so a match there is
+only ever a caution, titled "In the news: ...".
 """
 
 from __future__ import annotations
@@ -94,6 +98,21 @@ NSE_RULES: list[Rule] = [
     Rule("amber", "Deviation in use of raised funds", _rx(r"statement of deviation"), unless=NIL),
 ]
 
+NEWS_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("insolvency or bankruptcy", _rx(r"insolvency", r"\bnclt\b", r"bankrupt", r"liquidation")),
+    ("default on payments", _rx(r"\bdefaults?\b(?! swap)", r"missed (?:interest|payment)")),
+    ("fraud or raid", _rx(r"fraud", r"\braids?\b", r"\bsearch(?:es)?\b.*(?:income tax|\bed\b)", r"arrest")),
+    ("auditor resigned", _rx(r"auditor.*(?:resign|quit)", r"(?:resign|quit).*auditor")),
+    ("credit rating downgrade", _rx(r"downgrad.*rating", r"rating.*downgrad")),
+    (
+        "regulator order or penalty",
+        _rx(r"\bsebi\b.*(?:order|penalt|bars?|ban)", r"penalt(?:y|ies) (?:of|on)"),
+    ),
+    ("pledged shares invoked", _rx(r"pledge.*invo", r"invo.*pledge")),
+    ("trading suspended", _rx(r"suspen(?:d|sion).*trading", r"trading.*suspen")),
+    ("CEO or CFO quit", _rx(r"\b(?:ceo|cfo|md)\b.*(?:resign|quit|steps? down)")),
+]
+
 SEC_RED = {"1.03", "2.04", "3.01", "4.02"}
 SEC_AMBER = {"2.06", "4.01", "5.02"}
 
@@ -122,6 +141,13 @@ def _sec_flag(a: Announcement) -> Flag | None:
     return None
 
 
+def _news_flag(a: Announcement) -> Flag | None:
+    for title, rx in NEWS_RULES:
+        if rx.search(a.text):
+            return Flag("amber", f"In the news: {title}", a.day, a.text, "News", a.url)
+    return None
+
+
 def red_flags(events: CorporateEvents | None, asof: date) -> list[Flag]:
     """Flags from announcements on or before ``asof``, newest first: red within 180 days, amber within 90."""
     if events is None:
@@ -130,7 +156,7 @@ def red_flags(events: CorporateEvents | None, asof: date) -> list[Flag]:
     for a in events.announcements:
         if a.day > asof:
             continue
-        flag = _nse_flag(a) if a.source == "NSE" else _sec_flag(a)
+        flag = {"NSE": _nse_flag, "News": _news_flag}.get(a.source, _sec_flag)(a)
         if flag is None:
             continue
         limit = RED_LOOKBACK_DAYS if flag.level == "red" else AMBER_LOOKBACK_DAYS
@@ -149,6 +175,12 @@ def coverage_note(events: CorporateEvents | None, asof: date) -> str | None:
         return "corporate filings not checked"
     if events.error and not events.announcements:
         return f"could not fetch filings ({events.error})"
-    if events.market == "IN" and not events.announcements:  # listed companies file with NSE every few weeks
+    if events.market == "IN" and not any(a.source == "NSE" for a in events.announcements):
+        # listed companies file with NSE every few weeks, so none means a BSE-only filer
+        if events.announcements:
+            return (
+                "no NSE filings (it files with BSE only, which can't be read automatically): "
+                "news headlines were checked instead, which is less reliable"
+            )
         return "no NSE filings in the last 6 months (it may file with BSE only): red-flag check unavailable"
     return None

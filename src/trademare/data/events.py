@@ -3,6 +3,9 @@
 - India: NSE corporate announcements and board-meeting notices (the exchange's own filings).
   The upcoming results date comes from board meetings called to approve results, with Yahoo as
   a fallback.
+- India, BSE-only filers (e.g. MCX): BSE's data API refuses automated clients, so when NSE has no
+  filings for a company its last 90 days of news headlines are scanned instead (source "News"),
+  and the red-flag rules treat those as cautions only.
 - US: SEC 8-K filings (with their item codes) and late-filing notices, plus Yahoo's next earnings
   date.
 
@@ -50,7 +53,7 @@ class Announcement:
     day: date
     category: str
     text: str
-    source: str  # "NSE" | "SEC 8-K" | "SEC"
+    source: str  # "NSE" | "SEC" | "News"
     url: str | None = None
     items: list[str] = field(default_factory=list)  # SEC 8-K item codes, e.g. ["4.02", "9.01"]
 
@@ -198,6 +201,21 @@ def yahoo_next_earnings(market: Market, symbol: str, today: date) -> date | None
     return min(upcoming) if upcoming else None
 
 
+NEWS_LOOKBACK_DAYS = 90
+NEWS_MAX_ITEMS = 40
+
+
+def news_announcements(market: Market, company: str) -> list[Announcement]:
+    from trademare.analysis.news import fetch_headlines
+
+    return [
+        Announcement(
+            day=h.published.date(), category="News headline", text=f"{h.title} ({h.source})", source="News"
+        )
+        for h in fetch_headlines(market, company, NEWS_LOOKBACK_DAYS, NEWS_MAX_ITEMS)
+    ]
+
+
 class EventsService:
     def __init__(
         self,
@@ -207,9 +225,11 @@ class EventsService:
         nse: NseClient | None = None,
         lookback_days: int = 180,
         max_age_hours: float = 20,
+        names: dict[str, str] | None = None,
     ) -> None:
         self.root = Path(cache_dir) / "events"
         self.sec_client, self.ciks = sec_client, ciks or {}
+        self.names = names or {}  # India symbol -> company name, for the news fallback
         self._nse = nse
         self.lookback_days, self.max_age = lookback_days, timedelta(hours=max_age_hours)
 
@@ -256,6 +276,11 @@ class EventsService:
                 ev.announcements = self.nse.announcements(symbol, since)
                 ev.next_results = self.nse.next_results(symbol, today)
                 ev.results_source = "NSE board meeting" if ev.next_results else None
+                if not ev.announcements and symbol in self.names:  # files with BSE only
+                    try:
+                        ev.announcements = news_announcements(market, self.names[symbol])
+                    except Exception as e:
+                        errors.append(f"news fallback: {type(e).__name__}: {e}")
             else:
                 cik = self.ciks.get(symbol)
                 if cik and self.sec_client is not None:

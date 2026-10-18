@@ -79,7 +79,7 @@
         {% if e.flags %}<ul class="event-alerts">{% for fl in e.flags %}<li class="{{ fl.level }}"><b>{{ fl.title }}</b>{% if fl.count > 1 %} ×{{ fl.count }}{% endif %} · {{ fl.day }} · {{ fl.source }}{% if fl.url %} · <a href="{{ fl.url }}" target="_blank" rel="noopener">filing</a>{% endif %}<div class="sub">{{ fl.detail }}</div></li>{% endfor %}</ul>
         {% else %}<p class="sub">No red flags in official filings{% if not e.coverage %} (red: last 180 days, cautions: last 90){% endif %}.</p>{% endif %}
         {% if e.coverage %}<p class="sub warn-text">{{ e.coverage }}</p>{% endif %}
-        {% if e.recent %}<details class="recent-filings"><summary>Latest filings</summary><ul class="reasons">{% for a in e.recent %}<li>{{ a.day }} · {{ a.category }}{% if a.url %} · <a href="{{ a.url }}" target="_blank" rel="noopener">open</a>{% endif %}<div class="sub">{{ a.text }}</div></li>{% endfor %}</ul></details>{% endif %}
+        {% if e.recent %}<details class="recent-filings"><summary>{{ "Latest news headlines" if e.recent[0].category == "News headline" else "Latest filings" }}</summary><ul class="reasons">{% for a in e.recent %}<li>{{ a.day }} · {{ a.category }}{% if a.url %} · <a href="{{ a.url }}" target="_blank" rel="noopener">open</a>{% endif %}<div class="sub">{{ a.text }}</div></li>{% endfor %}</ul></details>{% endif %}
       {% else %}<p class="empty">Filings were not checked for this signal.</p>{% endif %}
     </section>
 

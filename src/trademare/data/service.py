@@ -73,14 +73,23 @@ class DataService:
         if self._events is None:
             ua = self._secrets.sec_user_agent
             ciks: dict[str, str] = {}
+            names: dict[str, str] = {}
             for market, cfg in self.config.markets.items():
+                if market is Market.IN:
+                    try:
+                        universe = load_universe(cfg.universe)
+                        names = dict(zip(universe["symbol"], universe["name"], strict=True))
+                    except (FileNotFoundError, KeyError):
+                        pass
                 if market is Market.US:
                     try:
                         universe = load_universe(cfg.universe).dropna(subset=["cik"])
                         ciks = dict(zip(universe["symbol"], universe["cik"].astype(str), strict=True))
                     except (FileNotFoundError, KeyError):
                         pass
-            self._events = EventsService(self.config.data.cache_dir, SecClient(ua) if ua else None, ciks)
+            self._events = EventsService(
+                self.config.data.cache_dir, SecClient(ua) if ua else None, ciks, names=names
+            )
         return self._events
 
     def universe_symbols(self, market: Market) -> list[str]:

@@ -131,6 +131,68 @@ def test_events_service_fetches_caches_and_keeps_last_good_copy(tmp_path, monkey
     assert stale.announcements and stale.error.startswith("stale:")
 
 
+class SilentNse(FakeNse):  # a BSE-only filer: NSE has nothing
+    def get_json(self, url):
+        self.calls += 1
+        return []
+
+
+@pytest.mark.live_events
+def test_bse_only_filer_falls_back_to_news_headlines(tmp_path, monkeypatch):
+    from trademare.analysis.news import Headline
+
+    monkeypatch.setattr("trademare.data.events.yahoo_next_earnings", lambda *a: date(2026, 10, 29))
+    seen = []
+
+    def fake_headlines(market, company, days, n):
+        seen.append(company)
+        return [
+            Headline("MCX shares jump on record volumes", "ET", datetime(2026, 10, 15, tzinfo=UTC)),
+            Headline("SEBI imposes penalty of Rs 25 lakh on MCX", "Mint", datetime(2026, 9, 30, tzinfo=UTC)),
+        ]
+
+    monkeypatch.setattr("trademare.analysis.news.fetch_headlines", fake_headlines)
+    svc = EventsService(tmp_path, nse=SilentNse(), names={"MCX": "Multi Commodity Exchange of India Ltd."})
+    ev = svc.get(Market.IN, "MCX", TODAY)
+    assert seen == ["Multi Commodity Exchange of India Ltd."] and ev.results_source == "Yahoo"
+    assert [a.source for a in ev.announcements] == ["News", "News"]
+    [flag] = red_flags(ev, TODAY)
+    assert (flag.level, flag.title) == ("amber", "In the news: regulator order or penalty")  # never red
+    assert "news headlines were checked" in coverage_note(ev, TODAY)
+    # without a known company name there is nothing to search for
+    bare = EventsService(tmp_path / "b", nse=SilentNse()).get(Market.IN, "MCX", TODAY)
+    assert bare.announcements == [] and "red-flag check unavailable" in coverage_note(bare, TODAY)
+
+
+@pytest.mark.parametrize(
+    ("headline", "title"),
+    [
+        ("NCLT admits insolvency plea against X Ltd", "insolvency or bankruptcy"),
+        ("X Ltd defaults on bond repayment", "default on payments"),
+        ("Income tax raids at X offices", "fraud or raid"),
+        ("Statutory auditor of X resigns citing lack of information", "auditor resigned"),
+        ("ICRA downgrades X's rating to BBB", "credit rating downgrade"),
+        ("X CFO resigns amid probe", "CEO or CFO quit"),
+    ],
+)
+def test_news_rules(headline, title):
+    ann = Announcement(TODAY - timedelta(days=3), "News headline", headline, "News")
+    [flag] = red_flags(CorporateEvents("IN", "X", datetime.now(UTC), announcements=[ann]), TODAY)
+    assert flag.title == f"In the news: {title}" and flag.level == "amber"
+
+
+def test_routine_news_is_not_flagged():
+    anns = [
+        Announcement(TODAY, "News headline", t, "News")
+        for t in (
+            "X Q2 profit rises 20%",
+            "X wins order worth Rs 500 crore",
+            "Credit default swap market explained",
+        )
+    ]
+    assert red_flags(CorporateEvents("IN", "X", datetime.now(UTC), announcements=anns), TODAY) == []
+
+
 # ------------------------------------------------------------------ forensic scores
 def statements(**overrides):
     """Two fiscal years; year t improves on year t-1 everywhere."""
