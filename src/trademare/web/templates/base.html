@@ -19,6 +19,7 @@
 {% set i_chart = '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M6 15l4-5 4 3 5-7"/></svg>' %}
 {% set i_bulb = '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"/></svg>' %}
 {% set i_flask = '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6L4 19a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-10V3"/></svg>' %}
+{% set i_book = '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z"/><path d="M8 8h6M8 12h6"/></svg>' %}
 {% set i_gear = '<svg width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg>' %}
 <body>
 <div class="shell">
@@ -26,6 +27,7 @@
     <a class="brand" href="/"><span class="logo">T</span><span>Trade<span class="mare">Mare</span></span></a>
     {{ nav("/", "Overview", i_home, path == "/") }}
     {{ nav("/signals", "Signals", i_bell, path.startswith("/signals"), ui.pending_total) }}
+    {{ nav("/journal", "Trade journal", i_book, path == "/journal") }}
     <div class="nav-label">Portfolio</div>
     {% for m in markets %}{{ nav("/portfolio/" ~ m.value, "India" if m.value == "IN" else "United States", i_brief, path == "/portfolio/" ~ m.value) }}{% endfor %}
     <div class="nav-label">Markets</div>

@@ -305,6 +305,26 @@ class BacktestConfig(_Strict):
     )
 
 
+class EventAction(StrEnum):
+    WARN = "warn"
+    SKIP = "skip"
+
+
+class EventsConfig(_Strict):
+    """Corporate events: official filings (NSE / SEC 8-K) and upcoming results dates."""
+
+    enabled: bool = True
+    results_window_sessions: int = Field(
+        5, ge=0, le=30, description="Warn about entries whose results are due within this many sessions"
+    )
+    results_action: EventAction = Field(
+        EventAction.WARN, description="warn: flag the signal; skip: no entry signal before results"
+    )
+    red_flag_action: EventAction = Field(
+        EventAction.WARN, description="warn: flag the signal; skip: no entry signal with a red flag"
+    )
+
+
 class AppConfig(_Strict):
     database_url: str = "sqlite:///data/trademare.db"
     log_level: str = "INFO"
@@ -313,6 +333,7 @@ class AppConfig(_Strict):
     strategy: StrategyConfig = StrategyConfig()
     notifications: NotificationsConfig = NotificationsConfig()
     llm: LLMConfig = LLMConfig()
+    events: EventsConfig = EventsConfig()
     backtest: BacktestConfig = BacktestConfig()
 
     @model_validator(mode="after")

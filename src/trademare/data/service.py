@@ -12,6 +12,7 @@ from trademare.config.secrets import Secrets
 from trademare.core.clock import MarketClock
 from trademare.core.models import Market
 from trademare.data.cache import FinancialsCache, FinancialsSource, PriceCache, UpdateReport
+from trademare.data.events import EventsService
 from trademare.data.providers.edgar import EdgarFundamentalsProvider, SecClient
 from trademare.data.providers.yfinance_provider import (
     CurrencyCache,
@@ -37,6 +38,7 @@ class DataService:
         self.store = ParquetStore(config.data.cache_dir)
         self._markets: dict[Market, MarketData] = {}
         self._secrets = secrets
+        self._events: EventsService | None = None
 
     def market(self, market: Market) -> MarketData:
         if market not in self._markets:
@@ -65,6 +67,21 @@ class DataService:
             log.warning("SEC_USER_AGENT not set in .env; using yfinance for %s fundamentals", market)
         cache = Path(self.config.data.cache_dir) / "financials" / market.value / "yfinance_currency.json"
         return YFinanceFundamentalsProvider(currencies=CurrencyCache(cache))
+
+    def events(self) -> EventsService:
+        """Corporate filings and results dates (built once; cached on disk for ~a day)."""
+        if self._events is None:
+            ua = self._secrets.sec_user_agent
+            ciks: dict[str, str] = {}
+            for market, cfg in self.config.markets.items():
+                if market is Market.US:
+                    try:
+                        universe = load_universe(cfg.universe).dropna(subset=["cik"])
+                        ciks = dict(zip(universe["symbol"], universe["cik"].astype(str), strict=True))
+                    except (FileNotFoundError, KeyError):
+                        pass
+            self._events = EventsService(self.config.data.cache_dir, SecClient(ua) if ua else None, ciks)
+        return self._events
 
     def universe_symbols(self, market: Market) -> list[str]:
         return load_universe(self.config.markets[market].universe)["symbol"].tolist()

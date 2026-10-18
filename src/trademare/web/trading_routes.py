@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
+from trademare.analysis.forensic import PIOTROSKI_LABELS
 from trademare.config.schema import AppConfig
 from trademare.config.secrets import Secrets
 from trademare.core.models import Direction, Market
@@ -18,6 +19,7 @@ from trademare.data.service import DataService
 from trademare.storage.db import Database, EquityRow, EventRow, OrderRow, PositionRow, SignalRow
 from trademare.strategy.evidence import FUND_METRICS, TECH_METRICS
 from trademare.trading.desk import DeskError, TradingDesk
+from trademare.trading.journal import build_journal
 from trademare.trading.tracking import MIN_SESSIONS, Tracking, compare_with_backtest
 from trademare.web.overview_data import sparkline
 
@@ -61,7 +63,13 @@ def register_trading_routes(
         now = datetime.now(UTC)
         with db.session() as s:
             pending_rows = s.scalars(select(SignalRow).where(SignalRow.status == "PENDING"))
-            needs = {Market(sig.market) for sig in pending_rows if not sig.evidence}
+            needs = {
+                Market(sig.market)
+                for sig in pending_rows
+                if not sig.evidence
+                or (config.events.enabled and sig.action == "ENTRY" and "events" not in sig.evidence)
+                or (sig.evidence.get("fundamental") and "forensic" not in sig.evidence["fundamental"])
+            }
         for market in needs:  # signals created before evidence was recorded
             desk(market).ensure_evidence()
         with db.session() as s:
@@ -104,6 +112,7 @@ def register_trading_routes(
                 "charts": charts,
                 "tech_metrics": TECH_METRICS,
                 "fund_metrics": FUND_METRICS,
+                "piotroski_labels": PIOTROSKI_LABELS,
             },
         )
 
@@ -204,6 +213,11 @@ def register_trading_routes(
                 "err": err,
             },
         )
+
+    @app.get("/journal", response_class=HTMLResponse)
+    def journal_page(request: Request):
+        entries, summary = build_journal(db, service.store)
+        return templates.TemplateResponse(request, "journal.html", {"entries": entries, "summary": summary})
 
     tracking_cache: dict[tuple[Market, object, int], Tracking] = {}
 

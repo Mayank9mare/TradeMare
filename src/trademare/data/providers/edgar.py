@@ -51,6 +51,7 @@ FLOW_TAGS: dict[str, tuple[str, ...]] = {
         "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
     ),
     "capex": ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"),
+    "sga": ("SellingGeneralAndAdministrativeExpense",),
 }
 
 # Instant (balance sheet) tags, in priority order.
@@ -65,6 +66,9 @@ STOCK_TAGS: dict[str, tuple[str, ...]] = {
         "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
     ),
     "cash": ("CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsAndShortTermInvestments"),
+    "receivables": ("AccountsReceivableNetCurrent", "ReceivablesNetCurrent"),
+    "ppe": ("PropertyPlantAndEquipmentNet",),
+    "retained_earnings": ("RetainedEarningsAccumulatedDeficit",),
     "long_term_debt": ("LongTermDebt",),
     "long_term_debt_noncurrent": ("LongTermDebtNoncurrent",),
     "long_term_debt_current": ("LongTermDebtCurrent",),

@@ -31,6 +31,8 @@ FLOW_FIELDS = (
     "interest_expense",
     "operating_cash_flow",
     "capex",  # positive number = cash spent
+    "depreciation",  # depreciation and amortisation (forensic scores)
+    "sga",  # selling, general and administrative expense
 )
 
 # Balance sheet: a snapshot at period end.
@@ -43,6 +45,9 @@ STOCK_FIELDS = (
     "total_debt",
     "cash",
     "shares_outstanding",
+    "receivables",
+    "ppe",  # net property, plant and equipment
+    "retained_earnings",
 )
 
 FIELDS = FLOW_FIELDS + STOCK_FIELDS

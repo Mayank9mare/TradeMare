@@ -48,6 +48,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["live_events: use the real corporate-events fetch path (network still faked in the test)"]
 filterwarnings = [
     "ignore:Using `httpx` with `starlette.testclient`",
     "ignore:websockets.legacy is deprecated:DeprecationWarning",

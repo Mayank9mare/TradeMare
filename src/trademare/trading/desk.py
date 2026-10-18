@@ -33,7 +33,7 @@ from trademare.analysis.indicators import atr
 from trademare.analysis.llm import create_llm_client
 from trademare.analysis.sentiment import SentimentAnalyst
 from trademare.backtest.costs import cost_model
-from trademare.config.schema import Rebalance, StrategyMode, TrailMethod
+from trademare.config.schema import EventAction, Rebalance, StrategyMode, TrailMethod
 from trademare.config.secrets import Secrets
 from trademare.core.clock import MarketClock
 from trademare.core.models import (
@@ -52,7 +52,13 @@ from trademare.execution.brokers import BrokerError, LoginRequired, OrderUpdate,
 from trademare.execution.fills import Bar, gapped_past_limit, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.manager import Exposure, RiskManager
 from trademare.storage.db import Database, EquityRow, OrderRow, PositionRow, SignalRow
-from trademare.strategy.evidence import build_evidence, risk_evidence
+from trademare.strategy.evidence import (
+    build_evidence,
+    event_warnings,
+    events_evidence,
+    forensic_evidence,
+    risk_evidence,
+)
 from trademare.strategy.scanner import ScanContext, ScanResult, is_rebalance_day, save_scan
 
 log = logging.getLogger(__name__)
@@ -797,11 +803,11 @@ class TradingDesk:
         report.regime = scan.regime.label.value
         fund_scores: dict | None = None
 
-        def evidence_for(symbol: str, risk: dict | None = None) -> dict:
+        def evidence_for(symbol: str, risk: dict | None = None, events: dict | None = None) -> dict:
             nonlocal fund_scores
             if fund_scores is None:  # universe-wide ranking, computed once per run
                 fund_scores = ctx.fundamental_scores(day)
-            return build_evidence(ctx, symbol, day, fund_scores, risk)
+            return build_evidence(ctx, symbol, day, fund_scores, risk, events)
 
         if not report.rebalance_day:
             report.notes.append(f"not a rebalance day ({frequency}): no new signals; stops stay active")
@@ -859,9 +865,27 @@ class TradingDesk:
                 report.notes.append(f"{idea.symbol}: no size within budget/limits")
                 continue
             reasons = dict(idea.reasons)
+            events = self.events_for(idea.symbol, day)
+            if skip := self._event_skip(events):
+                report.notes.append(f"{idea.symbol}: entry skipped ({skip})")
+                self.db.log(
+                    s,
+                    "event_skip",
+                    f"{idea.symbol} entry skipped: {skip}",
+                    self.market.value,
+                    symbol=idea.symbol,
+                )
+                continue
+            if warnings := event_warnings(events):
+                reasons["events"] = warnings
             if sentiment is not None:
                 outcome = sentiment.assess(
-                    self.market, idea.symbol, self.company(idea.symbol), idea.direction, day
+                    self.market,
+                    idea.symbol,
+                    self.company(idea.symbol),
+                    idea.direction,
+                    day,
+                    filings=(events or {}).get("recent"),
                 )
                 if outcome.veto:
                     report.notes.append(f"{idea.symbol}: entry vetoed by news sentiment ({outcome.note})")
@@ -902,6 +926,7 @@ class TradingDesk:
                         self.risk.capital(equity),
                         self.cfg,
                     ),
+                    events,
                 ),
                 status=SignalStatus.PENDING.value,
                 scan_date=day,
@@ -955,15 +980,83 @@ class TradingDesk:
         s.add(sig)
         return sig
 
+    def events_for(self, symbol: str, day: date) -> dict | None:
+        """Results date and red flags from official filings; None when the check is off."""
+        if not self.config.events.enabled:
+            return None
+        try:
+            raw = self.service.events().get(self.market, symbol, today=day)
+        except Exception as e:  # the events service should not raise, but never let it stop a run
+            log.warning("%s events check failed: %s", symbol, e)
+            raw = None
+        return events_evidence(raw, day, self.clock, self.config.events)
+
+    def _event_skip(self, events: dict | None) -> str | None:
+        if not events:
+            return None
+        cfg = self.config.events
+        if cfg.results_action is EventAction.SKIP and events["results_soon"]:
+            return f"results due {events['next_results']}, {events['sessions_to_results']} session(s) away"
+        if cfg.red_flag_action is EventAction.SKIP and events["red"]:
+            first = next(f for f in events["flags"] if f["level"] == "red")
+            return f"red flag in filings: {first['title']} ({first['day']})"
+        return None
+
+    def check_holdings(self, s: Session, day: date, report: DailyReport) -> None:
+        """New filings and imminent results for open positions (once per new session)."""
+        if not self.config.events.enabled:
+            return
+        since = self.clock.previous_session(day)
+        for pos in self.db.open_positions(s, self.market.value):
+            ev = self.events_for(pos.symbol, day)
+            if not ev:
+                continue
+            for f in ev["flags"]:
+                if date.fromisoformat(f["day"]) > since:
+                    prefix = "ALERT" if f["level"] == "red" else "WARNING"
+                    report.notes.append(
+                        f"{prefix} {pos.symbol} (held): {f['title']} — {f['source']} filing {f['day']}"
+                    )
+            if ev["sessions_to_results"] == 1:
+                stop = f"; stop {pos.stop_price:,.2f}" if pos.stop_price else ""
+                report.notes.append(f"HEADS-UP {pos.symbol} (held): results due {ev['next_results']}{stop}")
+
     def ensure_evidence(self) -> int:
         """Attach evidence to pending signals created before evidence was recorded."""
         with self.db.session() as s:
             q = select(SignalRow).where(SignalRow.market == self.market.value, SignalRow.status == "PENDING")
             # Checked in Python: older rows may hold JSON null rather than SQL NULL.
-            missing = [sig for sig in s.scalars(q) if not sig.evidence]
-            if not missing:
+            pending = list(s.scalars(q))
+            missing = [sig for sig in pending if not sig.evidence]
+            if self.config.events.enabled:  # signals from before the events check: add it
+                for sig in pending:
+                    if (
+                        sig.evidence
+                        and "events" not in sig.evidence
+                        and sig.action == SignalAction.ENTRY.value
+                    ):
+                        events = self.events_for(sig.symbol, sig.scan_date)
+                        sig.evidence = {**sig.evidence, "events": events}
+                        if warnings := event_warnings(events):
+                            sig.reasons = {**(sig.reasons or {}), "events": warnings}
+            no_forensic = [
+                sig
+                for sig in pending
+                if sig.evidence
+                and sig.evidence.get("fundamental")
+                and "forensic" not in sig.evidence["fundamental"]
+            ]
+            if not missing and not no_forensic:
                 return 0
             ctx = ScanContext(self.service, self.market)
+            for sig in no_forensic:  # signals from before forensic scores were recorded
+                fundamental = {
+                    **sig.evidence["fundamental"],
+                    "forensic": forensic_evidence(ctx, sig.symbol, sig.scan_date),
+                }
+                sig.evidence = {**sig.evidence, "fundamental": fundamental}
+            if not missing:
+                return len(no_forensic)
             equity, _, _ = self.equity(s)
             capital = self.risk.capital(equity)
             scores_by_day: dict[date, dict] = {}
@@ -975,8 +1068,13 @@ class TradingDesk:
                     risk = risk_evidence(
                         sig.entry_price, sig.stop_price, sig.target_price, sig.quantity, capital, self.cfg
                     )
+                events = None
+                if sig.action == SignalAction.ENTRY.value:
+                    events = self.events_for(sig.symbol, sig.scan_date)
+                    if warnings := event_warnings(events):
+                        sig.reasons = {**(sig.reasons or {}), "events": warnings}
                 sig.evidence = build_evidence(
-                    ctx, sig.symbol, sig.scan_date, scores_by_day[sig.scan_date], risk
+                    ctx, sig.symbol, sig.scan_date, scores_by_day[sig.scan_date], risk, events
                 )
             return len(missing)
 
@@ -999,6 +1097,8 @@ class TradingDesk:
                 state.last_processed = d
                 report.processed.append(d)
             report.expired = self.expire_signals(s, now)
+            if generate and day in report.processed:
+                self.check_holdings(s, day, report)
             if generate:
                 self.generate_signals(s, day, report)
             report.kill_switch, report.kill_reason = state.kill_switch, state.kill_reason

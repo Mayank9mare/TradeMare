@@ -23,3 +23,18 @@ def write_config(tmp_path):
         return path
 
     return _write
+
+
+@pytest.fixture(autouse=True)
+def no_event_network(monkeypatch, request):
+    """Tests never call NSE, SEC or Yahoo for corporate events; tests that need events stub them."""
+    if "live_events" in request.keywords:
+        return
+    from datetime import UTC, datetime
+
+    from trademare.data.events import CorporateEvents, EventsService
+
+    def offline(self, market, symbol, today):
+        return CorporateEvents(market.value, symbol, datetime.now(UTC))
+
+    monkeypatch.setattr(EventsService, "_fetch", offline)

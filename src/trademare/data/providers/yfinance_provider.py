@@ -83,6 +83,15 @@ _ROWS: dict[str, tuple[str, ...]] = {
     "total_debt": ("Total Debt",),
     "cash": ("Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments"),
     "shares_outstanding": ("Ordinary Shares Number", "Share Issued"),
+    "depreciation": (
+        "Reconciled Depreciation",
+        "Depreciation And Amortization",
+        "Depreciation Amortization Depletion",
+    ),
+    "sga": ("Selling General And Administration",),
+    "receivables": ("Accounts Receivable", "Receivables"),
+    "ppe": ("Net PPE",),
+    "retained_earnings": ("Retained Earnings",),
 }
 
 # Yahoo has no filing dates, so availability is estimated from the regulatory
@@ -130,7 +139,9 @@ def statements_to_financials(
     if not rows:
         return empty_financials()
     df = pd.DataFrame(rows)
-    df["capex"] = df["capex"].astype("float64").abs()  # Yahoo reports capex as negative
+    for field in ("capex", "depreciation"):  # Yahoo reports these as negative in some statements
+        if field in df:
+            df[field] = pd.to_numeric(df[field], errors="coerce").astype("float64").abs()
     if fx is not None:
         rates = df["period_end"].map(fx)
         for field in MONEY_FIELDS:

@@ -13,9 +13,13 @@ from typing import Any
 
 import pandas as pd
 
+from trademare.analysis.forensic import compute_forensics
 from trademare.analysis.fundamental import FundamentalScore
+from trademare.analysis.red_flags import coverage_note, red_flags
 from trademare.analysis.technical import score_features
-from trademare.config.schema import MarketConfig
+from trademare.config.schema import EventsConfig, MarketConfig
+from trademare.core.clock import MarketClock
+from trademare.data.events import CorporateEvents
 from trademare.strategy.scanner import ScanContext
 
 # Technical metrics shown in the explanation: key -> (label, kind)
@@ -102,7 +106,78 @@ def fundamental_evidence(
         "reasons": [] if score is None else score.reasons,
         "metrics": {k: _clean((ratios or {}).get(k)) for k in FUND_METRICS},
         "source": ctx.cfg.fundamentals_source,
+        "forensic": forensic_evidence(ctx, symbol, asof),
     }
+
+
+def forensic_evidence(ctx: ScanContext, symbol: str, asof: date) -> dict[str, Any] | None:
+    try:
+        f = compute_forensics(ctx.financials.get(symbol), asof, ctx.sectors.get(symbol))
+    except (ArithmeticError, ValueError, TypeError) as e:  # odd statements must not stop signal generation
+        return {"notes": [f"forensic scores unavailable ({type(e).__name__})"]}
+    return None if f is None else f.to_json()
+
+
+def sessions_until(clock: MarketClock, start: date, end: date) -> int:
+    """Trading sessions after ``start`` up to and including ``end`` (0 when end <= start)."""
+    n, day = 0, start
+    while day < end and n < 400:
+        day = clock.next_session(day)
+        if day <= end:
+            n += 1
+    return n
+
+
+def events_evidence(
+    events: CorporateEvents | None, asof: date, clock: MarketClock, cfg: EventsConfig
+) -> dict[str, Any]:
+    """Results date, red flags and how complete the check was, as of the scan date."""
+    flags = red_flags(events, asof)
+    nxt = events.next_results if events else None
+    sessions = sessions_until(clock, asof, nxt) if nxt and nxt > asof else None
+    soon = sessions is not None and sessions <= cfg.results_window_sessions
+    return {
+        "next_results": nxt.isoformat() if nxt else None,
+        "results_source": events.results_source if events else None,
+        "sessions_to_results": sessions,
+        "results_soon": soon,
+        "flags": [
+            {
+                "level": f.level,
+                "title": f.title,
+                "day": f.day.isoformat(),
+                "detail": f.detail[:300],
+                "source": f.source,
+                "url": f.url,
+                "count": f.count,
+            }
+            for f in flags
+        ],
+        "red": sum(f.level == "red" for f in flags),
+        "amber": sum(f.level == "amber" for f in flags),
+        "coverage": coverage_note(events, asof),
+        "recent": [
+            {"day": a.day.isoformat(), "category": a.category, "text": a.text[:200], "url": a.url}
+            for a in (events.announcements[:8] if events else [])
+        ],
+        "fetched_at": events.fetched_at.isoformat() if events else None,
+    }
+
+
+def event_warnings(ev: dict[str, Any] | None) -> list[str]:
+    """One-line warnings for the signal card, digest and phone alerts."""
+    if not ev:
+        return []
+    out = []
+    if ev.get("results_soon"):
+        n = ev["sessions_to_results"]
+        out.append(f"Results due {ev['next_results']} ({n} session{'s' if n != 1 else ''} away): gap risk")
+    for f in ev.get("flags", []):
+        times = f" (x{f['count']})" if f.get("count", 1) > 1 else ""
+        out.append(f"{'RED FLAG' if f['level'] == 'red' else 'Caution'}: {f['title']}{times}, {f['day']}")
+    if ev.get("coverage"):
+        out.append(f"Note: {ev['coverage']}")
+    return out
 
 
 def risk_evidence(
@@ -133,10 +208,12 @@ def build_evidence(
     asof: date,
     fundamental_scores: dict[str, FundamentalScore] | None,
     risk: dict[str, Any] | None = None,
+    events: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "asof": asof.isoformat(),
         "technical": technical_evidence(ctx, symbol, asof),
         "fundamental": fundamental_evidence(ctx, symbol, asof, fundamental_scores),
         "risk": risk,
+        "events": events,
     }

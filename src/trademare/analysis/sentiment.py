@@ -54,11 +54,12 @@ SCHEMA = {
 
 SYSTEM = (
     "You assess recent news about one listed company for a swing trader who holds positions for days to "
-    "weeks. Judge only what the headlines say; do not use prior knowledge of the company or its price. "
+    "weeks. Judge only what the headlines and exchange filings say; do not use prior knowledge of the "
+    "company or its price. Official filings are authoritative; headlines may be rumour or recycled. "
     "Score the likely impact on the stock over the next few weeks from -1 (clearly negative) to +1 "
     "(clearly positive); routine coverage, price-recap articles and analyst target lists are close to 0. "
     "Set confidence low when headlines are few, stale or uninformative. List a red flag only when a "
-    "headline directly reports it. Keep the summary to two sentences."
+    "headline or filing directly reports it. Keep the summary to two sentences."
 )
 
 
@@ -98,16 +99,27 @@ class SentimentAnalyst:
         path.write_text(json.dumps(ledger, indent=1, default=str))
 
     def assess(
-        self, market: Market, symbol: str, company: str, direction: Direction, day: date
+        self,
+        market: Market,
+        symbol: str,
+        company: str,
+        direction: Direction,
+        day: date,
+        filings: list[dict] | None = None,
     ) -> SentimentOutcome:
+        """``filings``: recent official announcements ({day, category, text}), newest first."""
+        filings = filings or []
         ledger = self._load(market, day)
         try:
             headlines = self.news(market, company, self.config.lookback_days, self.config.max_headlines)
         except Exception as e:  # network/RSS problems must never block trading
-            return SentimentOutcome(None, note=f"news unavailable ({e.__class__.__name__}); not assessed")
-        if not headlines:
-            return SentimentOutcome(None, note="no recent headlines; not assessed")
-        digest = hashlib.sha256("\n".join(h.title for h in headlines).encode()).hexdigest()[:16]
+            if not filings:
+                return SentimentOutcome(None, note=f"news unavailable ({e.__class__.__name__}); not assessed")
+            headlines = []  # official filings alone are still worth assessing
+        if not headlines and not filings:
+            return SentimentOutcome(None, note="no recent headlines or filings; not assessed")
+        texts = [h.title for h in headlines] + [f"{f['day']} {f['category']} {f['text']}" for f in filings]
+        digest = hashlib.sha256("\n".join(texts).encode()).hexdigest()[:16]
         cached = ledger["results"].get(symbol)
         if cached and cached.get("digest") == digest:
             data, cost = cached["data"], 0.0
@@ -118,7 +130,7 @@ class SentimentAnalyst:
                 )
             try:
                 answer = self.client.complete_json(
-                    SYSTEM, _prompt(market, symbol, company, headlines), SCHEMA
+                    SYSTEM, _prompt(market, symbol, company, headlines, filings), SCHEMA
                 )
             except LLMError as e:
                 return SentimentOutcome(None, note=f"LLM error ({e}); not assessed", headlines=headlines)
@@ -142,13 +154,21 @@ class SentimentAnalyst:
         # Longs: any red flag or clearly negative news; shorts: clearly positive news.
         long = direction is Direction.LONG
         veto = (bool(flags) or score <= threshold) if long else (score >= -threshold)
-        note = f"sentiment {score:+.2f} from {len(headlines)} headlines" + (
+        note = f"sentiment {score:+.2f} from {len(headlines)} headlines, {len(filings)} filings" + (
             f"; red flags: {', '.join(flags)}" if flags else ""
         )
         return SentimentOutcome(result, veto=veto, note=note, cost_usd=cost, headlines=headlines)
 
 
-def _prompt(market: Market, symbol: str, company: str, headlines: list[Headline]) -> str:
-    lines = "\n".join(f"- {h.published:%Y-%m-%d} [{h.source}] {h.title}" for h in headlines)
+def _prompt(
+    market: Market, symbol: str, company: str, headlines: list[Headline], filings: list[dict] | None = None
+) -> str:
+    lines = "\n".join(f"- {h.published:%Y-%m-%d} [{h.source}] {h.title}" for h in headlines) or "(none)"
     exchange = "NSE (India)" if market is Market.IN else "US"
-    return f"Company: {company} ({symbol}, {exchange})\n\nHeadlines, newest first:\n{lines}"
+    source = "NSE corporate announcements" if market is Market.IN else "SEC filings"
+    official = "\n".join(f"- {f['day']} [{f['category']}] {f['text']}" for f in filings or []) or "(none)"
+    return (
+        f"Company: {company} ({symbol}, {exchange})\n\n"
+        f"Official filings ({source}), newest first:\n{official}\n\n"
+        f"Headlines, newest first:\n{lines}"
+    )

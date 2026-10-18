@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 API = "https://api.telegram.org/bot{token}/{method}"
 MAX_LEN = 4000  # Telegram's limit is 4096 characters
 ALERT_PREFIXES = ("ALERT", "WARNING")
+HEADS_UP = "HEADS-UP"
 
 
 def _call(token: str, method: str, **payload) -> dict:
@@ -53,19 +54,22 @@ def format_alerts(reports: list[DailyReport], dashboard_url: str) -> str | None:
     lines: list[str] = []
     for r in reports:
         alerts = [n for n in r.notes if n.startswith(ALERT_PREFIXES)]
+        heads_up = [n.removeprefix(HEADS_UP).strip() for n in r.notes if n.startswith(HEADS_UP)]
         if r.kill_switch:
             alerts.insert(0, f"Kill switch tripped: {r.kill_reason}. New entries are blocked.")
         entries = [s for s in r.signals if s.action == "ENTRY"]
         exits = [s for s in r.signals if s.action == "EXIT"]
-        if not (alerts or entries or exits):
+        if not (alerts or heads_up or entries or exits):
             continue
         lines.append(f"<b>{r.market.value} · {r.session}</b>")
         lines += [f"🚨 {html.escape(a)}" for a in alerts]
+        lines += [f"📅 {html.escape(h)}" for h in heads_up]
         for s in entries:
             stop = f", stop {s.stop_price:,.2f}" if s.stop_price is not None else ""
             lines.append(
                 f"🟢 {s.direction} {html.escape(s.symbol)} x{s.quantity} @ {s.entry_price:,.2f}{stop}"
             )
+            lines += [f"    ⚠️ {html.escape(w)}" for w in (s.reasons or {}).get("events", [])]
         for s in exits:
             lines.append(f"🔴 EXIT {html.escape(s.symbol)} ({html.escape(s.exit_reason or 'signal')})")
         if r.equity is not None:
