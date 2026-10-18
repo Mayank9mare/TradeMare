@@ -51,17 +51,24 @@ def statement_ratios(financials: pd.DataFrame, asof: date) -> dict[str, Any] | N
     if year_ago is not None and year_ago["flow_period_end"] != now["flow_period_end"]:
         growth = _div(g("revenue"), _clean(year_ago.get("revenue")))
         revenue_growth = None if growth is None else growth - 1
-        prev_ni = _clean(year_ago.get("net_income"))
+        # Same basis in both years: recurring earnings when both have them, else reported.
+        prev_norm = _clean(year_ago.get("net_income_normalized"))
+        if normalized is not None and prev_norm is not None:
+            cur, prev = normalized, prev_norm
+        else:
+            cur, prev = net_income, _clean(year_ago.get("net_income"))
         # Growth from a loss is not meaningful as a ratio.
-        if prev_ni is not None and prev_ni > 0 and net_income is not None:
-            earnings_growth = net_income / prev_ni - 1
+        if prev is not None and prev > 0 and cur is not None:
+            earnings_growth = cur / prev - 1
 
+    # Profitability uses recurring earnings, so a one-off gain (an asset sale, a tax write-back)
+    # cannot make a loss-maker look like the most profitable company in its sector.
     return {
         "gross_margin": _div(g("gross_profit"), g("revenue")),
         "operating_margin": _div(g("operating_income"), g("revenue")),
-        "net_margin": _div(net_income, g("revenue")),
-        "roe": _div(net_income, g("total_equity")),
-        "roa": _div(net_income, g("total_assets")),
+        "net_margin": _div(earnings, g("revenue")),
+        "roe": _div(earnings, g("total_equity")),
+        "roa": _div(earnings, g("total_assets")),
         "debt_to_equity": _div(g("total_debt"), g("total_equity")),
         "current_ratio": _div(g("current_assets"), g("current_liabilities")),
         "interest_coverage": _div(g("operating_income"), g("interest_expense")),

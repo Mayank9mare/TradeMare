@@ -65,6 +65,30 @@ def test_recurring_earnings_preferred_over_reported(financials):
     r = key_ratios(financials, date(2026, 3, 1), price=50.0)
     assert r["net_income_ttm"] == 62 and r["earnings_ttm"] == -8
     assert r["pe"] is None  # no P/E on recurring losses
+    # profitability is judged on recurring earnings too (IDEA's one-off gain showed an 82% net margin)
+    assert r["net_margin"] < 0 and r["roe"] < 0
+
+
+def test_earnings_growth_compares_like_with_like(financials):
+    financials["net_income_normalized"] = financials["net_income"] / 2
+    r = key_ratios(financials, date(2026, 3, 1), price=50.0)
+    reported = key_ratios(financials.assign(net_income_normalized=float("nan")), date(2026, 3, 1), price=50.0)
+    assert r["earnings_growth"] == pytest.approx(reported["earnings_growth"])  # both years halved
+    assert r["net_margin"] == pytest.approx(reported["net_margin"] / 2)
+
+
+def test_recurring_loss_is_a_red_flag_despite_reported_profit():
+    from trademare.analysis.fundamental import score_universe
+    from trademare.analysis.ratios import RATIO_KEYS
+
+    base = dict.fromkeys(RATIO_KEYS) | dict(net_margin=0.1, roe=0.1, total_equity=100.0)
+    ratios = {
+        "IDEA": base | {"net_income_ttm": 50.0, "earnings_ttm": -30.0},
+        "OK": base | {"net_income_ttm": 50.0, "earnings_ttm": 40.0},
+    }
+    scores = score_universe(ratios, {"IDEA": "Telecom", "OK": "Telecom"})
+    assert scores["IDEA"].reasons[0].startswith("Red flag: loss-making")
+    assert not any("loss-making" in r for r in scores["OK"].reasons)
 
 
 def test_falls_back_to_reported_income_without_normalized(financials):

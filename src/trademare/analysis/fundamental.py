@@ -66,11 +66,17 @@ def metric_table(ratios: dict[str, dict[str, float | None]]) -> pd.DataFrame:
     pe = df.get("pe")
     df["earnings_yield"] = 1 / pe if pe is not None else np.nan
     # Loss-makers have no P/E; give them a negative earnings yield so they rank last.
-    losses = df["net_income_ttm"] <= 0
+    losses = _earnings(df) <= 0
     df.loc[losses, "earnings_yield"] = -1.0
     ptb = df.get("price_to_book")
     df["book_yield"] = 1 / ptb if ptb is not None else np.nan
     return df
+
+
+def _earnings(df: pd.DataFrame) -> pd.Series:
+    """Recurring earnings where known, else reported net income."""
+    reported = df["net_income_ttm"]
+    return df["earnings_ttm"].fillna(reported) if "earnings_ttm" in df else reported
 
 
 def _fmt(value: float, kind: str) -> str:
@@ -131,11 +137,14 @@ def score_universe(
         score = sum(FACTOR_WEIGHTS[f] * v for f, v in available.items()) / total_w
 
         reasons = _reasons(row, srow, {m: places[m][symbol] for m in METRICS})
-        if pd.notna(row.get("net_income_ttm")) and row["net_income_ttm"] <= 0:
+        earnings = row.get("earnings_ttm")
+        if pd.isna(earnings):
+            earnings = row.get("net_income_ttm")
+        if pd.notna(earnings) and earnings <= 0:
             score = min(score, -0.2)
             reasons.insert(0, "Red flag: loss-making over the last twelve months")
         if pd.notna(row.get("total_equity")) and row["total_equity"] <= 0:
-            if pd.notna(row.get("net_income_ttm")) and row["net_income_ttm"] > 0:
+            if pd.notna(earnings) and earnings > 0:
                 # Profitable firms with heavy buybacks (e.g. MCD, HD) often have negative equity.
                 reasons.append("Negative book equity (likely buybacks) — ROE and D/E not meaningful")
             else:
