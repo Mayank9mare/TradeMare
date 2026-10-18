@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -583,6 +583,9 @@ class TradingDesk:
         - Any broker: one alert per position per day when the price trades through its stop. In paper
           trading the stop itself is still filled by the daily run from the day's bar, exactly as the
           backtest does, so paper results stay comparable.
+        Prices come from the broker; when it cannot quote (e.g. a plan without live data) Yahoo fills
+        in. Yahoo can lag by minutes, so a market exit on a Yahoo price needs the stop to look stuck
+        on two checks in a row.
         Trailing stops still move once a day, after the close, as in the backtest.
         Returns the alert lines (empty outside market hours or when nothing happened).
         """
@@ -592,49 +595,59 @@ class TradingDesk:
         day = pd.Timestamp(now).tz_convert(self.clock.tz).date()
         report = DailyReport(self.market, day)
         alerts: list[str] = []
+        paper = self.broker.name == "paper"
         with self.db.session() as s:
             positions = [p for p in self.db.open_positions(s, self.market.value) if p.stop_price is not None]
             if not positions:
                 return []
-            symbols = sorted({p.symbol for p in positions})
-            try:
-                if self.broker.name == "paper":
-                    from trademare.data.quotes import latest_prices
-
-                    prices = latest_prices(self.market, symbols)
-                else:
-                    prices = self.broker.get_ltp(symbols)
-            except Exception as e:
-                log.warning("%s intraday quotes failed: %s", self.market, e)
+            prices, from_yahoo = self._intraday_prices(sorted({p.symbol for p in positions}))
+            if not prices:
                 return []
-            already = {
-                (e.data.get("position"), e.data.get("day"))
-                for e in s.scalars(
+            events = list(
+                s.scalars(
                     select(EventRow).where(
-                        EventRow.kind == "intraday_stop", EventRow.market == self.market.value
+                        EventRow.kind.in_(("intraday_stop", "intraday_stuck")),
+                        EventRow.market == self.market.value,
                     )
                 )
+            )
+            already = {
+                (e.data.get("position"), e.data.get("day")) for e in events if e.kind == "intraday_stop"
+            }
+            window = timedelta(minutes=2 * max(self.config.ops.intraday_check_minutes, 15) + 5)
+            stuck_before = {
+                e.data.get("position")
+                for e in events
+                if e.kind == "intraday_stuck" and now - datetime.fromisoformat(e.data["at"]) <= window
             }
             for pos in positions:
                 price = prices.get(pos.symbol)
                 if price is None:
                     continue
                 long = pos.direction == Direction.LONG.value
-                if self.broker.name != "paper":
+                lagging = pos.symbol in from_yahoo
+                source = " (Yahoo price, can lag)" if lagging and not paper else ""
+                if not paper:
                     for o in self._orders(s, position_id=pos.id, purpose="stop", status=OPEN):
+                        if (
+                            lagging
+                            and pos.id not in stuck_before
+                            and self._first_stuck_sighting(s, o, pos, price, now, alerts)
+                        ):
+                            continue  # a delayed price: confirm on the next check before selling
                         self._rescue_stuck_stop(
-                            s, o, pos, price, day, report, when=f"now (price {price:,.2f})"
+                            s, o, pos, price, day, report, when=f"now (price {price:,.2f}{source})"
                         )
                 breached = price <= pos.stop_price if long else price >= pos.stop_price
                 if not breached or (pos.id, day.isoformat()) in already:
                     continue
                 how = (
                     "paper trading fills the stop at today's daily run, from the day's prices"
-                    if self.broker.name == "paper"
+                    if paper
                     else "the stop order at the broker should be triggering"
                 )
                 alerts.append(
-                    f"WARNING {pos.symbol} traded at {price:,.2f}, "
+                    f"WARNING {pos.symbol} traded at {price:,.2f}{source}, "
                     f"through its stop {pos.stop_price:,.2f}: {how}"
                 )
                 self.db.log(
@@ -642,6 +655,45 @@ class TradingDesk:
                     self.market.value, position=pos.id, day=day.isoformat(),
                 )  # fmt: skip
         return [*report.notes, *alerts]  # notes: stuck-stop exits placed (or failed) by the rescue
+
+    def _first_stuck_sighting(
+        self, s: Session, o: OrderRow, pos: PositionRow, price: float, now: datetime, alerts: list[str]
+    ) -> bool:
+        """On a Yahoo price, a stuck stop is only acted on when the next check confirms it."""
+        if not gapped_past_limit(
+            OrderSide(o.side), o.trigger_price, price, self.cfg.stop_loss.limit_buffer_pct
+        ):
+            return False
+        self.db.log(
+            s, "intraday_stuck", f"{pos.symbol} at {price} looks past its stop's limit", self.market.value,
+            position=pos.id, at=now.isoformat(),
+        )  # fmt: skip
+        alerts.append(
+            f"ALERT {pos.symbol} at {price:,.2f} (Yahoo price, can lag) looks past its stop's limit, so the "
+            "stop may not fill. If it still is at the next check it will be sold at market. Check the "
+            "broker app now."
+        )
+        return True
+
+    def _intraday_prices(self, symbols: list[str]) -> tuple[dict[str, float], set[str]]:
+        """Latest prices: the broker's where it can quote, Yahoo for the rest; also which came from Yahoo."""
+        from trademare.data.quotes import latest_prices
+
+        prices: dict[str, float] = {}
+        if self.broker.name != "paper":
+            try:
+                prices = dict(self.broker.get_ltp(symbols))
+            except Exception as e:
+                log.warning("%s broker quotes failed, using Yahoo: %s", self.market, e)
+        missing = [sym for sym in symbols if sym not in prices]
+        if not missing:
+            return prices, set()
+        try:
+            yahoo = latest_prices(self.market, missing)
+        except Exception as e:
+            log.warning("%s Yahoo quotes failed: %s", self.market, e)
+            yahoo = {}
+        return prices | yahoo, set(yahoo)
 
     def _open_live_position(self, s: Session, state, o: OrderRow, day: date, report: DailyReport) -> None:
         sig = s.get(SignalRow, o.signal_id)

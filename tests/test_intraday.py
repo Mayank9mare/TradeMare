@@ -72,3 +72,57 @@ def test_live_stuck_stop_exits_now_instead_of_next_open(live_desk):  # noqa: F81
     _, exit_order = broker.placed[-1]
     assert exit_order.order_type.value == "MARKET" and exit_order.side.value == "SELL"
     assert desk.intraday_check(at(day2, 10, 30)) == []  # the stop is gone and today's alert was sent
+
+
+def live_position(desk, broker):  # noqa: F811
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    day1, day2 = SESSIONS[SESSIONS.index(DAY0) + 1 : SESSIONS.index(DAY0) + 3]
+    bid, placed = broker.placed[0]
+    broker.orders[bid] = broker_base.OrderUpdate(OrderStatus.FILLED, placed.quantity, sig.entry_price)
+    desk.run_daily(day1, generate=False)
+    return sig, day2
+
+
+def test_yahoo_fills_in_when_the_broker_cannot_quote(live_desk, monkeypatch):  # noqa: F811
+    desk, broker = live_desk, live_desk.broker  # noqa: F811
+    sig, day2 = live_position(desk, broker)
+
+    def no_data_plan(symbols):
+        raise broker_base.BrokerError("live data needs a paid plan")
+
+    broker.get_ltp = no_data_plan
+    asked = []
+    monkeypatch.setattr(
+        "trademare.data.quotes.latest_prices",
+        lambda market, symbols: asked.append(symbols) or {sig.symbol: sig.stop_price * 0.995},
+    )
+    [alert] = desk.intraday_check(at(day2, 10))
+    assert asked == [[sig.symbol]] and "(Yahoo price, can lag)" in alert and "through its stop" in alert
+
+
+def test_stuck_stop_on_a_yahoo_price_needs_two_checks(live_desk, monkeypatch):  # noqa: F811
+    desk, broker = live_desk, live_desk.broker  # noqa: F811
+    sig, day2 = live_position(desk, broker)
+    broker.get_ltp = lambda symbols: {}  # the broker returns nothing for this symbol
+    monkeypatch.setattr(
+        "trademare.data.quotes.latest_prices", lambda market, symbols: {sig.symbol: sig.stop_price * 0.95}
+    )
+    first = desk.intraday_check(at(day2, 10))
+    assert any("looks past its stop's limit" in a for a in first) and "P0" not in broker.cancelled
+    second = desk.intraday_check(at(day2, 10, 15))
+    assert any("market exit placed now" in a and "Yahoo" in a for a in second) and "P0" in broker.cancelled
+    assert broker.placed[-1][1].order_type.value == "MARKET"
+
+
+def test_an_old_yahoo_sighting_does_not_count(live_desk, monkeypatch):  # noqa: F811
+    desk, broker = live_desk, live_desk.broker  # noqa: F811
+    sig, day2 = live_position(desk, broker)
+    broker.get_ltp = lambda symbols: {}
+    monkeypatch.setattr(
+        "trademare.data.quotes.latest_prices", lambda market, symbols: {sig.symbol: sig.stop_price * 0.95}
+    )
+    desk.intraday_check(at(day2, 10))
+    later = desk.intraday_check(at(day2, 13))  # 3 hours later: confirm again rather than sell
+    assert any("looks past its stop's limit" in a for a in later) and "P0" not in broker.cancelled
