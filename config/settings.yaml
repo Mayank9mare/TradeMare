@@ -16,7 +16,7 @@ markets:
   IN:
     enabled: true
     validated: false           # strategy v2 failed its out-of-sample bar: paper trading only
-    broker: paper              # zerodha | dhan | paper
+    broker: paper              # zerodha | dhan | groww | paper
     universe: nifty500
     universe_top_n: 200        # each day, only the 200 most-traded names (reduces survivorship bias)
     strategy_mode: factor      # v2 paper candidate — see docs/research/2026-10-17-strategy-v2-plan.md

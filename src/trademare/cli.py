@@ -61,6 +61,7 @@ def _credential_status(broker: str, secrets: Secrets) -> str:
     required = {
         "zerodha": ("zerodha_api_key", "zerodha_api_secret"),
         "dhan": ("dhan_client_id", "dhan_access_token"),
+        "groww": ("groww_api_key",),
         "alpaca": ("alpaca_api_key", "alpaca_secret_key"),
         "paper": (),
     }[broker]

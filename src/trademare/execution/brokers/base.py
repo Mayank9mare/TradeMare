@@ -1,6 +1,6 @@
 """Broker abstraction (strategy pattern).
 
-Each broker (Zerodha, Dhan, Alpaca, Paper) implements ``BrokerAdapter`` and
+Each broker (Zerodha, Dhan, Groww, Alpaca, Paper) implements ``BrokerAdapter`` and
 registers itself under the name used in ``settings.yaml`` (``markets.<M>.broker``).
 The trading desk only ever talks to this interface.
 
@@ -8,7 +8,7 @@ Two kinds of orders:
 - regular day orders (entries as LIMIT, exits as MARKET) via ``place_order``;
 - *protection* for an open position: a stop (and optional target) that
   survives across sessions. Indian exchange orders are day-only, so this
-  maps to a Zerodha GTT, a Dhan Forever order, or an Alpaca GTC stop/OCO.
+  maps to a Zerodha or Groww GTT, a Dhan Forever order, or an Alpaca GTC stop/OCO.
 """
 
 from __future__ import annotations

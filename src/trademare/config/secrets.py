@@ -14,6 +14,9 @@ class Secrets(BaseSettings):
     zerodha_api_secret: SecretStr | None = None
     dhan_client_id: SecretStr | None = None
     dhan_access_token: SecretStr | None = None
+    groww_api_key: SecretStr | None = None
+    groww_totp_secret: SecretStr | None = None  # TOTP key: no daily approval needed
+    groww_api_secret: SecretStr | None = None  # approval key: approve in the Groww app daily
 
     # US
     alpaca_api_key: SecretStr | None = None

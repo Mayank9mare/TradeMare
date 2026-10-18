@@ -91,7 +91,7 @@ class KillSwitchConfig(_Strict):
 
 # Brokers that can trade each market. "paper" is the built-in simulator.
 ALLOWED_BROKERS: dict[Market, set[str]] = {
-    Market.IN: {"zerodha", "dhan", "paper"},
+    Market.IN: {"zerodha", "dhan", "groww", "paper"},
     Market.US: {"alpaca", "paper"},
 }
 

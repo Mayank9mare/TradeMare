@@ -16,7 +16,7 @@ An automated swing-trading engine for **Indian (NSE/BSE)** and **US** equities. 
 - **Long and short:** each direction is enabled per market in config.
 - **Human in the loop:** you approve, reject or edit each signal on the dashboard before any order is placed.
 - **Pluggable brokers** (strategy pattern):
-  - 🇮🇳 Zerodha (Kite Connect), Dhan (DhanHQ)
+  - 🇮🇳 Zerodha (Kite Connect), Dhan (DhanHQ), Groww (Trade API)
   - 🇺🇸 Alpaca
   - Built-in paper broker for simulation
 - **Corporate events and forensic checks:** NSE/SEC filings scanned for red flags (news headlines for BSE-only filers), upcoming results dates, and Piotroski, Altman and Beneish scores on every signal.
@@ -37,7 +37,7 @@ flowchart LR
     risk --> signals["Daily signals<br/>entry · stop · qty · reasons"]
     signals --> you(["You approve<br/>dashboard or CLI"])
     you --> desk["Trading desk<br/>orders · fills · standing stops"]
-    desk --> broker["Broker<br/>Paper · Zerodha · Dhan · Alpaca"]
+    desk --> broker["Broker<br/>Paper · Zerodha · Dhan · Groww · Alpaca"]
     desk --> db[("Database<br/>positions · equity · audit log")]
     db --> ui["Dashboard + email digest"]
     ui -. review .-> you
@@ -127,9 +127,10 @@ Paper trading needs no broker. To connect a real account, set `markets.<M>.broke
 |---|---|---|---|
 | Zerodha (Kite Connect) | IN | `ZERODHA_API_KEY`, `ZERODHA_API_SECRET` | Daily: `uv run trademare broker login zerodha` (tokens expire ~6 AM IST) |
 | Dhan (DhanHQ v2) | IN | `DHAN_CLIENT_ID`, `DHAN_ACCESS_TOKEN` | Token from the Dhan web console (~30 days) |
+| Groww (Trade API) | IN | `GROWW_API_KEY` + `GROWW_TOTP_SECRET` (or `GROWW_API_SECRET`) | TOTP key renews itself; an approval key needs approving in the Groww app daily |
 | Alpaca | US | `ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `ALPACA_PAPER=true` | Keys; start with Alpaca's paper environment |
 
-- **Protective stops** are standing broker orders that survive across sessions: GTT on Zerodha, Forever orders on Dhan, and GTC stop/OCO on Alpaca. Indian exchange stop orders are day-only, which is why these are used instead.
+- **Protective stops** are standing broker orders that survive across sessions: GTT on Zerodha and Groww, Forever orders on Dhan, and GTC stop/OCO on Alpaca. Indian exchange stop orders are day-only, which is why these are used instead.
 - **Reconciliation:** `uv run trademare broker check` compares broker holdings with TradeMare's records and flags any mismatch.
 - **Safety:** a market with `validated: false` refuses all real orders. Zerodha, Dhan and Alpaca-live are only usable for a strategy that has passed its out-of-sample test. Alpaca's *paper* environment is a broker too, so it is also blocked until `validated: true`; use `broker: paper` for simulation.
 - **SEBI (India):** API orders must come from a broker-whitelisted static IP, which means a VPS rather than a home connection.
@@ -141,7 +142,7 @@ All tunable values live in `config/settings.yaml`, so you can change them withou
 ```yaml
 markets:
   IN:
-    broker: zerodha        # zerodha | dhan | paper
+    broker: zerodha        # zerodha | dhan | groww | paper
     budget: 200000         # INR
     allow_short: false
     risk_per_trade_pct: 1.0

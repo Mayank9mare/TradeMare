@@ -31,7 +31,7 @@ docker compose run --rm trademare uv run --no-sync trademare data update
 
 - **Dashboard access:** it is published only on the server's localhost. Reach it with an SSH tunnel from your laptop: `ssh -L 8000:127.0.0.1:8000 you@server`, then open http://127.0.0.1:8000. Set `DASHBOARD_PASSWORD` anyway.
 - **Zerodha daily login:** `docker compose run --rm trademare uv run --no-sync trademare broker login zerodha`. The token is saved in `data/tokens/`, which the running service shares.
-- **Broker IP whitelist:** add the server's public IP in your broker's API console (Kite developer console, or Dhan's API settings).
+- **Broker IP whitelist:** add the server's public IP in your broker's API console (Kite developer console, Dhan's API settings, or Groww Cloud).
 - **Updates:** `git pull && docker compose up -d --build`. Your data, settings and secrets live outside the image.
 - **Backups:** the server copies `data/trademare.db` to `data/backups/` every night (14 kept; `ops` in settings). Copy that folder off the server too, e.g. a nightly `rsync` to your laptop. Restore with `trademare db restore <file>` after stopping the service.
 - **Missed-run alarm:** `serve` checks hourly and alerts by Telegram/email if a daily run is overdue. If the whole container is down nothing can alert from inside it, so add a host cron entry: `0 */2 * * * cd ~/TradeMare && docker compose run --rm trademare uv run --no-sync trademare health --alert`.
