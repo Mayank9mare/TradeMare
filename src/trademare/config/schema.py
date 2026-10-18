@@ -338,6 +338,12 @@ class OpsConfig(_Strict):
     health_grace_hours: float = Field(
         3, gt=0, le=24, description="Hours after daily_run_time before a missing run counts as missed"
     )
+    intraday_check_minutes: int = Field(
+        15,
+        ge=0,
+        le=120,
+        description="Check open positions against their stops this often in market hours (0 = off)",
+    )
 
 
 class AppConfig(_Strict):

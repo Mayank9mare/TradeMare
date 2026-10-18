@@ -130,6 +130,8 @@ ops:                           # backups and the missed-run alarm
   backup_time: "23:30"         # local time of the nightly backup
   health_check: true           # alert (Telegram + email) when a daily run is overdue or backups are stale
   health_grace_hours: 3        # a run counts as missed this long after daily_run_time
+  intraday_check_minutes: 15   # in market hours: alert when a holding trades through its stop, and exit
+                               # live positions whose stop is stuck past its limit (0 = off)
 
 backtest:
   years: 5                     # default length, ending at the latest cached session

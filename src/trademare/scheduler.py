@@ -63,6 +63,28 @@ def health_job(config_path: str | None = None) -> None:
         log.exception("health check failed")
 
 
+def intraday_job(market: Market, config_path: str | None = None) -> None:
+    from trademare.data.service import DataService
+    from trademare.notify.telegram import send_text
+    from trademare.trading.desk import TradingDesk
+    from trademare.trading.pipeline import _locks
+
+    config = load_config(config_path)
+    if not _locks[market].acquire(blocking=False):
+        return  # the daily run is busy with this market
+    try:
+        secrets = Secrets()
+        desk = TradingDesk(DataService(config, secrets), database(config), market, secrets)
+        alerts = desk.intraday_check()
+        if alerts:
+            log.warning("%s intraday: %s", market, alerts)
+            send_text(config, secrets, f"{market.value} intraday stop check\n" + "\n".join(alerts))
+    except Exception:
+        log.exception("%s intraday check failed", market)
+    finally:
+        _locks[market].release()
+
+
 def build_scheduler(config: AppConfig, config_path: str | None = None) -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     for market, cfg in config.enabled_markets().items():
@@ -77,6 +99,17 @@ def build_scheduler(config: AppConfig, config_path: str | None = None) -> Backgr
             max_instances=1,
         )
     ops = config.ops
+    if ops.intraday_check_minutes:
+        for market in config.enabled_markets():
+            scheduler.add_job(
+                intraday_job,
+                CronTrigger(
+                    day_of_week="mon-fri", hour="9-16", minute=f"*/{ops.intraday_check_minutes}",
+                    timezone=MarketClock(market).tz,
+                ),  # the desk itself skips times outside the session (and holidays)
+                args=[market, config_path], id=f"intraday-{market.value}",
+                misfire_grace_time=300, coalesce=True, max_instances=1,
+            )  # fmt: skip
     if ops.backup_enabled:
         hour, minute = (int(x) for x in ops.backup_time.split(":"))
         scheduler.add_job(

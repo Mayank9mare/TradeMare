@@ -51,7 +51,7 @@ from trademare.data.universe import load_universe
 from trademare.execution.brokers import BrokerError, LoginRequired, OrderUpdate, create_broker
 from trademare.execution.fills import Bar, gapped_past_limit, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.manager import Exposure, RiskManager
-from trademare.storage.db import Database, EquityRow, OrderRow, PositionRow, SignalRow
+from trademare.storage.db import Database, EquityRow, EventRow, OrderRow, PositionRow, SignalRow
 from trademare.strategy.evidence import (
     build_evidence,
     event_warnings,
@@ -514,15 +514,7 @@ class TradingDesk:
                         f"({update.message}); re-placing it"
                     )
                 elif pos is not None and (bar := self._bar(pos.symbol, day)) is not None:
-                    buffer = self.cfg.stop_loss.limit_buffer_pct
-                    if gapped_past_limit(OrderSide(o.side), o.trigger_price, bar.close, buffer):
-                        # The price is beyond the stop's limit leg, so it cannot fill: get out at the open.
-                        try:
-                            self.broker.cancel_protection(o.broker_order_id)
-                        except BrokerError as e:
-                            report.notes.append(f"WARNING {o.symbol}: could not cancel stuck stop: {e}")
-                        o.status = OrderStatus.CANCELLED.value
-                        self._market_exit(s, pos, day, "stop (gapped past limit)", report)
+                    self._rescue_stuck_stop(s, o, pos, bar.close, day, report)
 
         # Every open live position must have a standing stop (or an exit on its way).
         for pos in self.db.open_positions(s, self.market.value):
@@ -564,6 +556,91 @@ class TradingDesk:
                 )
             )
             report.notes.append(f"{pos.symbol}: protective stop re-placed at {pos.stop_price:,.2f}")
+
+    def _rescue_stuck_stop(
+        self, s: Session, o: OrderRow, pos: PositionRow, price: float, day: date, report: DailyReport,
+        when: str = "for the next open",
+    ) -> bool:  # fmt: skip
+        """If ``price`` is beyond the stop's limit leg the resting order cannot fill: exit at market."""
+        if not gapped_past_limit(
+            OrderSide(o.side), o.trigger_price, price, self.cfg.stop_loss.limit_buffer_pct
+        ):
+            return False
+        try:
+            self.broker.cancel_protection(o.broker_order_id)
+        except BrokerError as e:
+            report.notes.append(f"WARNING {o.symbol}: could not cancel stuck stop: {e}")
+        o.status = OrderStatus.CANCELLED.value
+        self._market_exit(s, pos, day, "stop (gapped past limit)", report, when)
+        return True
+
+    def intraday_check(self, now: datetime | None = None) -> list[str]:
+        """During market hours, act on stops that the daily run would only see after the close.
+
+        - Live broker: a stop whose price has run past its limit leg cannot fill, so it is cancelled
+          and the position exited at market now, instead of at tomorrow's open.
+        - Any broker: one alert per position per day when the price trades through its stop. In paper
+          trading the stop itself is still filled by the daily run from the day's bar, exactly as the
+          backtest does, so paper results stay comparable.
+        Trailing stops still move once a day, after the close, as in the backtest.
+        Returns the alert lines (empty outside market hours or when nothing happened).
+        """
+        now = now or datetime.now(UTC)
+        if not self.clock.is_open(now):
+            return []
+        day = pd.Timestamp(now).tz_convert(self.clock.tz).date()
+        report = DailyReport(self.market, day)
+        alerts: list[str] = []
+        with self.db.session() as s:
+            positions = [p for p in self.db.open_positions(s, self.market.value) if p.stop_price is not None]
+            if not positions:
+                return []
+            symbols = sorted({p.symbol for p in positions})
+            try:
+                if self.broker.name == "paper":
+                    from trademare.data.quotes import latest_prices
+
+                    prices = latest_prices(self.market, symbols)
+                else:
+                    prices = self.broker.get_ltp(symbols)
+            except Exception as e:
+                log.warning("%s intraday quotes failed: %s", self.market, e)
+                return []
+            already = {
+                (e.data.get("position"), e.data.get("day"))
+                for e in s.scalars(
+                    select(EventRow).where(
+                        EventRow.kind == "intraday_stop", EventRow.market == self.market.value
+                    )
+                )
+            }
+            for pos in positions:
+                price = prices.get(pos.symbol)
+                if price is None:
+                    continue
+                long = pos.direction == Direction.LONG.value
+                if self.broker.name != "paper":
+                    for o in self._orders(s, position_id=pos.id, purpose="stop", status=OPEN):
+                        self._rescue_stuck_stop(
+                            s, o, pos, price, day, report, when=f"now (price {price:,.2f})"
+                        )
+                breached = price <= pos.stop_price if long else price >= pos.stop_price
+                if not breached or (pos.id, day.isoformat()) in already:
+                    continue
+                how = (
+                    "paper trading fills the stop at today's daily run, from the day's prices"
+                    if self.broker.name == "paper"
+                    else "the stop order at the broker should be triggering"
+                )
+                alerts.append(
+                    f"WARNING {pos.symbol} traded at {price:,.2f}, "
+                    f"through its stop {pos.stop_price:,.2f}: {how}"
+                )
+                self.db.log(
+                    s, "intraday_stop", f"{pos.symbol} at {price} through stop {pos.stop_price}",
+                    self.market.value, position=pos.id, day=day.isoformat(),
+                )  # fmt: skip
+        return [*report.notes, *alerts]  # notes: stuck-stop exits placed (or failed) by the rescue
 
     def _open_live_position(self, s: Session, state, o: OrderRow, day: date, report: DailyReport) -> None:
         sig = s.get(SignalRow, o.signal_id)
@@ -623,8 +700,11 @@ class TradingDesk:
             s, "fill", f"live entry {o.symbol} x{o.quantity} @ {price}", self.market.value, order=o.id
         )
 
-    def _market_exit(self, s: Session, pos: PositionRow, day: date, reason: str, report: DailyReport) -> None:
-        """Pre-approved protective exit: market order at the next session's open."""
+    def _market_exit(
+        self, s: Session, pos: PositionRow, day: date, reason: str, report: DailyReport,
+        when: str = "for the next open",
+    ) -> None:  # fmt: skip
+        """Pre-approved protective exit: a market order (filled at the next open, or now in market hours)."""
         side = _side(pos.direction, False)
         model = Order(
             market=self.market,
@@ -658,7 +738,7 @@ class TradingDesk:
                 valid_until=self.clock.next_session(day),
             )
         )
-        report.notes.append(f"ALERT {pos.symbol}: {reason} — market exit placed for the next open")
+        report.notes.append(f"ALERT {pos.symbol}: {reason} — market exit placed {when}")
         self.db.log(
             s, "stop_gap", f"{pos.symbol}: {reason}; market exit placed", self.market.value, position=pos.id
         )
