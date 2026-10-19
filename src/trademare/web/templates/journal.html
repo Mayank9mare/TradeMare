@@ -2,7 +2,8 @@
 {% block title %}Trade journal · TradeMare{% endblock %}
 {% block content %}
 {% set open_ = entries | selectattr("stage", "equalto", "open") | list %}
-{% set waiting = entries | selectattr("stage", "in", ["awaiting fill", "not filled"]) | list %}
+{% set waiting = entries | selectattr("stage", "equalto", "awaiting fill") | list %}
+{% set unfilled = entries | selectattr("stage", "equalto", "not filled") | list %}
 {% set closed = entries | selectattr("stage", "equalto", "closed") | list %}
 {% set passed = entries | selectattr("hypothetical") | list %}
 <h1>Trade journal</h1>
@@ -42,7 +43,7 @@
 {% if waiting %}
 <h2>Approved, waiting to fill{{ tip("awaiting_fill", "waiting to fill") }} <small class="muted">{{ waiting | length }}</small></h2>
 <div class="table-wrap"><table class="data">
-  <thead><tr><th>Stock</th><th>Approved</th><th class="num">Qty</th><th class="num">Limit{{ tip("entry_limit", "the limit price") }}</th><th class="num">Order value</th><th class="num">Price now</th><th>Status</th></tr></thead>
+  <thead><tr><th>Stock</th><th>Approved</th><th class="num">Qty</th><th class="num">Limit{{ tip("entry_limit", "the limit price") }}</th><th class="num">Order value</th><th class="num">Price now</th><th>What happens next</th></tr></thead>
   <tbody>{% for e in waiting %}{% set s = e.signal %}{% set m = s.market %}
     <tr>
       <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span></td>
@@ -50,10 +51,18 @@
       <td class="num">{{ e.quantity }}</td>
       <td class="num">{{ s.entry_price | money(m, False) }}</td>
       <td class="num">{{ (s.entry_price * e.quantity) | money(m, False) if e.quantity else "—" }}</td>
-      <td class="num">{{ e.last_price | money(m, False) if e.last_price else "—" }}{% if e.last_price %}<div class="sub">{{ (e.last_price / s.entry_price - 1) | pct(1, True) }} vs limit</div>{% endif %}</td>
-      <td><span class="stage {{ e.stage | replace(' ', '-') }}">{{ e.stage }}</span>{% if e.stage == "awaiting fill" %}<div class="sub">fills at the next open if the price is at or below the limit</div>{% endif %}</td>
+      <td class="num">{{ e.last_price | money(m, False) if e.last_price else "—" }}{% if e.last_price %}<div class="sub">{{ (e.last_price / s.entry_price - 1) | pct(1, True) }} vs limit · {{ e.price_date }}</div>{% endif %}</td>
+      <td class="outcome">{{ e.outcome }}</td>
     </tr>
   {% endfor %}</tbody></table></div>
+{% endif %}
+
+{% if unfilled %}
+<h2>Approved, but did not fill <small class="muted">{{ unfilled | length }}</small></h2>
+<p class="muted">The order ended without buying anything; no money was spent.</p>
+<ul class="event-alerts">{% for e in unfilled %}{% set s = e.signal %}
+  <li class="note"><a href="/m/{{ s.market }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ s.market }}</span> {{ e.outcome }}</li>
+{% endfor %}</ul>
 {% endif %}
 
 {# ------------------------------------------------------------------ closed #}

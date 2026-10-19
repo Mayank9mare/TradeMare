@@ -159,7 +159,7 @@ def create_app(
                 "config": config,
                 "pending": pending,
                 "first_expiry": first_expiry,
-                "working": working_entries(db),
+                "working": working_entries(db, service.store),
             },
         )
 

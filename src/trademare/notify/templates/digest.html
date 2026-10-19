@@ -11,6 +11,8 @@
   {% if r.regime %}· regime {{ r.regime.replace("_", "-") }}{% endif %}</p>
 {% if r.fills %}<p style="margin:8px 0 2px"><b>Fills</b></p><ul style="margin:0">
   {% for f in r.fills %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
+{% if r.orders_ended %}<p style="margin:8px 0 2px"><b>Orders that did not fill</b></p><ul style="margin:0">
+  {% for e in r.orders_ended %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
 {% if r.signals %}
 <p style="margin:12px 0 4px"><b>New signals — approve before the next session</b></p>
 <table style="border-collapse:collapse;width:100%;font-size:14px">

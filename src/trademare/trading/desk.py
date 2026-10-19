@@ -61,6 +61,7 @@ from trademare.strategy.evidence import (
     risk_evidence,
 )
 from trademare.strategy.scanner import ScanContext, ScanResult, is_rebalance_day, save_scan
+from trademare.trading.outcomes import describe as describe_order
 
 log = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ class DailyReport:
     regime: str | None = None
     rebalance_day: bool = True
     notes: list[str] = field(default_factory=list)
+    orders_ended: list[str] = field(default_factory=list)  # approved orders that ended unfilled, and why
 
 
 def _side(direction: str, opening: bool) -> OrderSide:
@@ -471,7 +473,10 @@ class TradingDesk:
             if o.valid_until is not None and o.valid_until <= day:
                 o.status = "EXPIRED"
                 self.broker.cancel_order(o.broker_order_id or "")
-                report.notes.append(f"{o.symbol}: {o.purpose} order expired unfilled")
+                if o.purpose in ("entry", "exit"):
+                    report.orders_ended.append(describe_order(o, self.service.store)[1])
+                else:
+                    report.notes.append(f"{o.symbol}: {o.purpose} order expired unfilled")
 
     # ------------------------------------------------------------------ live reconciliation
     def _sync_live(self, s: Session, day: date, report: DailyReport) -> None:
@@ -495,12 +500,11 @@ class TradingDesk:
                         self._close(s, state, pos, update.average_price, day, o.costs, reason, report)
                 elif update.is_dead:
                     o.status = update.status.value
-                    report.notes.append(
-                        f"{o.symbol}: {o.purpose} order {update.status.value} ({update.message})"
-                    )
+                    said = f" Broker said: {update.message}" if update.message else ""
+                    report.orders_ended.append(describe_order(o)[1] + said)
                 elif expired:
                     o.status = "EXPIRED"
-                    report.notes.append(f"{o.symbol}: {o.purpose} order expired unfilled")
+                    report.orders_ended.append(describe_order(o)[1])
             elif o.purpose == "stop":
                 update = self.broker.protection_status(o.broker_order_id)
                 pos = s.get(PositionRow, o.position_id)
@@ -1266,6 +1270,8 @@ class TradingDesk:
             report.open_positions = len(self.db.open_positions(s, self.market.value))
             if report.equity is None:
                 report.equity, report.cash, _ = self.equity(s)
+            for text in report.orders_ended:
+                self.db.log(s, "order_ended", text, self.market.value)
             self.db.log(
                 s,
                 "daily",

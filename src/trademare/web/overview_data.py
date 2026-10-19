@@ -130,15 +130,28 @@ def pending_signals(db: Database) -> list[SignalRow]:
     return [r for r in rows if r.expires_at is None or r.expires_at.replace(tzinfo=UTC) > now]
 
 
-def working_entries(db: Database) -> list[OrderRow]:
-    """Approved buy/sell orders not filled yet (protective stops are excluded)."""
+def working_entries(db: Database, store=None, days: int = 5) -> list[dict]:
+    """Approved buy/sell orders still waiting, plus those that ended in the last ``days`` days
+    (filled, or not), each with one sentence saying what happened. Protective stops are excluded."""
+    from datetime import UTC, datetime, timedelta
+
+    from trademare.trading.outcomes import describe
+
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
     with db.session() as s:
         rows = list(
             s.scalars(
                 select(OrderRow)
-                .where(OrderRow.status == "OPEN", OrderRow.purpose.in_(("entry", "exit")))
-                .order_by(OrderRow.placed_on)
+                .where(
+                    OrderRow.purpose.in_(("entry", "exit")),
+                    (OrderRow.status == "OPEN") | (OrderRow.updated_at >= since),
+                )
+                .order_by(OrderRow.status != "OPEN", OrderRow.updated_at.desc())
             )
         )
         s.expunge_all()
-    return rows
+    out = []
+    for o in rows:
+        status, text = describe(o, store)
+        out.append({"order": o, "status": status, "text": text})
+    return out

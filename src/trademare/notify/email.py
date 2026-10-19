@@ -47,7 +47,8 @@ def send_digest(
     """Send (or save) the digest; returns where it went."""
     email = config.notifications.email
     if not reports or (
-        email.send_empty_digest is False and not any(r.signals or r.fills or r.kill_switch for r in reports)
+        email.send_empty_digest is False
+        and not any(r.signals or r.fills or r.orders_ended or r.kill_switch for r in reports)
     ):
         return "skipped (nothing to report)"
     subject, html = render_digest(reports, base_url)

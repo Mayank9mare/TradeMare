@@ -133,7 +133,9 @@ def test_unfilled_entry_expires(desk):
         close=sig.entry_price * 1.05,
     )  # gaps up and never returns
     report = desk.run_daily(day1, generate=False)
-    assert any("expired" in n for n in report.notes)
+    [ended] = report.orders_ended
+    assert f"expired on {day1:%a %d %b} without filling: the lowest price" in ended
+    assert "stayed above your limit" in ended
     with desk.db.session() as s:
         assert s.query(PositionRow).count() == 0
 

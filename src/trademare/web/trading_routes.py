@@ -24,7 +24,7 @@ from trademare.strategy.evidence import FUND_METRICS, TECH_METRICS
 from trademare.trading.desk import DeskError, TradingDesk
 from trademare.trading.journal import build_journal
 from trademare.trading.tracking import MIN_SESSIONS, Tracking, compare_with_backtest
-from trademare.web.overview_data import sparkline
+from trademare.web.overview_data import sparkline, working_entries
 
 
 def register_trading_routes(
@@ -243,6 +243,11 @@ def register_trading_routes(
                 "gross": gross,
                 "positions": positions,
                 "orders": orders,
+                "ended": [
+                    w
+                    for w in working_entries(db, service.store, days=14)
+                    if w["order"].market == market.value and w["status"] != "waiting"
+                ],
                 "closed": closed,
                 "events": events,
                 "realized": realized,

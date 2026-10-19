@@ -34,14 +34,13 @@
 
 {% if working %}
 <section class="card working">
-  <div class="card-head"><h2>Approved, waiting to fill{{ tip("awaiting_fill", "waiting to fill") }}</h2><a class="sub" href="/journal">Trade journal →</a></div>
+  <div class="card-head"><h2>Your orders{{ tip("awaiting_fill", "waiting to fill") }}</h2><a class="sub" href="/journal">Trade journal →</a></div>
   <ul class="working-list">
-  {% for o in working %}
+  {% for w in working %}{% set o = w.order %}
     <li>
-      <span class="action-word {{ 'buy' if o.side == 'BUY' else 'sell' }}">{{ "Buy" if o.side == "BUY" else "Sell" }}</span>
-      <b>{{ o.quantity }}</b> <a href="/m/{{ o.market }}/{{ o.symbol | urlencode }}"><b>{{ o.symbol }}</b></a>
-      <span class="muted">{% if o.limit_price %}at {{ o.limit_price | money(o.market, False) }} or less{% else %}at market{% endif %}</span>
-      <span class="sub">fills at the open on {{ o.valid_until.strftime("%a %d %b") if o.valid_until else "the next session" }}{% if o.limit_price %} if the price allows{% endif %}</span>
+      <span class="stage {{ w.status | replace(' ', '-') }}">{{ w.status }}</span>
+      <a href="/m/{{ o.market }}/{{ o.symbol | urlencode }}"><b>{{ o.symbol }}</b></a>
+      <span>{{ w.text }}</span>
     </li>
   {% endfor %}
   </ul>

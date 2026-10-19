@@ -59,10 +59,13 @@ def format_alerts(reports: list[DailyReport], dashboard_url: str) -> str | None:
             alerts.insert(0, f"Kill switch tripped: {r.kill_reason}. New entries are blocked.")
         entries = [s for s in r.signals if s.action == "ENTRY"]
         exits = [s for s in r.signals if s.action == "EXIT"]
-        if not (alerts or heads_up or entries or exits):
+        ended = r.orders_ended
+        if not (alerts or heads_up or entries or exits or ended or r.fills):
             continue
         lines.append(f"<b>{r.market.value} · {r.session}</b>")
         lines += [f"🚨 {html.escape(a)}" for a in alerts]
+        lines += [f"✅ {html.escape(f)}" for f in r.fills]
+        lines += [f"⏹ {html.escape(e)}" for e in ended]
         lines += [f"📅 {html.escape(h)}" for h in heads_up]
         for s in entries:
             stop = f", stop {s.stop_price:,.2f}" if s.stop_price is not None else ""

@@ -16,6 +16,7 @@ from trademare.core.models import Direction, Market
 from trademare.data.store import ParquetStore
 from trademare.risk.tax import long_term_from
 from trademare.storage.db import Database, OrderRow, PositionRow, SignalRow
+from trademare.trading.outcomes import describe as describe_order
 
 
 @dataclass
@@ -40,6 +41,7 @@ class JournalEntry:
     stop: float | None = None
     costs: float | None = None  # brokerage, taxes and fees paid so far
     long_term_on: date | None = None  # open longs: first day a sale counts as a long-term gain
+    outcome: str | None = None  # approved but not (yet) filled: what happened to the order, in a sentence
 
     @property
     def market(self) -> Market:
@@ -106,6 +108,7 @@ def build_journal(
                     JournalEntry(
                         sig, stage, order.status if order else None, last_price=last, price_date=last_day,
                         quantity=order.quantity if order else sig.quantity, stop=sig.stop_price,
+                        outcome=describe_order(order, store)[1] if order else "No order was placed.",
                     )
                 )  # fmt: skip
                 continue
