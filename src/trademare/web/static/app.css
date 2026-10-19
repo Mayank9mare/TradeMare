@@ -398,3 +398,4 @@ table.data td.run-cell b { white-space: normal; font-weight: 600; line-height: 1
 .research-list { margin-bottom: 16px; }
 .research-list ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
 .research-list li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.reject-note { flex: 1 1 100%; min-width: 0; font-size: .85rem; }

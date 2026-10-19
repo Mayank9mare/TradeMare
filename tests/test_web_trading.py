@@ -79,10 +79,17 @@ def test_reject_and_portfolio(tmp_path, monkeypatch):
     client, db = make_app(tmp_path, monkeypatch)
     t = token(client.get("/signals").text)
     assert (
-        client.post("/signals/sig1/reject", data={"csrf_token": t}, follow_redirects=False).status_code == 303
+        client.post(
+            "/signals/sig1/reject",
+            data={"csrf_token": t, "note": "results next week"},
+            follow_redirects=False,
+        ).status_code
+        == 303
     )
     with db.session() as s:
         assert s.get(SignalRow, "sig1").status == "REJECTED"
+        assert s.get(SignalRow, "sig1").note == "results next week"
+    assert "“results next week”" in client.get("/journal").text
     page = client.get("/portfolio/IN")
     assert page.status_code == 200 and "paper account" in page.text and "armed" in page.text
     assert client.get("/api/portfolio/IN/equity").json() == {"equity": []}

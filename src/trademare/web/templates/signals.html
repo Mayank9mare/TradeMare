@@ -77,6 +77,7 @@
       {% endif %}
       <button type="submit" class="primary">Approve</button>
       <button type="submit" formaction="/signals/{{ s.id }}/reject">Reject</button>
+      <input type="text" name="note" maxlength="200" class="reject-note" placeholder="If rejecting: why? (optional, shown in your journal)">
     </form>
     {% endif %}
   </article>

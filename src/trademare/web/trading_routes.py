@@ -180,7 +180,7 @@ def register_trading_routes(
         )
 
     @app.post("/signals/{signal_id}/reject")
-    def reject(signal_id: str, csrf_token: str = Form(...)):
+    def reject(signal_id: str, csrf_token: str = Form(...), note: str = Form("")):
         check_csrf(csrf_token)
         with db.session() as s:
             sig = s.get(SignalRow, signal_id)
@@ -188,7 +188,7 @@ def register_trading_routes(
                 raise HTTPException(404, "no such signal")
             market, symbol = Market(sig.market), sig.symbol
         try:
-            desk(market).reject(signal_id)
+            desk(market).reject(signal_id, note=note.strip()[:200] or None)
         except DeskError as e:
             return back("/signals", err=str(e))
         return back("/signals", msg=f"Rejected {symbol}")

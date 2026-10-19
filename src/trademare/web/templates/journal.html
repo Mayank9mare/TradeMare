@@ -99,7 +99,7 @@
     <tr class="muted">
       <td><a href="/m/{{ m }}/{{ s.symbol | urlencode }}"><b>{{ s.symbol }}</b></a> <span class="pill">{{ m }}</span></td>
       <td>{{ s.scan_date }}</td>
-      <td>{{ e.stage }}</td>
+      <td>{{ e.stage }}{% if s.note %}<div class="sub">“{{ s.note }}”</div>{% endif %}</td>
       <td class="num">{{ s.entry_price | money(m, False) }}</td>
       <td class="num">{{ e.last_price | money(m, False) if e.last_price else "—" }}</td>
       <td class="num {{ e.return_pct | tone }}">{{ e.return_pct | pct(1, True) if e.return_pct is not none else "—" }}</td>
