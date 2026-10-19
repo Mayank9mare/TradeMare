@@ -25,9 +25,35 @@ class MarketStatus:
     is_open: bool
     next_run: datetime | None  # local market time of the next daily job
     tz_label: str
+    prices_through: date | None = None  # last session with prices in the cache
+    behind: int = 0  # completed sessions (past the daily run time) still missing prices
 
 
-def market_status(market: Market, cfg: MarketConfig, now: datetime | None = None) -> MarketStatus:
+def price_freshness(
+    market: Market, cfg: MarketConfig, store, now: datetime | None = None
+) -> tuple[date | None, int]:
+    """(last session with index prices, sessions missing since). A session counts as missing only
+    once its daily run time has passed, since prices are fetched then."""
+    if not cfg.benchmark:
+        return None, 0
+    bars = store.read_bars(market, cfg.benchmark)
+    if bars is None or bars.empty:
+        return None, 0
+    through = bars.index.max().date()
+    clock = MarketClock(market)
+    local = (now or datetime.now(UTC)).astimezone(ZoneInfo(clock.tz))
+    hour, minute = (int(x) for x in cfg.daily_run_time.split(":"))
+    try:
+        due = [
+            d for d in clock.sessions_between(through, local.date())
+            if d < local.date() or local.time() >= time(hour, minute)
+        ]  # fmt: skip
+    except ValueError:
+        return through, 0
+    return through, len(due)
+
+
+def market_status(market: Market, cfg: MarketConfig, now: datetime | None = None, store=None) -> MarketStatus:
     clock = MarketClock(market)
     now = now or datetime.now(UTC)
     tz = ZoneInfo(clock.tz)
@@ -42,7 +68,8 @@ def market_status(market: Market, cfg: MarketConfig, now: datetime | None = None
         next_run = datetime.combine(day, run_at, tz)
     except ValueError:  # beyond the calendar's range
         is_open, next_run = False, None
-    return MarketStatus(market, EXCHANGE[market], is_open, next_run, TZ_LABEL[market])
+    through, behind = price_freshness(market, cfg, store, now) if store is not None else (None, 0)
+    return MarketStatus(market, EXCHANGE[market], is_open, next_run, TZ_LABEL[market], through, behind)
 
 
 @dataclass(frozen=True)

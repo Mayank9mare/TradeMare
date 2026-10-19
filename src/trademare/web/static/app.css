@@ -81,6 +81,7 @@ code { font-family: var(--mono); font-size: .88em; background: var(--surface-2);
 .statusbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 32px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); font-size: .82rem; }
 .status-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; color: var(--muted); }
 .status-chip b { color: var(--text); font-weight: 600; }
+.status-chip.stale { color: color-mix(in srgb, var(--warning) 75%, var(--text)); border-color: color-mix(in srgb, var(--warning) 50%, transparent); background: color-mix(in srgb, var(--warning) 10%, var(--surface)); }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
 .dot.open { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
 main { width: 100%; max-width: 1320px; margin: 0 auto; padding: 28px 32px 48px; }

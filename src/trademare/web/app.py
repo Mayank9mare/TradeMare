@@ -105,7 +105,9 @@ def create_app(
     def chrome() -> dict:
         """Context every page needs: market status bar and the pending-signal badge."""
         return {
-            "statuses": [market_status(m, c) for m, c in config.markets.items() if c.enabled],
+            "statuses": [
+                market_status(m, c, store=service.store) for m, c in config.markets.items() if c.enabled
+            ],
             "pending_total": len(pending_signals(db)),
         }
 

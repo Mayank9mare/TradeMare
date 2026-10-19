@@ -48,3 +48,21 @@ def test_expired_says_why_from_that_sessions_prices():
     _, text = describe(order(status="EXPIRED"), Store({}))
     assert text.endswith("without filling: no prices for that session.")
     assert Market(order().market) is Market.IN
+
+
+def test_price_freshness_counts_only_sessions_past_their_run_time():
+    from datetime import UTC, datetime
+
+    from tests.conftest import REPO_CONFIG
+    from trademare.config import load_config
+    from trademare.web.overview_data import price_freshness
+
+    cfg = load_config(REPO_CONFIG).markets[Market.IN]  # benchmark ^NSEI, daily run 17:00 IST
+    bars = pd.DataFrame({"close": [1.0]}, index=pd.DatetimeIndex([pd.Timestamp("2026-10-16")]))
+    store = Store({"^NSEI": bars})
+    # Mon 19 Oct, 16:00 IST: the day's run has not happened yet, so nothing is missing
+    assert price_freshness(Market.IN, cfg, store, datetime(2026, 10, 19, 10, 30, tzinfo=UTC)) == (
+        date(2026, 10, 16), 0,
+    )  # fmt: skip
+    # Tue 20 Oct, 00:30 IST: Monday's session finished and its prices are still missing
+    assert price_freshness(Market.IN, cfg, store, datetime(2026, 10, 19, 19, 0, tzinfo=UTC))[1] == 1

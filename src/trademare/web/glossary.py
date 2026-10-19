@@ -214,6 +214,9 @@ GLOSSARY: dict[str, str] = {
     "Small (a few %) means the backtest models reality well.",
     "unexplained": "Trades made on only one side with no decision of yours to explain them. These "
     "point at a problem worth investigating before using real money.",
+    "prices_as_of": "The last trading day whose closing prices TradeMare has. Prices are fetched at each "
+    "daily run; if a finished session is still missing (the data provider was late), the chip turns "
+    "amber and that day's fills and stops wait until the prices arrive.",
     # ---------------------------------------------------------------- IPOs
     "ipo": "Initial public offering: a company selling shares to the public for the first time. You bid "
     "during a few days; shares are allotted (often by lottery) and start trading on the listing day.",
