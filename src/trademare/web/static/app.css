@@ -394,3 +394,7 @@ table.data td.run-cell b { white-space: normal; font-weight: 600; line-height: 1
 .field.untested .tested-note { color: color-mix(in srgb, var(--warning) 75%, var(--text)); }
 .field.untested input, .field.untested select { border-color: var(--warning); }
 .flash.warn { border-color: color-mix(in srgb, var(--warning) 50%, transparent); background: color-mix(in srgb, var(--warning) 12%, var(--surface)); }
+
+.research-list { margin-bottom: 16px; }
+.research-list ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+.research-list li { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }

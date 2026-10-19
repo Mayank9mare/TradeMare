@@ -98,6 +98,46 @@ def list_backtests(config: AppConfig) -> list[dict]:
     return sorted(runs, key=lambda r: r["created_at"], reverse=True)
 
 
+_RULE_KEYS_MARKET = (
+    "universe", "universe_top_n", "strategy_mode", "factors", "min_avg_traded_value", "allow_long",
+    "allow_short", "risk_per_trade_pct", "max_position_pct", "max_open_positions", "max_sector_pct",
+    "stop_loss", "take_profit", "time_stop_days",
+)  # fmt: skip
+_RULE_KEYS_STRATEGY = (
+    "factor_rebalance", "factor_entry_pct", "factor_exit_pct", "risk_off_exposure", "vol_target",
+    "exclude_high_vol_pct", "min_composite_score", "weights", "regime_penalty",
+)  # fmt: skip
+
+
+# The pre-registered studies and what they concluded (each doc holds the plan and its results).
+RESEARCH: tuple[dict[str, str], ...] = (
+    {"title": "India factor strategy v3 (momentum + earnings yield, volatility controls)",
+     "verdict": "pass", "doc": "2026-10-18-strategy-v3-plan.md",
+     "note": "Passed holdout and walk-forward; the India paper strategy uses these settings."},
+    {"title": "US factor strategy (India v3 recipe on the S&P 500)", "verdict": "fail",
+     "doc": "2026-10-19-us-factor-plan.md", "note": "Failed walk-forward; the US stays signals-only."},
+    {"title": "India IPOs: institutional demand vs listing gains", "verdict": "pass",
+     "doc": "2026-10-19-ipo-demand-plan.md", "note": "Strong link in both halves; used for IPO labels."},
+    {"title": "Strategy v2 (factor ranks)", "verdict": "fail", "doc": "2026-10-17-strategy-v2-plan.md",
+     "note": "Drawdown too deep out of sample; led to v3."},
+    {"title": "Strategy v1 (multi-analyst swing)", "verdict": "fail",
+     "doc": "2026-10-17-strategy-v1-baseline.md", "note": "No reliable edge."},
+)  # fmt: skip
+
+
+def matches_current(run: dict, config: AppConfig) -> bool:
+    """True when the run used the trading rules the market is configured with now (budget aside)."""
+    snap = run.get("settings") or {}
+    market = config.markets.get(run.get("market"))
+    if market is None or "market" not in snap:
+        return False
+    now_m = market.model_dump(mode="json")
+    now_s = config.strategy.model_dump(mode="json")
+    return all(snap["market"].get(k) == now_m.get(k) for k in _RULE_KEYS_MARKET) and all(
+        snap.get("strategy", {}).get(k) == now_s.get(k) for k in _RULE_KEYS_STRATEGY
+    )
+
+
 def load_backtest(config: AppConfig, run_id: str) -> tuple[dict, pd.DataFrame, pd.DataFrame] | None:
     folder = backtests_dir(config) / run_id
     if not (folder / "summary.json").exists() or "/" in run_id or ".." in run_id:

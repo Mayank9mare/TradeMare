@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from trademare import __version__
 from trademare.analysis.ratios import key_ratios
-from trademare.backtest.report import list_backtests, load_backtest
+from trademare.backtest.report import RESEARCH, list_backtests, load_backtest, matches_current
 from trademare.config import Secrets, load_config
 from trademare.config.schema import AppConfig
 from trademare.core.models import Market
@@ -345,7 +345,10 @@ def create_app(
 
     @app.get("/backtests", response_class=HTMLResponse)
     def backtests_page(request: Request):
-        return templates.TemplateResponse(request, "backtests.html", {"runs": list_backtests(config)})
+        runs = list_backtests(config)
+        for r in runs:
+            r["current"] = matches_current(r, config)
+        return templates.TemplateResponse(request, "backtests.html", {"runs": runs, "research": RESEARCH})
 
     @app.get("/backtests/{run_id}", response_class=HTMLResponse)
     def backtest_page(request: Request, run_id: str):

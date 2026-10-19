@@ -2,7 +2,15 @@
 {% block title %}Backtests · TradeMare{% endblock %}
 {% block content %}
 <h1>Backtests{{ tip("backtest", "a backtest") }}</h1>
-<p class="muted">Green ▲ means better than simply holding the index over the same dates; red ▼ means worse.</p>
+<section class="card research-list">
+  <h2 style="margin-top:0">Research verdicts{{ tip("oos", "honest tests") }}</h2>
+  <p class="sub">Each study fixed its pass bar before running, then tested on history it was never tuned on.</p>
+  <ul>{% for r in research %}
+    <li><span class="pill {{ 'good' if r.verdict == 'pass' else 'bad' }}">{{ r.verdict }}</span>
+      <a href="https://github.com/Mayank9mare/TradeMare/blob/main/docs/research/{{ r.doc }}"><b>{{ r.title }}</b></a> <span class="sub">{{ r.note }}</span></li>
+  {% endfor %}</ul>
+</section>
+<p class="muted">Green ▲ means better than simply holding the index over the same dates; red ▼ means worse. <span class="pill info">your settings</span> marks runs that used the rules you trade now.</p>
 {% if not runs %}
 <div class="card"><p>No backtests yet. Run <code>uv run trademare backtest -m US</code>.</p></div>
 {% else %}
@@ -13,7 +21,7 @@
   <tbody>
   {% for r in runs %}{% set st = r.summary.strategy %}{% set bm = r.summary.benchmark %}{% set oos = r.summary.get("out_of_sample", {}).get("strategy", {}) %}
     <tr>
-      <td class="run-cell" data-v="{{ r.created_at }}"><a href="/backtests/{{ r.id }}"><b>{{ r.overrides | run_label }}</b></a><div class="sub">{{ r.created_at.replace("T", " ")[:16] }}</div></td>
+      <td class="run-cell" data-v="{{ r.created_at }}"><a href="/backtests/{{ r.id }}"><b>{{ r.overrides | run_label }}</b></a>{% if r.current %} <span class="pill info">your settings</span>{% endif %}<div class="sub">{{ r.created_at.replace("T", " ")[:16] }}</div></td>
       <td>{{ r.market }}</td><td>{{ r.start }} → {{ r.end }}</td>
       <td class="num {{ st.cagr | vs(bm.cagr) }}" data-v="{{ st.cagr }}">{{ st.cagr | pct(1, True) }}</td>
       <td class="num" data-v="{{ bm.cagr }}">{{ bm.cagr | pct(1, True) }}</td>

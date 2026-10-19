@@ -269,3 +269,19 @@ def test_kill_switch_can_be_disabled(config):
     ] * 3
     result = run(config, {"A": ohlc(a)}, {ohlc(a).index[0].date(): [idea("A", 100, 20, None)]})
     assert result.kill_switch_trips == [] and result.halted_sessions == 0
+
+
+def test_matches_current_compares_trading_rules_not_budget():
+    from tests.conftest import REPO_CONFIG
+    from trademare.backtest.report import matches_current
+    from trademare.config import load_config
+
+    config = load_config(REPO_CONFIG)
+    snap = {
+        "market": config.markets[Market.IN].model_dump(mode="json") | {"budget": 1},
+        "strategy": config.strategy.model_dump(mode="json"),
+    }
+    assert matches_current({"market": "IN", "settings": snap}, config)
+    snap["market"] = snap["market"] | {"max_open_positions": 20}
+    assert not matches_current({"market": "IN", "settings": snap}, config)
+    assert not matches_current({"market": "IN"}, config)
