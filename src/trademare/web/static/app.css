@@ -1,23 +1,21 @@
-/* TradeMare dashboard design system.
-   Colours: the dataviz reference palette (validated light/dark steps, status colours
-   reserved for state). Layout: sidebar + status bar; 8px spacing grid. */
+/* TradeMare dashboard design system. Status colours are reserved for state. */
 
 /* Layout: sidebar + status bar; spacing on a 4/8px grid. Two switches (sidebar foot, app.js):
-   theme  light | dark (no attribute = follow the system)      -> :root[data-theme]
+   theme  light | dim | dark (no attribute = follow the system) -> :root[data-theme]
    density comfortable | compact                                -> :root[data-density="compact"]
-   Light is the "calm ledger" look: white cards on a cool grey page, one blue accent, few borders.
+   Light is the "calm ledger" look: off-white cards on a soft warm grey page, one blue accent, few borders.
    Dark is terminal-like: dark grey (never black) surfaces that get lighter as they rise. */
 :root {
   color-scheme: light;
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --surface-2: #f1f2f5;
-  --text: #16181d;
-  --muted: #555a64;
-  --faint: #737882;
-  --border: #e6e8ec;
-  --border-strong: #d0d4db;
-  --row-hover: #f6f7f9;
+  --bg: #e6e5e0;          /* soft, not white: easier on the eyes for long sessions */
+  --surface: #f3f2ee;
+  --surface-2: #e9e8e3;
+  --text: #1c1d20;
+  --muted: #53555b;
+  --faint: #6f7177;
+  --border: #dcdbd5;
+  --border-strong: #c9c8c1;
+  --row-hover: #ecebe6;
   --accent: #2357c6;
   --accent-soft: rgba(35, 87, 198, 0.09);
   --up: #137a3a;          /* text-safe green on light */
