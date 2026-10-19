@@ -122,6 +122,17 @@ class TradingDesk:
         row = bars.loc[ts]
         return Bar(float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"]))
 
+    def _data_through(self) -> date | None:
+        """Last session with index prices (the provider publishes all stocks at about the same time).
+
+        A session whose prices are missing must not be processed: paper fills and day-order expiry
+        both read that day's bar, so an approved order would expire without ever being checked.
+        """
+        if not self.cfg.benchmark:
+            return None
+        bars = self.service.store.read_bars(self.market, self.cfg.benchmark)
+        return None if bars is None or bars.empty else bars.index.max().date()
+
     def _last_close(self, symbol: str, day: date) -> float | None:
         bars = self.service.store.read_bars(self.market, symbol)
         if bars is None:
@@ -1227,7 +1238,14 @@ class TradingDesk:
     ) -> DailyReport:
         day = asof or self.clock.last_completed_session()
         now = now or datetime.now(UTC)
+        waiting = None
+        if self.broker.simulated and (through := self._data_through()) is not None and through < day:
+            waiting, day = day, through  # paper fills need the session's prices; retry on the next run
         report = DailyReport(market=self.market, session=day)
+        if waiting:
+            report.notes.append(
+                f"prices for {waiting} are not in yet; that session is processed on the next run"
+            )
         with self.db.session() as s:
             state = self.account_state(s)
             sessions = (

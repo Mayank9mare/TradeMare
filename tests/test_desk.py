@@ -138,6 +138,28 @@ def test_unfilled_entry_expires(desk):
         assert s.query(PositionRow).count() == 0
 
 
+def test_session_without_prices_waits_instead_of_expiring_orders(desk):
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    day1 = CLOCK.next_session(DAY0)
+    full = {sym: desk.service.store.read_bars(Market.IN, sym) for sym in ("^NSEI", sig.symbol)}
+    for sym, bars in full.items():  # the provider has not published day1 yet
+        desk.service.store.write_bars(Market.IN, sym, bars.loc[: pd.Timestamp(DAY0)])
+    report = desk.run_daily(day1, generate=False)
+    assert report.processed == [] and any("not in yet" in n for n in report.notes)
+    with desk.db.session() as s:
+        assert s.query(OrderRow).filter_by(purpose="entry").one().status == OrderStatus.OPEN.value
+        assert s.get(MarketStateRow, "IN").last_processed == DAY0
+    for sym, bars in full.items():  # prices arrive; the next run processes day1
+        desk.service.store.write_bars(Market.IN, sym, bars)
+    set_bar(desk, sig.symbol, day1, open=sig.entry_price * 0.99, low=sig.entry_price * 0.98)
+    report = desk.run_daily(day1, generate=False)
+    assert report.processed == [day1]
+    with desk.db.session() as s:
+        assert s.query(PositionRow).count() == 1
+
+
 def test_catch_up_processes_missed_sessions(desk):
     desk.run_daily(DAY0)
     later = SESSIONS[SESSIONS.index(DAY0) + 4]
