@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}TradeMare{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <script>/* apply the saved theme and density before the page paints */
+    try { const t = localStorage.getItem("tm-theme"), d = localStorage.getItem("tm-density");
+      if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      if (d === "compact") document.documentElement.dataset.density = "compact"; } catch (e) {}
+  </script>
   <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
 </head>
 {% set ui = chrome() %}
@@ -29,15 +34,22 @@
     {{ nav("/", "Overview", i_home, path == "/") }}
     {{ nav("/signals", "Signals", i_bell, path.startswith("/signals"), ui.pending_total) }}
     {{ nav("/journal", "Trade journal", i_book, path == "/journal") }}
-    <div class="nav-label">Portfolio</div>
-    {% for m in markets %}{{ nav("/portfolio/" ~ m.value, "India" if m.value == "IN" else "United States", i_brief, path == "/portfolio/" ~ m.value) }}{% endfor %}
-    <div class="nav-label">Markets</div>
-    {% for m in markets %}{{ nav("/m/" ~ m.value, ("Nifty 500" if m.value == "IN" else "S&P 500"), i_chart, path.startswith("/m/" ~ m.value) and not path.endswith("/ideas")) }}{% endfor %}
-    {% for m in markets %}{{ nav("/m/" ~ m.value ~ "/ideas", "Ideas " ~ m.value, i_bulb, path == "/m/" ~ m.value ~ "/ideas") }}{% endfor %}
-    {% if "IN" in markets | map(attribute="value") | list %}{{ nav("/ipos", "IPOs", i_rocket, path.startswith("/ipos")) }}{% endif %}
+    {% for m in markets %}{% set c = m.value %}
+    <div class="nav-label market-label">{{ "India" if c == "IN" else "United States" }}</div>
+    {{ nav("/portfolio/" ~ c, "Portfolio", i_brief, path == "/portfolio/" ~ c) }}
+    {{ nav("/m/" ~ c, ("Nifty 500" if c == "IN" else "S&P 500"), i_chart, path.startswith("/m/" ~ c) and not path.endswith("/ideas")) }}
+    {{ nav("/m/" ~ c ~ "/ideas", "Ideas", i_bulb, path == "/m/" ~ c ~ "/ideas") }}
+    {% if c == "IN" %}{{ nav("/ipos", "IPOs", i_rocket, path.startswith("/ipos")) }}{% endif %}
+    {% endfor %}
     <div class="nav-label">Research</div>
     {{ nav("/backtests", "Backtests", i_flask, path.startswith("/backtests")) }}
     {{ nav("/settings", "Settings", i_gear, path.startswith("/settings")) }}
+    <div class="switches">
+      <div class="switch" role="group" aria-label="Theme"><span>Theme</span>
+        <div class="seg" data-setting="theme"><button type="button" data-value="auto">Auto</button><button type="button" data-value="light">Light</button><button type="button" data-value="dark">Dark</button></div></div>
+      <div class="switch" role="group" aria-label="Density"><span>Density</span>
+        <div class="seg" data-setting="density"><button type="button" data-value="comfortable">Comfortable</button><button type="button" data-value="compact">Compact</button></div></div>
+    </div>
     <div class="sidebar-foot">v{{ version }} · paper trading unless a market is validated · not financial advice</div>
   </aside>
   <div class="content">

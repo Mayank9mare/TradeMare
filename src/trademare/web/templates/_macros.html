@@ -9,7 +9,8 @@
 {%- endmacro %}
 
 {% macro direction_badge(direction) -%}
-<span class="badge dir {{ direction | lower }}">{{ direction }}</span>
+{# With short selling off every trade is long, so the badge would say nothing #}
+{% if shorts_on or (direction | string | upper) != "LONG" %}<span class="badge dir {{ direction | lower }}">{{ direction }}</span>{% endif %}
 {%- endmacro %}
 
 {% macro spark(line, label) -%}

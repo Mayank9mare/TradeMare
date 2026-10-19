@@ -22,7 +22,7 @@
   <div class="analysis-head">
     <div><span class="muted">Composite{{ tip("score") }}</span> {{ score_bar(score.composite) }} <span class="muted small">confidence {{ "%.0f" | format(score.confidence * 100) }}%{{ tip("confidence") }}</span>
       {% if not score.liquid %}<span class="badge off">below liquidity threshold</span>{% endif %}</div>
-    {% if idea %}<div>{{ direction_badge(idea.direction.value) }} idea: entry {{ idea.levels.entry | money(market, False) }} · stop {{ idea.levels.stop | money(market, False) }} · target {{ idea.levels.target | money(market, False) }}</div>{% endif %}
+    {% if idea %}<div>{{ direction_badge(idea.direction.value) }} Trade idea: entry {{ idea.levels.entry | money(market, False) }} · stop {{ idea.levels.stop | money(market, False) }} · target {{ idea.levels.target | money(market, False) }}</div>{% endif %}
   </div>
   <div class="grid two">
   {% for name, a in score.analysts.items() %}

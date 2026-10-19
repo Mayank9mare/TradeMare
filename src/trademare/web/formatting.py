@@ -29,14 +29,28 @@ def money(value: float | None, market: Market | str, compact: bool = True) -> st
     v = abs(value)
     if market is Market.IN:
         if compact and v >= 1e7:
-            return f"{sign}₹{v / 1e7:,.0f} Cr" if v >= 1e9 else f"{sign}₹{v / 1e7:,.1f} Cr"
+            return f"{sign}₹{indian(v / 1e7, 0 if v >= 1e9 else 1)} Cr"
         if compact and v >= 1e5:
             return f"{sign}₹{v / 1e5:,.1f} L"
-        return f"{sign}₹{v:,.2f}"
+        return f"{sign}₹{indian(v, 0 if v >= 1e4 else 2)}"  # no paise on large amounts
     for size, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M")):
         if compact and v >= size:
             return f"{sign}${v / size:,.1f}{suffix}"
     return f"{sign}${v:,.2f}"
+
+
+def indian(value: float, decimals: int = 2) -> str:
+    """Indian digit grouping: 12345678.9 -> "1,23,45,678.90" (lakh and crore)."""
+    text = f"{abs(value):.{decimals}f}"
+    whole, _, frac = text.partition(".")
+    if len(whole) > 3:
+        head, tail = whole[:-3], whole[-3:]
+        groups = []
+        while len(head) > 2:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        whole = ",".join([head, *groups, tail]) if head else ",".join([*groups, tail])
+    return ("-" if value < 0 else "") + whole + (f".{frac}" if frac else "")
 
 
 def pct(value: float | None, digits: int = 1, signed: bool = False) -> str:

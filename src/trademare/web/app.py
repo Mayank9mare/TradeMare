@@ -104,6 +104,7 @@ def create_app(
         tested=TESTED,
         drifted=drifted,
         untested=untested,
+        shorts_on=any(c.allow_short for c in config.markets.values()),
     )
 
     register_trading_routes(app, templates, config, service, db, secrets)

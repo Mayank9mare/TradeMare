@@ -89,9 +89,9 @@
 <div class="table-wrap"><table class="data">
   <thead><tr><th>Created</th><th>Market</th><th>Action</th><th>Symbol</th><th class="num">Qty</th><th class="num">Price</th><th>Status</th><th>Decided</th></tr></thead>
   <tbody>{% for s in recent %}
-    <tr><td>{{ s.created_at.strftime("%Y-%m-%d %H:%M") }}</td><td>{{ s.market }}</td><td>{{ s.action }} {{ s.direction }}</td>
+    <tr><td>{{ s.created_at.strftime("%Y-%m-%d %H:%M") }}</td><td>{{ s.market }}</td><td>{{ ("Buy" if s.direction == "LONG" else "Short") if s.action == "ENTRY" else ("Sell" if s.direction == "LONG" else "Cover") }}</td>
       <td><a href="/m/{{ s.market }}/{{ s.symbol | urlencode }}">{{ s.symbol }}</a></td><td class="num">{{ s.quantity }}</td>
-      <td class="num">{{ s.entry_price | num(2) }}</td><td>{{ s.status }}</td><td class="sub">{{ s.decided_at.strftime("%Y-%m-%d %H:%M") if s.decided_at else "—" }}</td></tr>
+      <td class="num">{{ s.entry_price | num(2) }}</td><td><span class="stage {{ s.status | lower }}">{{ {"APPROVED": "approved", "REJECTED": "rejected", "EXPIRED": "expired", "PENDING": "waiting"}.get(s.status, s.status | lower) }}</span></td><td class="sub">{{ s.decided_at.strftime("%Y-%m-%d %H:%M") if s.decided_at else "—" }}</td></tr>
   {% endfor %}</tbody>
 </table></div>
 {% endif %}

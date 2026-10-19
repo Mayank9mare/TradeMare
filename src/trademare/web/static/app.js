@@ -152,3 +152,32 @@
   }
   window.addEventListener("resize", () => document.querySelectorAll(".table-wrap").forEach(update));
 })();
+
+// Theme (auto / light / dark) and density (comfortable / compact), remembered in this browser.
+(() => {
+  const root = document.documentElement;
+  const read = (k, fallback) => { try { return localStorage.getItem(k) || fallback; } catch (e) { return fallback; } };
+  const save = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const current = { theme: read("tm-theme", "auto"), density: read("tm-density", "comfortable") };
+  const apply = () => {
+    if (current.theme === "auto") delete root.dataset.theme; else root.dataset.theme = current.theme;
+    if (current.density === "compact") root.dataset.density = "compact"; else delete root.dataset.density;
+    for (const seg of document.querySelectorAll(".seg[data-setting]")) {
+      for (const b of seg.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.value === current[seg.dataset.setting]));
+    }
+  };
+  for (const seg of document.querySelectorAll(".seg[data-setting]")) {
+    seg.addEventListener("click", e => {
+      const b = e.target.closest("button[data-value]");
+      if (!b) return;
+      const key = seg.dataset.setting;
+      if (current[key] === b.dataset.value) return;
+      current[key] = b.dataset.value;
+      save(`tm-${key}`, b.dataset.value);
+      apply();
+      // Price charts read their colours once when drawn; redraw them in the new theme.
+      if (key === "theme" && document.querySelector("#chart, #equity")) location.reload();
+    });
+  }
+  apply();
+})();

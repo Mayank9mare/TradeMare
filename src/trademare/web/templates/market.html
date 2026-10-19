@@ -21,7 +21,7 @@
   <tbody>
   {% for r in rows %}
     <tr data-search="{{ (r.symbol ~ ' ' ~ r.name) | lower }}" data-sector="{{ r.sector }}">
-      <td data-v="{{ r.symbol }}"><a href="/m/{{ market.value }}/{{ r.symbol | urlencode }}"><b>{{ r.symbol }}</b></a>{% if r.symbol in ideas %} {{ direction_badge(ideas[r.symbol]) }}{% endif %}<div class="sub">{{ r.name }}</div></td>
+      <td data-v="{{ r.symbol }}"><a href="/m/{{ market.value }}/{{ r.symbol | urlencode }}"><b>{{ r.symbol }}</b></a>{% if r.symbol in ideas %} <span class="badge">{{ "idea" if ideas[r.symbol] == "LONG" else "short idea" }}</span>{% endif %}<div class="sub">{{ r.name }}</div></td>
       {% set sc = scores.get(r.symbol) %}<td class="num" data-v="{{ sc if sc is not none else '' }}">{{ score_bar(sc) }}</td>
       <td data-v="{{ r.sector }}" class="sub">{{ r.sector }}</td>
       <td class="num" data-v="{{ r.close or '' }}">{{ r.close | num(2) }}</td>
