@@ -59,6 +59,10 @@ code { font-family: var(--mono); font-size: .88em; background: var(--surface-2);
 .muted { color: var(--muted); }
 .faint { color: var(--faint); }
 .up { color: var(--up); } .down { color: var(--down); }
+/* Colour is never the only cue (red-green colour blindness): numbers in tables also get an arrow */
+table.data td.num.up::before, table.data td.num.down::before { font-size: .62em; margin-right: 4px; vertical-align: 1px; opacity: .85; }
+table.data td.num.up::before { content: "▲"; }
+table.data td.num.down::before { content: "▼"; }
 .num { text-align: right !important; font-variant-numeric: tabular-nums; }
 .sub { color: var(--muted); font-size: .82rem; }
 

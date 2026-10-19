@@ -74,6 +74,7 @@ def create_app(
         pct=formatting.pct,
         num=formatting.num,
         tone=formatting.tone,
+        vs=formatting.vs,
         metric=formatting.metric,
         local_time=formatting.local_time,
         run_label=formatting.run_label,

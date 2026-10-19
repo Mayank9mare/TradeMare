@@ -51,10 +51,17 @@ def num(value: float | None, digits: int = 1) -> str:
 
 
 def tone(value: float | None) -> str:
-    """CSS class for gains/losses."""
-    if _missing(value) or value == 0:
+    """CSS class for gains/losses. Values that display as zero (|x| < 0.05%) stay neutral."""
+    if _missing(value) or abs(value) < 5e-4:
         return ""
     return "up" if value > 0 else "down"
+
+
+def vs(value: float | None, other: float | None, higher_better: bool = True) -> str:
+    """CSS class comparing a result with its benchmark: "up" if better, "down" if worse."""
+    if _missing(value) or _missing(other) or abs(value - other) < 5e-4:
+        return ""
+    return "up" if (value > other) == higher_better else "down"
 
 
 def metric(value: float | None, kind: str, market: Market | str) -> str:

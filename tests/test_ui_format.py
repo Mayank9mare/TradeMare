@@ -31,3 +31,12 @@ def test_plain_names():
     rule = stop_rule(load_config(REPO_CONFIG).markets[Market.IN])
     assert rule.startswith("stop-loss 3× the average daily range (ATR) below entry")  # noqa: RUF001
     assert "no profit target" in rule
+
+
+def test_tone_neutral_near_zero_and_vs_benchmark():
+    from trademare.web.formatting import tone, vs
+
+    assert tone(-0.0003) == "" and tone(-0.01) == "down" and tone(5.0) == "up"
+    assert vs(0.07, 0.121) == "down" and vs(0.15, 0.12) == "up"
+    assert vs(-0.239, -0.198) == "down"  # deeper drawdown is worse
+    assert vs(0.20, 0.15, higher_better=False) == "down" and vs(None, 0.1) == ""

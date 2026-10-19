@@ -22,7 +22,7 @@
       {% set perf_tips = {"longest_drawdown_days": "longest_drawdown"} %}
       {% for key, label, kind in [("total_return","Total return","pct"),("cagr","CAGR","pct"),("volatility","Volatility","pct0"),("sharpe","Sharpe","num"),("sortino","Sortino","num"),("max_drawdown","Max drawdown","pct0"),("calmar","Calmar","num"),("longest_drawdown_days","Longest drawdown (days)","int")] %}
         <tr><td>{{ label }}{{ tip(perf_tips.get(key, key), label) }}</td>
-        {% for d in [st, bm] %}{% set v = d.get(key) %}<td class="num {{ (v | tone) if kind == 'pct' else '' }}">{{ (v | pct(1, True)) if kind == "pct" else (v | pct(1)) if kind == "pct0" else (v | num(0)) if kind == "int" else (v | num(2)) }}</td>{% endfor %}</tr>
+        {% for d in [st, bm] %}{% set v = d.get(key) %}<td class="num {{ (v | vs(bm.get(key), key not in ('volatility', 'longest_drawdown_days'))) if loop.first else '' }}">{{ (v | pct(1, True)) if kind == "pct" else (v | pct(1)) if kind == "pct0" else (v | num(0)) if kind == "int" else (v | num(2)) }}</td>{% endfor %}</tr>
       {% endfor %}
       </tbody>
     </table>
@@ -47,7 +47,7 @@
   <section class="card">
     <h2 style="margin-top:0">By year</h2>
     <table class="data"><thead><tr><th>Year</th><th class="num">Strategy</th><th class="num">Index</th><th class="num">Trades</th></tr></thead><tbody>
-    {% for y, r in s.by_year.items() %}<tr><td>{{ y }}</td><td class="num {{ r.strategy | tone }}">{{ r.strategy | pct(1, True) }}</td><td class="num {{ r.benchmark | tone }}">{{ r.benchmark | pct(1, True) }}</td><td class="num">{{ r.trades }}</td></tr>{% endfor %}
+    {% for y, r in s.by_year.items() %}<tr><td>{{ y }}</td><td class="num {{ r.strategy | vs(r.benchmark) }}">{{ r.strategy | pct(1, True) }}</td><td class="num">{{ r.benchmark | pct(1, True) }}</td><td class="num">{{ r.trades }}</td></tr>{% endfor %}
     </tbody></table>
   </section>
   {% if s.in_sample %}
@@ -56,7 +56,7 @@
     <table class="data"><thead><tr><th></th><th class="num">CAGR</th><th class="num">Index</th><th class="num">Sharpe</th><th class="num">Index</th><th class="num">Max DD</th><th class="num">Trades</th></tr></thead><tbody>
     {% for label in ["in_sample", "out_of_sample"] %}{% set seg = s[label] %}
       <tr><td>{{ label.replace("_", "-") }}</td>
-        <td class="num {{ seg.strategy.cagr | tone }}">{{ seg.strategy.cagr | pct(1, True) }}</td><td class="num">{{ seg.benchmark.cagr | pct(1, True) }}</td>
+        <td class="num {{ seg.strategy.cagr | vs(seg.benchmark.cagr) }}">{{ seg.strategy.cagr | pct(1, True) }}</td><td class="num">{{ seg.benchmark.cagr | pct(1, True) }}</td>
         <td class="num">{{ seg.strategy.sharpe | num(2) }}</td><td class="num">{{ seg.benchmark.sharpe | num(2) }}</td>
         <td class="num down">{{ seg.strategy.max_drawdown | pct(1) }}</td><td class="num">{{ seg.strategy.trades | num(0) }}</td></tr>
     {% endfor %}

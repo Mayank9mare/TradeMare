@@ -2,6 +2,7 @@
 {% block title %}Backtests · TradeMare{% endblock %}
 {% block content %}
 <h1>Backtests{{ tip("backtest", "a backtest") }}</h1>
+<p class="muted">Green ▲ means better than simply holding the index over the same dates; red ▼ means worse.</p>
 {% if not runs %}
 <div class="card"><p>No backtests yet. Run <code>uv run trademare backtest -m US</code>.</p></div>
 {% else %}
@@ -14,11 +15,11 @@
     <tr>
       <td class="run-cell" data-v="{{ r.created_at }}"><a href="/backtests/{{ r.id }}"><b>{{ r.overrides | run_label }}</b></a><div class="sub">{{ r.created_at.replace("T", " ")[:16] }}</div></td>
       <td>{{ r.market }}</td><td>{{ r.start }} → {{ r.end }}</td>
-      <td class="num {{ st.cagr | tone }}" data-v="{{ st.cagr }}">{{ st.cagr | pct(1, True) }}</td>
+      <td class="num {{ st.cagr | vs(bm.cagr) }}" data-v="{{ st.cagr }}">{{ st.cagr | pct(1, True) }}</td>
       <td class="num" data-v="{{ bm.cagr }}">{{ bm.cagr | pct(1, True) }}</td>
-      <td class="num" data-v="{{ st.sharpe }}">{{ st.sharpe | num(2) }}</td>
+      <td class="num {{ st.sharpe | vs(bm.sharpe) }}" data-v="{{ st.sharpe }}">{{ st.sharpe | num(2) }}</td>
       <td class="num" data-v="{{ bm.sharpe }}">{{ bm.sharpe | num(2) }}</td>
-      <td class="num down" data-v="{{ st.max_drawdown }}">{{ st.max_drawdown | pct(1) }}</td>
+      <td class="num {{ st.max_drawdown | vs(bm.max_drawdown) }}" data-v="{{ st.max_drawdown }}">{{ st.max_drawdown | pct(1) }}</td>
       <td class="num" data-v="{{ st.trades }}">{{ st.trades | num(0) }}</td>
       <td class="num" data-v="{{ st.win_rate }}">{{ st.win_rate | pct(0) }}</td>
       <td class="num {{ oos.cagr | tone }}" data-v="{{ oos.cagr }}">{{ oos.cagr | pct(1, True) }}</td>
