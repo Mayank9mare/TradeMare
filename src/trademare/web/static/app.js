@@ -142,3 +142,13 @@
   document.querySelectorAll("#sidebar a").forEach(a => a.addEventListener("click", () => toggle(false)));
   document.addEventListener("keydown", e => { if (e.key === "Escape") toggle(false); });
 })();
+
+// Wide tables: fade the right edge while there are columns off-screen.
+(() => {
+  const update = w => w.classList.toggle("more-right", w.scrollLeft + w.clientWidth < w.scrollWidth - 4);
+  for (const w of document.querySelectorAll(".table-wrap")) {
+    update(w);
+    w.addEventListener("scroll", () => update(w), { passive: true });
+  }
+  window.addEventListener("resize", () => document.querySelectorAll(".table-wrap").forEach(update));
+})();

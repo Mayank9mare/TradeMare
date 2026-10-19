@@ -187,6 +187,10 @@ def create_app(
         scan = latest_scan(market)
         scores = {s.symbol: s.composite for s in scan.scores} if scan else {}
         ideas = {i.symbol: i.direction.value for i in scan.ideas} if scan else {}
+        # best-scored first; unscored stocks (too little data or not liquid enough) at the end
+        rows = sorted(
+            rows, key=lambda r: (scores.get(r.symbol) is None, -(scores.get(r.symbol) or 0), r.symbol)
+        )
         return templates.TemplateResponse(
             request,
             "market.html",

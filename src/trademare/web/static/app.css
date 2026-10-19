@@ -158,6 +158,12 @@ table.data th, table.data td { padding: 10px 14px; border-bottom: 1px solid var(
 table.data tbody tr:last-child td { border-bottom: none; }
 table.data thead th { position: sticky; top: 0; background: var(--surface-2); font-size: .74rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; z-index: 1; }
 table.data tbody tr:hover { background: var(--row-hover); }
+/* Wide tables: the first column (the stock) stays put while scrolling sideways, and a fade on
+   the right edge shows there is more to see (set by app.js) */
+.table-wrap table.data td:first-child, .table-wrap table.data th:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+.table-wrap table.data thead th:first-child { background: var(--surface-2); z-index: 2; }
+.table-wrap table.data tbody tr:hover td:first-child { background: var(--row-hover); }
+.table-wrap.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
 .card table.data th, .card table.data td { padding: 8px 6px; }
 .card table.data thead th { background: transparent; }
 table.mini td { padding: 6px 0; border-bottom: 1px solid var(--border); }
