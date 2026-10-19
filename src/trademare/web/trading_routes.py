@@ -27,6 +27,23 @@ from trademare.trading.tracking import MIN_SESSIONS, Tracking, compare_with_back
 from trademare.web.overview_data import sparkline, working_entries
 
 
+def _decision_outcome(signal_status: str, order_status: str | None) -> tuple[str, str]:
+    """(css class, words) for a decided signal, following an approval through to its order."""
+    if signal_status == "APPROVED":
+        if order_status in ("FILLED", "PARTIALLY_FILLED"):
+            return "approved", "approved · filled"
+        if order_status == "OPEN":
+            return "pending", "approved · waiting"
+        if order_status in ("EXPIRED", "CANCELLED", "REJECTED"):
+            return "expired", "approved · not filled"
+        return "approved", "approved"
+    if signal_status == "REJECTED":
+        return "rejected", "rejected"
+    if signal_status == "EXPIRED":
+        return "expired", "expired"
+    return "pending", signal_status.lower()
+
+
 def register_trading_routes(
     app: FastAPI,
     templates: Jinja2Templates,
@@ -92,6 +109,13 @@ def register_trading_routes(
                     .limit(40)
                 )
             )
+            # what happened to the order of each approved signal: filled, waiting, or not filled
+            ids = [sig.id for sig in recent if sig.status == "APPROVED"]
+            order_status = {
+                o.signal_id: o.status for o in s.scalars(select(OrderRow).where(OrderRow.signal_id.in_(ids)))
+            }
+            for sig in recent:
+                sig.outcome = _decision_outcome(sig.status, order_status.get(sig.id))  # type: ignore[attr-defined]
         for sig in pending:
             exp = (
                 sig.expires_at.replace(tzinfo=UTC)

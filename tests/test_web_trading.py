@@ -174,3 +174,13 @@ def test_chart_api_marks_your_orders_and_fills(tmp_path, monkeypatch):
         "time": days[5].strftime("%Y-%m-%d"), "position": "belowBar", "shape": "arrowUp", "buy": True,
         "text": "Bought 3 @ 99.80",
     }]  # fmt: skip
+
+
+def test_decision_outcome_follows_the_order():
+    from trademare.web.trading_routes import _decision_outcome
+
+    assert _decision_outcome("APPROVED", "FILLED") == ("approved", "approved · filled")
+    assert _decision_outcome("APPROVED", "OPEN") == ("pending", "approved · waiting")
+    assert _decision_outcome("APPROVED", "EXPIRED") == ("expired", "approved · not filled")
+    assert _decision_outcome("REJECTED", None) == ("rejected", "rejected")
+    assert _decision_outcome("EXPIRED", None) == ("expired", "expired")
