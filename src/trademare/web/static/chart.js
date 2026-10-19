@@ -25,8 +25,19 @@
     volume.setData(data.volume.map(v => ({ time: v.time, value: v.value, color: (v.up ? up : down) + "55" })));
     sma50.setData(data.sma50);
     sma200.setData(data.sma200);
+    // Your position and orders as labelled lines, your past fills as arrows.
+    for (const l of priceLines) candles.removePriceLine(l);
+    priceLines = (data.lines || []).map(l => candles.createPriceLine({
+      price: l.price, title: l.title, lineWidth: 1, axisLabelVisible: true,
+      color: l.kind === "stop" ? down : l.kind === "target" ? up : css("--accent"),
+      lineStyle: l.kind === "entry" ? LightweightCharts.LineStyle.Solid : LightweightCharts.LineStyle.Dashed,
+    }));
+    candles.setMarkers((data.markers || []).map(m => ({
+      time: m.time, position: m.position, shape: m.shape, text: m.text, color: m.buy ? up : down,
+    })));
     chart.timeScale().fitContent();
   }
+  let priceLines = [];
 
   for (const btn of document.querySelectorAll(".chart-controls button")) {
     btn.addEventListener("click", () => {

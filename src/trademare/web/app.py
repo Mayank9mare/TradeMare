@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
 
 from trademare import __version__
 from trademare.analysis.ratios import key_ratios
@@ -24,7 +25,7 @@ from trademare.core.models import Market
 from trademare.data.fields import FIELDS
 from trademare.data.service import DataService
 from trademare.data.universe import load_universe
-from trademare.storage.db import Database
+from trademare.storage.db import Database, OrderRow, PositionRow
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
 from trademare.web.glossary import tip
@@ -285,8 +286,51 @@ def create_app(
                 ],
                 "sma50": _line(times, sma50[window]),
                 "sma200": _line(times, sma200[window]),
+                **your_levels(market, symbol, set(times)),
             }
         )
+
+    def your_levels(market: Market, symbol: str, days: set[str]) -> dict:
+        """Your position's entry/stop/target, open order prices, and past fills as chart markers."""
+        lines, markers = [], []
+        with db.session() as s:
+            pos = s.scalars(
+                select(PositionRow).where(
+                    PositionRow.market == market.value,
+                    PositionRow.symbol == symbol,
+                    PositionRow.status == "open",
+                )
+            ).first()
+            if pos is not None:
+                lines.append({"price": pos.entry_price, "title": "your entry", "kind": "entry"})
+                if pos.stop_price:
+                    lines.append({"price": pos.stop_price, "title": "your stop-loss", "kind": "stop"})
+                if pos.target_price:
+                    lines.append({"price": pos.target_price, "title": "your target", "kind": "target"})
+            orders = s.scalars(
+                select(OrderRow).where(OrderRow.market == market.value, OrderRow.symbol == symbol)
+            ).all()
+            for o in orders:
+                if o.status == "OPEN" and o.purpose in ("entry", "exit") and o.limit_price:
+                    verb = "buy" if o.side == "BUY" else "sell"
+                    lines.append({"price": o.limit_price, "title": f"{verb} limit", "kind": "order"})
+                if o.status == "FILLED" and o.filled_on and o.average_fill_price and o.purpose != "stop":
+                    day = o.filled_on.strftime("%Y-%m-%d")
+                    if day in days:
+                        buy = o.side == "BUY"
+                        markers.append({
+                            "time": day, "position": "belowBar" if buy else "aboveBar",
+                            "shape": "arrowUp" if buy else "arrowDown", "buy": buy,
+                            "text": f"{'Bought' if buy else 'Sold'} {o.quantity} @ {o.average_fill_price:,.2f}",  # noqa: E501
+                        })  # fmt: skip
+                if o.status == "FILLED" and o.purpose == "stop" and o.filled_on:
+                    day = o.filled_on.strftime("%Y-%m-%d")
+                    if day in days:
+                        markers.append({
+                            "time": day, "position": "aboveBar", "shape": "arrowDown", "buy": False,
+                            "text": f"Stopped out @ {o.average_fill_price:,.2f}",
+                        })  # fmt: skip
+        return {"lines": lines, "markers": sorted(markers, key=lambda m: m["time"])}
 
     @app.get("/backtests", response_class=HTMLResponse)
     def backtests_page(request: Request):

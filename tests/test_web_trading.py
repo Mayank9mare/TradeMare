@@ -137,3 +137,33 @@ def test_ask_claude_about_a_signal(tmp_path, monkeypatch):
     assert r.status_code == 200 and "Momentum ranks #1 of 200." in r.text and "Stop is 6.7% away" in r.text
     assert "Owner's question: Why INFY?" in prompts[0] and "12-1 month momentum" in prompts[0]
     assert client.post("/signals/sig1/ask", data={"csrf_token": "bad"}).status_code == 403
+
+
+def test_chart_api_marks_your_orders_and_fills(tmp_path, monkeypatch):
+    import pandas as pd
+
+    from trademare.core.models import Market
+
+    client, db = make_app(tmp_path, monkeypatch)
+    days = pd.bdate_range("2025-05-01", periods=40)
+    bars = pd.DataFrame(
+        {"open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0, "volume": 1e6}, index=days
+    )
+    bars.index.name = "date"
+    from trademare.data.store import ParquetStore
+
+    ParquetStore(tmp_path / "cache").write_bars(Market.IN, "INFY", bars)
+    with db.session() as s:
+        s.add(OrderRow(id="o1", signal_id="sig1", market="IN", symbol="INFY", side="BUY", purpose="entry",
+                       quantity=5, order_type="LIMIT", limit_price=99.5, status="OPEN", broker="paper",
+                       placed_on=date(2025, 6, 2), filled_quantity=0, costs=0.0))  # fmt: skip
+        s.add(OrderRow(id="o2", signal_id=None, market="IN", symbol="INFY", side="BUY", purpose="entry",
+                       quantity=3, order_type="LIMIT", limit_price=100.0, status="FILLED", broker="paper",
+                       placed_on=date(2025, 5, 5), filled_quantity=3, average_fill_price=99.8,
+                       filled_on=days[5].date(), costs=0.0))  # fmt: skip
+    data = client.get("/api/bars/IN/INFY?years=1").json()
+    assert {"price": 99.5, "title": "buy limit", "kind": "order"} in data["lines"]
+    assert data["markers"] == [{
+        "time": days[5].strftime("%Y-%m-%d"), "position": "belowBar", "shape": "arrowUp", "buy": True,
+        "text": "Bought 3 @ 99.80",
+    }]  # fmt: skip
