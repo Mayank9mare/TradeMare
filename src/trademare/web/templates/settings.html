@@ -8,12 +8,16 @@
 
 <form method="post" action="/settings" class="settings-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% set drift = drifted(values) %}
+  <p class="muted">Settings marked <span class="tested-note">as tested</span> are the ones the India strategy passed its history test with. Changing them means trading a version that was never tested.</p>
+  {% if drift %}<div class="flash warn">These differ from the tested strategy: {{ untested(values) | join("; ") }}.</div>{% endif %}
   <div class="grid two">
   {% for m in market_codes %}
     <section class="card">
       <h2 style="margin-top:0">{{ "India" if m == "IN" else "US" }} <small class="muted">broker {{ on_disk.markets[m].broker }} · {{ "validated" if on_disk.markets[m].validated else "not validated" }}</small></h2>
       {% for f in market_fields %}{% set name = m ~ "." ~ f.key %}{% set v = values[name] %}
-      <label class="field"><span>{{ f.label }}{% if f.help %} <small class="muted">— {{ f.help }}</small>{% endif %}</span>
+      {% set t_known = name in tested %}{% set t = tested.get(name) %}{% set t_differs = name in drift %}
+      <label class="field{{ ' untested' if t_differs }}"><span>{{ f.label }}{% if f.help %} <small class="muted">— {{ f.help }}</small>{% endif %}{% if t_known %} <small class="tested-note">{{ "differs from" if t_differs else "as" }} tested{% if t_differs %} ({{ "on" if t is sameas true else "off" if t is sameas false else "blank" if t is none else t }}){% endif %}</small>{% endif %}</span>
         {% if f.kind == "bool" %}<input type="checkbox" name="{{ name }}" {% if v in (true, "on", "true") %}checked{% endif %}>
         {% elif f.kind == "choice" %}<select name="{{ name }}">{% for c in f.choices %}<option {% if c == v %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
         {% else %}<input type="text" inputmode="decimal" name="{{ name }}" value="{{ '' if v is none else v }}">{% endif %}
@@ -25,7 +29,8 @@
   <section class="card" style="margin-top:1rem">
     <h2 style="margin-top:0">General</h2>
     {% for f in global_fields %}{% set v = values[f.key] %}
-    <label class="field"><span>{{ f.label }}</span>
+    {% set t_known = f.key in tested %}{% set t = tested.get(f.key) %}{% set t_differs = f.key in drift %}
+    <label class="field{{ ' untested' if t_differs }}"><span>{{ f.label }}{% if t_known %} <small class="tested-note">{{ "differs from" if t_differs else "as" }} tested{% if t_differs %} ({{ "on" if t is sameas true else "off" if t is sameas false else t }}){% endif %}</small>{% endif %}</span>
       {% if f.kind == "bool" %}<input type="checkbox" name="{{ f.key }}" {% if v in (true, "on", "true") %}checked{% endif %}>
       {% elif f.kind == "emails" %}<input type="text" name="{{ f.key }}" value="{{ v | join(', ') if v is not string else v }}">
       {% else %}<input type="text" inputmode="decimal" name="{{ f.key }}" value="{{ v }}">{% endif %}

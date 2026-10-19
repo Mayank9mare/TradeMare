@@ -105,3 +105,16 @@ def test_settings_page_saves_via_form(config_copy, tmp_path, monkeypatch):
     bad = client.post("/settings", data=form | {"IN.max_open_positions": "zero"})
     assert bad.status_code == 422 and "Not saved" in bad.text
     assert client.post("/settings", data=form | {"csrf_token": "forged"}).status_code == 403
+
+
+def test_tested_values_flag_drift():
+    from trademare.web.settings_form import TESTED, drifted, untested
+
+    values = {k: v for k, v in TESTED.items()}
+    assert drifted(values) == set() and untested(values) == []
+    values |= {"IN.stop_loss.atr_multiple": "2.5", "strategy.vol_target": "", "IN.time_stop_days": ""}
+    assert drifted(values) == {"IN.stop_loss.atr_multiple", "strategy.vol_target"}
+    assert untested(values) == [
+        "Stop: ATR multiple is 2.5 (tested with 3.0)",
+        "Volatility targeting is blank (tested with on)",
+    ]

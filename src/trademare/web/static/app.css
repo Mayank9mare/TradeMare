@@ -388,3 +388,9 @@ table.data td.run-cell b { white-space: normal; font-weight: 600; line-height: 1
 .pc-head { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .pros .pc-head::before { content: "▲ "; color: var(--up); }
 .cons .pc-head::before { content: "▼ "; color: var(--down); }
+
+/* Settings: values the strategy was tested with */
+.tested-note { font-size: .72rem; color: var(--up); font-weight: 600; }
+.field.untested .tested-note { color: color-mix(in srgb, var(--warning) 75%, var(--text)); }
+.field.untested input, .field.untested select { border-color: var(--warning); }
+.flash.warn { border-color: color-mix(in srgb, var(--warning) 50%, transparent); background: color-mix(in srgb, var(--warning) 12%, var(--surface)); }

@@ -40,7 +40,15 @@ from trademare.web.overview_data import (
     working_entries,
 )
 from trademare.web.reasons import plain, split_reasons
-from trademare.web.settings_form import GLOBAL_FIELDS, MARKET_FIELDS, apply_form, current_values
+from trademare.web.settings_form import (
+    GLOBAL_FIELDS,
+    MARKET_FIELDS,
+    TESTED,
+    apply_form,
+    current_values,
+    drifted,
+    untested,
+)
 from trademare.web.snapshot import SnapshotCache
 from trademare.web.trading_routes import register_trading_routes
 
@@ -93,6 +101,9 @@ def create_app(
         asset_v=asset_v,
         tip=tip,
         split_reasons=split_reasons,
+        tested=TESTED,
+        drifted=drifted,
+        untested=untested,
     )
 
     register_trading_routes(app, templates, config, service, db, secrets)
@@ -408,6 +419,8 @@ def create_app(
                 status_code=422,
             )
         summary = "no changes" if not changes else ", ".join(_flatten(changes))
+        if changes and (drift := untested(current_values(load_config(config_path)))):
+            summary += ". Note: this now differs from the tested strategy (" + "; ".join(drift) + ")"
         return RedirectResponse(f"/settings?saved={quote(summary)}", status_code=303)
 
     return app

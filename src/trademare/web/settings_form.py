@@ -73,6 +73,60 @@ GLOBAL_FIELDS: tuple[FieldSpec, ...] = (
 )
 
 
+# Values the India strategy (v3) was validated with on history it was never tuned on
+# (docs/research/2026-10-18-strategy-v3-plan.md). Changing them means trading an untested strategy.
+TESTED: dict[str, Any] = {
+    "IN.max_open_positions": 10,
+    "IN.stop_loss.method": "atr",
+    "IN.stop_loss.atr_multiple": 3.0,
+    "IN.stop_loss.trailing": False,
+    "IN.take_profit.method": "none",
+    "IN.time_stop_days": None,
+    "strategy.risk_off_exposure": 0.5,
+    "strategy.vol_target": True,
+    "strategy.exclude_high_vol_pct": 0.2,
+}
+
+
+def _same(a: Any, b: Any) -> bool:
+    if isinstance(b, bool) or b is None:
+        return a == b
+    try:
+        return abs(float(a) - float(b)) < 1e-9
+    except (TypeError, ValueError):
+        return str(a) == str(b)
+
+
+def drifted(values: dict[str, Any]) -> set[str]:
+    """Keys whose current value differs from the tested one."""
+    return {k for k, v in TESTED.items() if k in values and not _same(_value(values[k]), v)}
+
+
+def _value(v: Any) -> Any:
+    """Form values arrive as strings ("on", "", "3.0"); config values are typed."""
+    if v in ("on", "true", "True"):
+        return True
+    if v in ("off", "false", "False"):
+        return False
+    if v == "":
+        return None
+    return v
+
+
+def _show(v: Any) -> str:
+    return "on" if v is True else "off" if v is False else "blank" if v is None else str(v)
+
+
+def untested(values: dict[str, Any]) -> list[str]:
+    """Labels of settings that now differ from the values the strategy was tested with."""
+    labels = {f.key: f.label for f in GLOBAL_FIELDS} | {f"IN.{f.key}": f.label for f in MARKET_FIELDS}
+    return [
+        f"{labels.get(k, k)} is {_show(_value(values.get(k)))} (tested with {_show(v)})"
+        for k, v in TESTED.items()
+        if k in drifted(values)
+    ]
+
+
 def _get(data: dict[str, Any], dotted: str) -> Any:
     for part in dotted.split("."):
         data = data[part]
