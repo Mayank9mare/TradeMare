@@ -72,6 +72,14 @@
   --accent-soft: rgba(126, 164, 255, 0.14); --up: #4cc27e; --down: #ff7b7b; --good: #2fb36b; --warning: #f0b54a;
   --critical: #f05d5d; --sma50: #e07a45; --sma200: #9b8ff0; --card-border: #20242b;
 }
+/* Dim: between light and dark. Mid slate greys and softer contrast, easy on the eyes in a lit room */
+:root[data-theme="dim"] {
+  color-scheme: dark;
+  --bg: #22272e; --surface: #2b313a; --surface-2: #343b45; --text: #d5dde6; --muted: #a2adba; --faint: #8592a1;
+  --border: #3b434e; --border-strong: #4a5360; --row-hover: #313843; --accent: #7cb4ff;
+  --accent-soft: rgba(124, 180, 255, 0.15); --up: #6bc47f; --down: #f08279; --good: #4fae66; --warning: #e3b55a;
+  --critical: #e5675e; --sma50: #e08a5a; --sma200: #a99cf0; --card-border: transparent;
+}
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }

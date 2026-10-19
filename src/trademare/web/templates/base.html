@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
   <script>/* apply the saved theme and density before the page paints */
     try { const t = localStorage.getItem("tm-theme"), d = localStorage.getItem("tm-density");
-      if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      if (t === "light" || t === "dim" || t === "dark") document.documentElement.dataset.theme = t;
       if (d === "compact") document.documentElement.dataset.density = "compact"; } catch (e) {}
   </script>
   <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
@@ -46,7 +46,7 @@
     {{ nav("/settings", "Settings", i_gear, path.startswith("/settings")) }}
     <div class="switches">
       <div class="switch" role="group" aria-label="Theme"><span>Theme</span>
-        <div class="seg" data-setting="theme"><button type="button" data-value="auto">Auto</button><button type="button" data-value="light">Light</button><button type="button" data-value="dark">Dark</button></div></div>
+        <div class="seg" data-setting="theme"><button type="button" data-value="auto">Auto</button><button type="button" data-value="light">Light</button><button type="button" data-value="dim">Dim</button><button type="button" data-value="dark">Dark</button></div></div>
       <div class="switch" role="group" aria-label="Density"><span>Density</span>
         <div class="seg" data-setting="density"><button type="button" data-value="comfortable">Comfortable</button><button type="button" data-value="compact">Compact</button></div></div>
     </div>
