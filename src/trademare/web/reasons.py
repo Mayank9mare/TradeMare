@@ -27,6 +27,8 @@ _PHRASES: list[tuple[re.Pattern[str], str, int]] = [
     (re.compile(r"^Breakout above (\d+)-day high on ([\d.]+)x volume$"), r"Broke above its \1-day high on \2× normal volume", 1),
     (re.compile(r"^Breakdown below (\d+)-day low on ([\d.]+)x volume$"), r"Fell below its \1-day low on \2× normal volume", -1),
     (re.compile(r"^Strong trend \(ADX (\d+)\)$"), r"Strong, steady trend (ADX \1)", 0),
+    (re.compile(r"^(Index (?:above|below) its 200-day average \([^)]*\)), SMA50 above SMA200$"), r"\1; its 50-day average is above the 200-day (an uptrend)", 0),
+    (re.compile(r"^(Index (?:above|below) its 200-day average \([^)]*\)), SMA50 below SMA200$"), r"\1; its 50-day average is below the 200-day (a downtrend)", 0),
     (re.compile(r"^Accumulation: up/down volume ratio ([\d.]+)$"), r"More volume on up days than down days (ratio \1)", 1),
     (re.compile(r"^Distribution: up/down volume ratio ([\d.]+)$"), r"More volume on down days than up days (ratio \1)", -1),
 ]  # fmt: skip

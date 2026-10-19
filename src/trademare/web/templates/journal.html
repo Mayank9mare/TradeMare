@@ -83,7 +83,7 @@
       <td class="num">{{ e.exit_price | money(m, False) }}</td>
       <td class="num {{ e.pnl | tone }}"><b>{{ e.pnl | money(m, False) }}</b></td>
       <td class="num {{ e.return_pct | tone }}">{{ e.return_pct | pct(2, True) }}</td>
-      <td class="num {{ e.r_multiple | tone }}">{{ "%+.1f" | format(e.r_multiple) if e.r_multiple is not none else "—" }}</td>
+      <td class="num {{ (e.r_multiple | round(1)) | tone if e.r_multiple is not none else "" }}">{{ "%+.1f" | format(e.r_multiple) if e.r_multiple is not none else "—" }}</td>
       <td>{{ e.exit_reason or "" }}</td>
     </tr>
   {% endfor %}</tbody></table></div>
@@ -103,7 +103,7 @@
       <td class="num">{{ s.entry_price | money(m, False) }}</td>
       <td class="num">{{ e.last_price | money(m, False) if e.last_price else "—" }}</td>
       <td class="num {{ e.return_pct | tone }}">{{ e.return_pct | pct(1, True) if e.return_pct is not none else "—" }}</td>
-      <td class="num {{ e.r_multiple | tone }}">{{ "%+.1f" | format(e.r_multiple) if e.r_multiple is not none else "—" }}</td>
+      <td class="num {{ (e.r_multiple | round(1)) | tone if e.r_multiple is not none else "" }}">{{ "%+.1f" | format(e.r_multiple) if e.r_multiple is not none else "—" }}</td>
     </tr>
   {% endfor %}</tbody></table></div>
 {% else %}<div class="empty">You haven't rejected or let any signal expire yet.</div>{% endif %}

@@ -9,7 +9,7 @@
 {% else %}
 <section class="card regime-card">
   <div class="card-head"><h2>Market regime{{ tip("regime", "market regime") }} · {{ scan.asof }}</h2>{{ regime_badge(scan.regime) }}</div>
-  <ul class="reasons">{% for r in scan.regime.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+  <ul class="reasons">{% for r in scan.regime.reasons %}<li>{{ r | plain_reason }}</li>{% endfor %}</ul>
   <p class="muted small">
     Ranked on{{ tip("weights") }}: {% for k, v in scan.weights.items() if v > 0 %}{{ k | factor_name }} ({{ v | pct(0) }}){{ ", " if not loop.last }}{% endfor %}.
     A buy needs a score of at least {{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_off" else 0)) }}{% if scan.regime.label.value == "risk_off" %} (raised because the market is risk-off){% endif %}.
