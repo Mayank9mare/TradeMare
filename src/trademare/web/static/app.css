@@ -358,3 +358,14 @@ table.data td.run-cell b { white-space: normal; font-weight: 600; line-height: 1
 .sub-track i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
 .track { font-size: .88rem; margin: 6px 0; }
 @media (max-width: 560px) { .sub-row { grid-template-columns: 1fr 56px; } .sub-track { grid-column: 1 / -1; grid-row: 2; } }
+
+/* Signal reasons: for / against */
+.why { margin: 6px 0 8px; font-size: .92rem; }
+.pros-cons { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.pros-cons > div { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; border-left: 3px solid var(--border-strong); }
+.pros-cons .pros { border-left-color: var(--good); }
+.pros-cons .cons { border-left-color: var(--critical); }
+.pros-cons ul { margin: 4px 0 0; padding-left: 18px; font-size: .86rem; }
+.pc-head { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.pros .pc-head::before { content: "▲ "; color: var(--up); }
+.cons .pc-head::before { content: "▼ "; color: var(--down); }

@@ -29,7 +29,7 @@
     <div>
       <h3>{{ name }} {{ score_bar(a.score) }}</h3>
       <div class="components">{% for k, v in a.details.items() %}<span>{{ k }} {{ score_bar(v) }}</span>{% endfor %}</div>
-      <ul class="reasons">{% for r in a.reasons %}<li>{{ r }}</li>{% else %}<li class="muted">No notable factors</li>{% endfor %}</ul>
+      <ul class="reasons">{% for r in a.reasons %}<li>{{ r | plain_reason }}</li>{% else %}<li class="muted">No notable factors</li>{% endfor %}</ul>
     </div>
   {% endfor %}
   </div>

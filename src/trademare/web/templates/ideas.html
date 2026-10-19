@@ -37,10 +37,11 @@
       <div><span>Target{{ tip("target") }}</span><b class="up">{{ lv.target | money(market, False) }}</b>{% if lv.target %}<small>{{ ((lv.target / lv.entry) - 1) | pct(1, True) }}</small>{% endif %}</div>
       <div><span>Risk / share{{ tip("risk_per_share", "risk per share") }}</span><b>{{ lv.risk_per_share | money(market, False) }}</b></div>
     </div>
-    <div class="grid two">
-      {% for analyst, reasons in i.reasons.items() %}
-      <div><h3>{{ analyst }}</h3><ul class="reasons">{% for r in reasons %}<li>{{ r }}</li>{% else %}<li class="muted">No notable factors</li>{% endfor %}</ul></div>
-      {% endfor %}
+    {% set rs = split_reasons(i.reasons, i.direction) %}
+    <div class="pros-cons">
+      {% if rs.pro %}<div class="pros"><span class="pc-head">For</span><ul>{% for r in rs.pro %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if rs.con %}<div class="cons"><span class="pc-head">Against</span><ul>{% for r in rs.con %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if rs.neutral %}<div class="neutral"><span class="pc-head">Also noted</span><ul>{% for r in rs.neutral %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
     </div>
   </article>
 {% endfor %}

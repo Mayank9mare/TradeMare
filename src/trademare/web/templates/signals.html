@@ -40,7 +40,13 @@
     </div>
     {% set warns = s.reasons.get("events", []) + s.reasons.get("tax", []) %}
     {% if warns %}<p class="sub" style="margin:8px 0 0">Warnings{{ tip("event_alerts", "these warnings") }}</p><ul class="event-alerts">{% for w in warns %}<li class="{{ 'red' if w.startswith('RED FLAG') else 'note' if w.startswith(('Note', 'Tax')) else 'amber' }}">{{ w }}</li>{% endfor %}</ul>{% endif %}
-    <ul class="reasons">{% for k, rs in s.reasons.items() if k not in ("events", "tax") %}{% for r in rs[:4] %}<li>{{ r }}</li>{% endfor %}{% endfor %}</ul>
+    {% set rs = split_reasons(s.reasons, s.direction) %}
+    {% if rs.summary %}<p class="why"><b>Why:</b> {{ rs.summary }}</p>{% endif %}
+    <div class="pros-cons">
+      {% if rs.pro %}<div class="pros"><span class="pc-head">For</span><ul>{% for r in rs.pro %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if rs.con %}<div class="cons"><span class="pc-head">Against</span><ul>{% for r in rs.con %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
+      {% if rs.neutral %}<div class="neutral"><span class="pc-head">Also noted</span><ul>{% for r in rs.neutral %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
+    </div>
     {% include "_explain.html" %}
     {% set qa = asks.get(s.id, []) %}
     <details class="ask"{% if qa %} open{% endif %}>

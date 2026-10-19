@@ -36,6 +36,7 @@ from trademare.web.overview_data import (
     sparkline,
     working_entries,
 )
+from trademare.web.reasons import plain, split_reasons
 from trademare.web.settings_form import GLOBAL_FIELDS, MARKET_FIELDS, apply_form, current_values
 from trademare.web.snapshot import SnapshotCache
 from trademare.web.trading_routes import register_trading_routes
@@ -75,10 +76,17 @@ def create_app(
         metric=formatting.metric,
         local_time=formatting.local_time,
         run_label=formatting.run_label,
+        plain_reason=lambda r: plain(str(r))[0],
     )
     # Cache-busting: static URLs carry the files' modification time, so browsers fetch new versions.
     asset_v = max(int(f.stat().st_mtime) for f in (HERE / "static").iterdir())
-    env.globals.update(version=__version__, markets=list(config.markets), asset_v=asset_v, tip=tip)
+    env.globals.update(
+        version=__version__,
+        markets=list(config.markets),
+        asset_v=asset_v,
+        tip=tip,
+        split_reasons=split_reasons,
+    )
 
     register_trading_routes(app, templates, config, service, db, secrets)
     register_ipo_routes(app, templates, config, db, secrets)
