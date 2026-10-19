@@ -31,6 +31,7 @@ from trademare.web.glossary import tip
 from trademare.web.ipo_routes import register_ipo_routes
 from trademare.web.overview_data import (
     account_summary,
+    ideas_vs_signals,
     market_status,
     pending_signals,
     sparkline,
@@ -161,6 +162,7 @@ def create_app(
                     scan=scan,
                     ideas=(scan.ideas[:5] if scan else []),
                     pending=[p for p in pending if p.market == market.value],
+                    vs_signals=ideas_vs_signals(db, config, market, scan.asof) if scan else "",
                 )
             )
         first_expiry = min((p for p in pending if p.expires_at), key=lambda p: p.expires_at, default=None)
@@ -207,7 +209,8 @@ def create_app(
             "ideas.html",
             {
                 "market": market,
-                "scan": latest_scan(market),
+                "scan": (scan := latest_scan(market)),
+                "vs_signals": ideas_vs_signals(db, config, market, scan.asof if scan else None),
                 "cfg": config.markets[market],
                 "config_min": config.strategy.min_composite_score,
                 "penalty": config.strategy.regime_penalty,

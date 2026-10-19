@@ -182,3 +182,54 @@ def working_entries(db: Database, store=None, days: int = 5) -> list[dict]:
         status, text = describe(o, store)
         out.append({"order": o, "status": status, "text": text})
     return out
+
+
+def ideas_vs_signals(db: Database, config, market: Market, scan_date: date | None) -> str:
+    """One sentence on why the ideas list and the signals list differ for ``scan_date``."""
+    from trademare.config.schema import Rebalance, StrategyMode
+
+    cfg = config.markets[market]
+    with db.session() as s:
+        n = (
+            s.scalar(
+                select(func.count())
+                .select_from(SignalRow)
+                .where(
+                    SignalRow.market == market.value,
+                    SignalRow.scan_date == scan_date,
+                    SignalRow.action == "ENTRY",
+                )
+            )
+            or 0
+        )
+        state = s.get(MarketStateRow, market.value)
+    made = (
+        f"{n} buy signal{'s' if n != 1 else ''} came from this scan"
+        if n
+        else "No buy signals came from this scan"
+    )
+    if n:
+        return made + ": the top ideas that fit your risk limits (open slots, position and sector caps)."
+    if state is not None and state.kill_switch:
+        return made + ": the kill switch is tripped, so new buys are blocked until you re-arm it."
+    freq = config.strategy.factor_rebalance
+    if cfg.strategy_mode is StrategyMode.FACTOR and freq is not Rebalance.DAILY and scan_date:
+        clock = MarketClock(market)
+        try:
+            day = scan_date
+            while True:  # first session of the next period
+                day = clock.next_session(day)
+                prev = clock.previous_session(day)
+                if freq is Rebalance.WEEKLY and prev.isocalendar()[:2] != day.isocalendar()[:2]:
+                    break
+                if freq is Rebalance.MONTHLY and (prev.year, prev.month) != (day.year, day.month):
+                    break
+            when = f"; the next is {day:%a %d %b}"
+        except ValueError:
+            when = ""
+        period = "month" if freq is Rebalance.MONTHLY else "week"
+        return (
+            f"{made}: this strategy only buys on the first trading day of each {period} "
+            f"(its tested rebalance){when}. Between those days the ideas are for information."
+        )
+    return made + ": no idea passed the risk limits (open slots, position and sector caps, regime)."

@@ -90,6 +90,7 @@
     {% if a.kill_switch %}<div class="flash bad" style="margin:14px 0 0">Kill switch: {{ a.kill_reason }} — <a href="/portfolio/{{ m.value }}">review and re-arm</a></div>{% endif %}
 
     <h3 style="margin-top:20px">Top ideas{{ tip("score", "the score bar") }}{% if c.scan %} <span class="faint">· scan {{ c.scan.asof }}</span>{% endif %}</h3>
+    {% if c.vs_signals and not c.pending %}<p class="sub" style="margin:-4px 0 6px">{{ c.vs_signals }}</p>{% endif %}
     {% if c.ideas %}
     <table class="data">
       <tbody>

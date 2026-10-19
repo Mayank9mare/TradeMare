@@ -3,6 +3,7 @@
 {% block title %}Ideas · {{ market.value }} · TradeMare{% endblock %}
 {% block content %}
 <h1>{{ "India" if market.value == "IN" else "US" }} · trade ideas</h1>
+<p class="muted">Ideas are every stock the strategy ranks well today. Signals are the trades it actually proposes to you, after the risk rules. {{ vs_signals }} <a href="/signals">Signals →</a></p>
 {% if not scan %}
   <div class="card"><p>No scan yet. Run <code>uv run trademare scan -m {{ market.value }}</code>.</p></div>
 {% else %}
