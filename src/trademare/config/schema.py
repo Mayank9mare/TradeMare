@@ -355,6 +355,9 @@ class OpsConfig(_Strict):
         le=120,
         description="Check open positions against their stops this often in market hours (0 = off)",
     )
+    ipo_alerts: bool = Field(
+        True, description="Alert when an Indian mainboard IPO opens soon and on its last afternoon of bidding"
+    )
 
 
 class AppConfig(_Strict):

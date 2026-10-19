@@ -55,3 +55,45 @@ p < 0.05 **in both halves** of the sample: issues closing 2016-01 → 2021-12 an
   label is about the listing, not about what any one applicant receives.
 - **Listing-day close ≠ a fill.** Selling at the open or close is assumed with no costs.
 - Market mood moves all IPOs together (2021 and 2024 were hot); buckets pool across cycles.
+
+---
+
+# Results (appended after the run; the plan above was committed first, in 3930fca)
+
+## Sample
+466 mainboard issues listed 2016-01-01 → 2026-10-17 had an issue price and listing date. 33 had no
+subscription figures at NSE and 22 had no Yahoo bar within 3 days of listing (renamed or delisted),
+leaving **411**. Five large outliers were spot-checked against the known listings and matched (for
+example Tata Technologies ₹500 → ₹1,313 close, Bajaj Housing Finance ₹70 → ₹165, CDSL ₹149 → ₹262).
+
+## Test
+| Half | Spearman ρ (QIB vs listing-day gain) | p | n |
+|---|---|---|---|
+| 2016–2021 | 0.73 | < 1e-28 | 116 |
+| 2022–2026 | 0.69 | < 1e-60 | 295 |
+| Full sample | 0.69 | < 1e-80 | 411 |
+
+**H1 holds** in both halves, by a wide margin.
+
+## Buckets (full sample)
+| QIB subscribed | IPOs | Median listing-day gain | Listed above issue | Median 6 months vs Nifty | Label (fixed rule) |
+|---|---|---|---|---|---|
+| < 1× | 3 | +16.6% | 67% | −11.1% | Mixed (only 3 issues) |
+| 1–10× | 138 | −1.3% | 43% | −0.4% | **Unfavourable** |
+| 10–50× | 79 | +5.4% | 65% | −4.7% | Mixed |
+| 50–100× | 60 | +26.6% | 92% | +34.5% | **Favourable** |
+| ≥ 100× | 131 | +36.3% | 96% | +42.2% | **Favourable** |
+
+All issues together: median listing-day gain +11.5%, 71% listed above issue.
+
+## Reading
+- Institutional demand sorts listings sharply. Below 10× QIB, buying in the IPO was a coin flip
+  with a slightly negative median; from 50× up, more than 9 in 10 listed above the issue price.
+- The 6-month column points the same way, but survivorship (22 issues missing prices) flatters it,
+  and it is not part of the label.
+- The < 1× bucket has 3 issues; its label is shown with that count and means little.
+
+## Applied
+The IPO page shows each issue's bucket record and the label above. The QIB figure while bidding is
+open is partial (institutions bid mostly on the last day), so the page and the closing-day alert say
+so; the label is only firm after the close at 5 pm.

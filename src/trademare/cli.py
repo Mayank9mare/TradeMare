@@ -337,6 +337,46 @@ def cmd_db_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ipo_list(args: argparse.Namespace) -> int:
+    from trademare.analysis.ipo import build_cards
+    from trademare.analysis.ipo_study import load_study
+    from trademare.data.ipo import IpoService, ist_now
+
+    config = load_config(args.config)
+    today = ist_now().date()
+    study = load_study(config.data.cache_dir)
+    cards = build_cards(IpoService(config.data.cache_dir).india(today), today, study)
+    for c in sorted(cards, key=lambda c: c.ipo.start or today, reverse=True):
+        i, sub = c.ipo, c.ipo.subscription
+        demand = ""
+        if sub and sub.qib is not None:
+            demand = f"QIB {sub.qib:.1f}x retail {sub.retail or 0:.1f}x total {sub.total or 0:.1f}x"
+        band = f"₹{i.price_low:,.0f}-{i.price_high:,.0f}"
+        print(f"{c.status:9} {i.symbol:12} {i.start} → {i.end}  {band}  {demand}  {c.label or ''}")
+    if study is None:
+        print("(run `trademare ipo study` for the track record of past IPOs by QIB demand)")
+    return 0
+
+
+def cmd_ipo_study(args: argparse.Namespace) -> int:
+    from trademare.analysis.ipo_study import run_study
+    from trademare.data.ipo import IpoService
+
+    config = load_config(args.config)
+    summary = run_study(IpoService(config.data.cache_dir), config.data.cache_dir)
+    print(f"{summary['sample']['n']} IPOs; dropped {summary['sample']['dropped']}")
+    for half, h in summary["halves"].items():
+        print(f"{half}: Spearman {h['rho']:.3f} (p {h['p']:.4f}, n {h['n']})")
+    print("H1 holds" if summary["h1_holds"] else "H1 fails: no labels will be shown")
+    for b in summary["buckets"]:
+        if b["count"]:
+            print(
+                f"  QIB {b['bucket']:8} n={b['count']:3}  median {b['median_gain']:+.1%}"
+                f"  above issue {b['share_above']:.0%}"
+            )
+    return 0
+
+
 def cmd_daily(args: argparse.Namespace) -> int:
     from trademare.trading.pipeline import run_daily_pipeline
 
@@ -638,6 +678,16 @@ def build_parser() -> argparse.ArgumentParser:
     restore = dbp.add_parser("restore", help="list backups, or restore one (stop the server first)")
     restore.add_argument("file", nargs="?", help="backup file to restore")
     restore.set_defaults(func=cmd_db_restore)
+
+    ipo = sub.add_parser("ipo", help="Indian IPOs: list current issues, or run the demand study")
+    ipo_sub = ipo.add_subparsers(dest="ipo_cmd")
+    ipo.set_defaults(func=cmd_ipo_list)
+    ipo_sub.add_parser("list", help="open, upcoming and recent mainboard IPOs").set_defaults(
+        func=cmd_ipo_list
+    )
+    ipo_sub.add_parser(
+        "study", help="re-run the pre-registered study of QIB demand vs listing gains (slow the first time)"
+    ).set_defaults(func=cmd_ipo_study)
 
     daily = sub.add_parser("daily", help="run the daily process now: data, paper fills, signals, digest")
     daily.add_argument("-m", "--market", choices=[m.value for m in Market])

@@ -142,6 +142,8 @@ ops:                           # backups and the missed-run alarm
   health_grace_hours: 3        # a run counts as missed this long after daily_run_time
   intraday_check_minutes: 15   # in market hours: alert when a holding trades through its stop, and exit
                                # live positions whose stop is stuck past its limit (0 = off)
+  ipo_alerts: true             # India: alert when a mainboard IPO opens within 2 days, and at 2:30 pm on its
+                               # last bidding day with the demand so far (never applies for you)
 
 backtest:
   years: 5                     # default length, ending at the latest cached session

@@ -28,6 +28,7 @@ from trademare.storage.db import Database
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
 from trademare.web.glossary import tip
+from trademare.web.ipo_routes import register_ipo_routes
 from trademare.web.overview_data import (
     account_summary,
     market_status,
@@ -80,6 +81,7 @@ def create_app(
     env.globals.update(version=__version__, markets=list(config.markets), asset_v=asset_v, tip=tip)
 
     register_trading_routes(app, templates, config, service, db, secrets)
+    register_ipo_routes(app, templates, config, db, secrets)
     scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}
 
     def latest_scan(market: Market) -> ScanResult | None:

@@ -21,6 +21,7 @@
 {% set i_flask = '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6L4 19a1 1 0 0 0 1 2h14a1 1 0 0 0 1-2l-6-10V3"/></svg>' %}
 {% set i_book = '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z"/><path d="M8 8h6M8 12h6"/></svg>' %}
 {% set i_gear = '<svg width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg>' %}
+{% set i_rocket = '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M12 15l-3-3c1.5-4.5 5-8 10-9-1 5-4.5 8.5-9 10"/><path d="M9 12H5l2-4h4"/><path d="M12 15v4l4-2v-4"/><path d="M6 17c-1 1-1.5 3-1.5 3s2-.5 3-1.5"/></svg>' %}
 <body>
 <div class="shell">
   <aside class="sidebar">
@@ -33,6 +34,7 @@
     <div class="nav-label">Markets</div>
     {% for m in markets %}{{ nav("/m/" ~ m.value, ("Nifty 500" if m.value == "IN" else "S&P 500"), i_chart, path.startswith("/m/" ~ m.value) and not path.endswith("/ideas")) }}{% endfor %}
     {% for m in markets %}{{ nav("/m/" ~ m.value ~ "/ideas", "Ideas " ~ m.value, i_bulb, path == "/m/" ~ m.value ~ "/ideas") }}{% endfor %}
+    {% if "IN" in markets | map(attribute="value") | list %}{{ nav("/ipos", "IPOs", i_rocket, path.startswith("/ipos")) }}{% endif %}
     <div class="nav-label">Research</div>
     {{ nav("/backtests", "Backtests", i_flask, path.startswith("/backtests")) }}
     {{ nav("/settings", "Settings", i_gear, path.startswith("/settings")) }}

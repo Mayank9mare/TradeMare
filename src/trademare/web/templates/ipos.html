@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}IPOs · TradeMare{% endblock %}
+{% macro times(x) %}{% if x is none %}—{% else %}{{ "%.1f" | format(x) }}×{% endif %}{% endmacro %}
+{% macro label_pill(label) %}{% if label %}<span class="pill {{ {'Favourable': 'good', 'Unfavourable': 'bad'}.get(label, 'warn') }}">{{ label }}</span>{{ tip("ipo_label", "this label") }}{% endif %}{% endmacro %}
+{% macro sub_bar(name, x, key) %}
+  <div class="sub-row"><span>{{ name }}{{ tip(key) }}</span>
+    <span class="sub-track"><i style="width:{{ x | times_width }}%"></i></span>
+    <b>{{ times(x) }}</b></div>
+{% endmacro %}
+{% block content %}
+{% set open_ = cards | selectattr("status", "equalto", "open") | list %}
+{% set soon = cards | selectattr("status", "equalto", "upcoming") | list %}
+{% set closed = cards | selectattr("status", "equalto", "closed") | list %}
+{% set listed = cards | selectattr("status", "equalto", "listed") | list %}
+<h1>IPOs{{ tip("ipo", "an IPO") }}</h1>
+{% include "_flash.html" %}
+<p class="muted">NSE mainboard issues: open now, opening soon, and the last 30 days. Figures come from NSE (subscription updates hourly while bidding is open).
+  TradeMare never applies for you: apply through your bank's or broker's IPO screen with a UPI mandate before 5 pm on the last day.</p>
+
+{# ------------------------------------------------------------------ track record #}
+<div class="card ipo-study">
+  <h2 style="margin-top:0">What QIB demand has meant for past IPOs{{ tip("qib_bucket", "these groups") }}</h2>
+  {% if study %}
+  <p class="sub">{{ study.n }} NSE mainboard IPOs listed 2016 – Oct 2026, grouped by final institutional (QIB) subscription.
+    {% if study.h1_holds %}Higher QIB demand went with better listings in both halves of the sample, so each group carries a fixed label.
+    {% else %}The link between QIB demand and listings was not reliable in both halves of the sample, so no labels are shown.{% endif %}
+    <a href="https://github.com/Mayank9mare/TradeMare/blob/main/docs/research/2026-10-19-ipo-demand-plan.md">Method and results</a></p>
+  <div class="table-wrap"><table class="data">
+    <thead><tr><th>QIB subscribed</th><th class="num">IPOs</th><th class="num">Median listing-day gain{{ tip("listing_gain", "listing-day gain") }}</th><th class="num">Listed above issue</th><th class="num">6 months vs Nifty{{ tip("excess_6m", "6 months vs Nifty") }}</th>{% if study.h1_holds %}<th>Label</th>{% endif %}</tr></thead>
+    <tbody>{% for name in buckets %}{% set b = study.buckets.get(name) %}
+      <tr><td><b>{{ name }}</b></td><td class="num">{{ b.count if b else 0 }}</td>
+        <td class="num {{ b.median_gain | tone if b }}">{{ b.median_gain | pct(1, True) if b and b.count else "—" }}</td>
+        <td class="num">{{ b.share_above | pct(0) if b and b.count else "—" }}</td>
+        <td class="num {{ b.median_excess_6m | tone if b }}">{{ b.median_excess_6m | pct(1, True) if b and b.count_6m else "—" }}{% if b and b.count_6m %}<div class="sub">median of {{ b.count_6m }}</div>{% endif %}</td>
+        {% if study.h1_holds %}<td>{{ label_pill(study.bucket_label(name)) }}</td>{% endif %}</tr>
+    {% endfor %}</tbody></table></div>
+  {% else %}
+  <p class="sub">The study has not been run on this machine yet. Run <code>trademare ipo study</code> (takes about 20 minutes the first time) to see how past IPOs with similar demand listed.</p>
+  {% endif %}
+</div>
+
+{# ------------------------------------------------------------------ cards #}
+{% macro ipo_card(c) %}{% set i = c.ipo %}{% set f = i.facts %}{% set sub = i.subscription %}
+<article class="card ipo-card" id="ipo-{{ i.symbol }}">
+  <div class="idea-head">
+    <div>
+      <div class="sig-title"><b class="sym">{{ i.company }}</b> <span class="pill plain">{{ i.symbol }}</span>
+        <span class="stage {{ 'open' if c.status == 'open' else '' }}">{{ {"open": "bidding open", "upcoming": "opens soon", "closed": "closed · awaiting listing", "listed": "listed"}[c.status] }}</span>
+        {{ label_pill(c.label) }}</div>
+      <div class="sub">
+        {% if c.status == "upcoming" %}bidding {{ i.start.strftime("%a %d %b") }} – {{ i.end.strftime("%a %d %b") }}
+        {% elif c.status == "open" %}{% if i.end == today %}<b class="down">closes today, 5 pm IST</b>{% else %}closes <b>{{ i.end.strftime("%a %d %b") }}, 5 pm IST</b>{% endif %}
+        {% else %}bidding closed {{ i.end.strftime("%a %d %b") }}{% if i.listing_date %} · lists {{ i.listing_date.strftime("%a %d %b") }}{% endif %}{% endif %}
+        {% if f and f.lead_managers %} · lead managers: {{ f.lead_managers }}{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="levels sig-levels">
+    <div><span>Price band{{ tip("price_band", "the price band") }}</span><b>₹{{ "{:,.0f}".format(i.price_low) }}{% if i.price_high != i.price_low %} – {{ "{:,.0f}".format(i.price_high) }}{% endif %}</b>{% if i.issue_price %}<small>final ₹{{ "{:,.2f}".format(i.issue_price) }}</small>{% endif %}</div>
+    <div><span>Lot{{ tip("lot", "a lot") }}</span><b>{{ f.lot if f and f.lot else "—" }} shares</b><small>{% if i.min_investment %}{{ i.min_investment | money("IN", False) }} per lot{% endif %}</small></div>
+    {% if i.issue_value %}<div><span>Issue size{{ tip("issue_size", "issue size") }}</span><b>{{ i.issue_value | money("IN") }}</b></div>{% endif %}
+    <div><span>Type{{ tip("issue_type", "issue type") }}</span><b class="small-b">{{ {"fresh": "Fresh issue", "ofs": "Offer for sale", "fresh+ofs": "Fresh + OFS"}.get(f.kind, "—") if f else "—" }}</b></div>
+  </div>
+  {% if sub %}
+  <div class="subs">
+    <p class="sub" style="margin:0 0 6px">Subscription{{ tip("subscription") }} · {{ "final" if c.status != "open" else "so far" }}{% if sub.as_of %} · as of {{ sub.as_of }}{% endif %}</p>
+    {{ sub_bar("Institutions (QIB)", sub.qib, "qib") }}
+    {{ sub_bar("Wealthy individuals (NII)", sub.nii, "nii") }}
+    {{ sub_bar("Retail", sub.retail, "retail_portion") }}
+    {{ sub_bar("Total", sub.total, "subscription") }}
+  </div>
+  {% endif %}
+  {% set st = c.stats %}
+  {% if st and st.count %}
+  <p class="track">Past IPOs with QIB {{ c.bucket }}{{ tip("qib_bucket", "this group") }}: <b>{{ st.count }}</b>, median listing-day gain <b class="{{ st.median_gain | tone }}">{{ st.median_gain | pct(0, True) }}</b>, <b>{{ st.share_above | pct(0) }}</b> listed above issue{% if st.count_6m %}, after 6 months a median <b class="{{ st.median_excess_6m | tone }}">{{ st.median_excess_6m | pct(1, True) }}</b> vs the Nifty{% endif %}.</p>
+  {% endif %}
+  {% if c.listing %}
+  <p class="track">Listed: day-one close <b class="{{ c.listing_gain | tone }}">{{ c.listing_gain | pct(1, True) }}</b> vs issue price · now <b class="{{ c.gain_since | tone }}">{{ c.gain_since | pct(1, True) }}</b> <span class="sub">({{ c.listing.last_date }})</span></p>
+  {% endif %}
+  {% set notes = c.notes + ([("Retail allotment is a lottery: roughly a 1 in " ~ ((1 / c.retail_odds) | round | int) ~ " chance of a lot.")] if c.retail_odds and c.status != "listed" else []) %}
+  {% if notes %}<ul class="event-alerts">{% for n in notes %}<li class="note">{{ n }}</li>{% endfor %}</ul>{% endif %}
+  {% if f and f.prospectus_url %}<p class="sub">Prospectus (RHP): <a href="{{ f.prospectus_url }}">{{ f.prospectus_url.rsplit("/", 1)[-1] }}</a> · read the risk factors and financials before applying.</p>{% endif %}
+  {% if c.status in ("open", "upcoming", "closed") %}
+  {% set qa = asks.get(i.symbol, []) %}
+  <details class="ask"{% if qa %} open{% endif %}>
+    <summary>Ask Claude about this IPO{{ tip("ask_claude", "Ask Claude") }}{% if qa %} <span class="faint">({{ qa | length }})</span>{% endif %}</summary>
+    {% for a in qa %}<div class="ask-answer">
+      <p class="ask-q">{{ a.question }}</p>
+      <p class="ask-a">{{ a.answer }}</p>
+      {% if a.risks %}<ul class="reasons">{% for r in a.risks %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+      <p class="sub">{{ a.ts.strftime("%Y-%m-%d %H:%M") }} UTC · ${{ "%.3f" | format(a.cost_usd or 0) }} · from the facts on this card only</p>
+    </div>{% endfor %}
+    {% if llm_missing %}<p class="sub">To use this, {{ llm_missing }}.</p>
+    {% else %}<form method="post" action="/ipos/{{ i.symbol | urlencode }}/ask" class="ask-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="text" name="question" maxlength="500" placeholder="What stands out in this IPO, for and against?">
+      <button type="submit">Ask</button>
+      <span class="sub">Uses only the facts on this card (Claude may not know this company); counts toward llm.max_daily_cost_usd.</span>
+    </form>{% endif %}
+  </details>
+  {% endif %}
+</article>
+{% endmacro %}
+
+<h2>Bidding open <small class="muted">{{ open_ | length }}</small></h2>
+{% if open_ %}<div class="ideas">{% for c in open_ %}{{ ipo_card(c) }}{% endfor %}</div>
+{% else %}<div class="empty">No mainboard IPO is taking bids right now.</div>{% endif %}
+
+<h2>Opening soon <small class="muted">{{ soon | length }}</small></h2>
+{% if soon %}<div class="ideas">{% for c in soon %}{{ ipo_card(c) }}{% endfor %}</div>
+{% else %}<div class="empty">Nothing announced yet. Issues usually appear here a few days before they open.</div>{% endif %}
+
+{% if closed %}
+<h2>Closed, awaiting listing <small class="muted">{{ closed | length }}</small></h2>
+<div class="ideas">{% for c in closed %}{{ ipo_card(c) }}{% endfor %}</div>
+{% endif %}
+
+{% if listed %}
+<h2>Listed in the last 30 days <small class="muted">{{ listed | length }}</small></h2>
+<p class="sub">How each did against the issue price, with the label the fixed rule gives its final QIB demand. Issues listed up to 17 Oct 2026 were part of the study; later ones are a fresh check of the rule.</p>
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Company</th><th>Listed</th><th class="num">Issue price</th><th class="num">QIB{{ tip("qib") }}</th>{% if study and study.h1_holds %}<th>Rule said</th>{% endif %}<th class="num">Day one{{ tip("listing_gain", "listing-day gain") }}</th><th class="num">Since</th></tr></thead>
+  <tbody>{% for c in listed %}{% set i = c.ipo %}
+    <tr><td><b>{{ i.company }}</b><div class="sub">{{ i.symbol }}</div></td>
+      <td>{{ i.listing_date.strftime("%d %b") }}</td>
+      <td class="num">{{ i.price | money("IN", False) }}</td>
+      <td class="num">{{ times(c.qib) }}</td>
+      {% if study and study.h1_holds %}<td>{{ label_pill(c.label) if c.label else "—" }}</td>{% endif %}
+      <td class="num {{ c.listing_gain | tone }}">{{ c.listing_gain | pct(1, True) }}</td>
+      <td class="num {{ c.gain_since | tone }}">{{ c.gain_since | pct(1, True) }}{% if c.listing %}<div class="sub">{{ c.listing.last_date }}</div>{% endif %}</td></tr>
+  {% endfor %}</tbody></table></div>
+{% endif %}
+
+{% if us %}
+<h2>United States <small class="muted">{{ us | length }} this month</small></h2>
+<p class="sub">From Nasdaq's IPO calendar. US issues publish no demand figures and retail investors rarely get allocations, so these are listed for information only, without a track record or label.</p>
+<div class="table-wrap"><table class="data">
+  <thead><tr><th>Company</th><th>Exchange</th><th>Date</th><th class="num">Price</th><th class="num">Shares</th><th class="num">Raise</th><th>Status</th></tr></thead>
+  <tbody>{% for i in us %}
+    <tr><td><b>{{ i.company }}</b><div class="sub">{{ i.symbol }}</div></td><td>{{ i.exchange }}</td>
+      <td>{{ i.start.strftime("%d %b") if i.start else "—" }}</td>
+      <td class="num">{% if i.price_low and i.price_high and i.price_low != i.price_high %}${{ i.price_low }}–{{ i.price_high }}{% else %}{{ i.price_high | money("US", False) }}{% endif %}</td>
+      <td class="num">{{ "{:,.0f}".format(i.shares_offered) if i.shares_offered else "—" }}</td>
+      <td class="num">{{ i.issue_value | money("US") }}</td>
+      <td>{{ i.extra.deal }}</td></tr>
+  {% endfor %}</tbody></table></div>
+{% endif %}
+{% endblock %}

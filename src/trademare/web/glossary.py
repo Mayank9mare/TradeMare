@@ -214,6 +214,36 @@ GLOSSARY: dict[str, str] = {
     "Small (a few %) means the backtest models reality well.",
     "unexplained": "Trades made on only one side with no decision of yours to explain them. These "
     "point at a problem worth investigating before using real money.",
+    # ---------------------------------------------------------------- IPOs
+    "ipo": "Initial public offering: a company selling shares to the public for the first time. You bid "
+    "during a few days; shares are allotted (often by lottery) and start trading on the listing day.",
+    "price_band": "The range you may bid within. Most retail investors tick 'cut-off', which means "
+    "paying whatever final price is set, normally the top of the band.",
+    "lot": "Bids are made in lots, a fixed number of shares. The minimum investment is one lot at the "
+    "top of the price band.",
+    "issue_size": "The total value of shares on offer, at the top of the price band.",
+    "issue_type": "Fresh issue: new shares, money goes to the company. Offer for sale (OFS): existing "
+    "owners sell their shares and keep the money; the company raises nothing.",
+    "subscription": "How many times over each part of the issue has been bid for. 10× means bids for ten "
+    "times the shares on offer. It is updated hourly while bidding is open.",
+    "qib": "Qualified Institutional Buyers: mutual funds, insurers, banks and foreign funds. They do "
+    "their own research, so their demand is the most watched number. They bid mostly on the last day.",
+    "nii": "Non-institutional investors: wealthy individuals and companies bidding over ₹2 lakh.",
+    "retail_portion": "Individuals bidding up to ₹2 lakh. When this part is oversubscribed, lots are "
+    "allotted by lottery, so applying does not mean you get shares.",
+    "allotment_odds": "A rough chance of getting one lot as a retail applicant: about 1 in the retail "
+    "subscription figure if most people applied for one lot. Real odds are often a little better.",
+    "qib_bucket": "Past NSE mainboard IPOs grouped by how many times over institutions subscribed. Shows "
+    "what happened to IPOs with similar demand, from TradeMare's own study of 2016–2026 listings.",
+    "listing_gain": "Listing-day closing price compared with the issue price. Positive means shares bought "
+    "in the IPO were worth more by the end of the first trading day.",
+    "excess_6m": "Return from the issue price to six months after listing, minus the Nifty 50 over the "
+    "same days. Shows whether holding on after listing has beaten simply owning the index.",
+    "ipo_label": "A fixed rule written before the study ran: Favourable when at least 75% of past IPOs "
+    "with similar QIB demand listed above their issue price and the median gain was 10% or more; "
+    "Unfavourable when under 60% did or the median was negative; Mixed otherwise. The study found QIB "
+    "demand strongly predicted listings in 2016–21 and again in 2022–26. It is a base rate, not a "
+    "forecast for this IPO.",
 }
 
 

@@ -345,3 +345,14 @@ table.data td.run-cell b { white-space: normal; font-weight: 600; line-height: 1
   .score .track { width: 26px; }
   .card table.data th, .card table.data td { padding: 8px 4px; }
 }
+
+/* IPOs */
+.ipo-study { margin-bottom: 18px; }
+.subs { display: grid; gap: 6px; margin: 2px 0 10px; }
+.sub-row { display: grid; grid-template-columns: minmax(150px, 210px) 1fr 64px; align-items: center; gap: 10px; font-size: .85rem; }
+.sub-row > span:first-child { color: var(--muted); }
+.sub-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.sub-track { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.sub-track i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.track { font-size: .88rem; margin: 6px 0; }
+@media (max-width: 560px) { .sub-row { grid-template-columns: 1fr 56px; } .sub-track { grid-column: 1 / -1; grid-row: 2; } }

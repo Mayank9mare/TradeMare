@@ -12,7 +12,8 @@ from trademare.trading.desk import DailyReport
 def test_scheduler_has_one_job_per_market_in_local_time():
     scheduler = build_scheduler(load_config(REPO_CONFIG))
     jobs = {j.id: j for j in scheduler.get_jobs()}
-    assert set(jobs) == {"daily-IN", "daily-US", "backup", "health", "intraday-IN", "intraday-US"}
+    assert set(jobs) == {"daily-IN", "daily-US", "backup", "health", "intraday-IN", "intraday-US", "ipo"}
+    assert str(jobs["ipo"].trigger.timezone) == "Asia/Kolkata"
     assert str(jobs["daily-IN"].trigger.timezone) == "Asia/Kolkata"
     assert "hour='17'" in str(jobs["daily-IN"].trigger) and "day_of_week='mon-fri'" in str(
         jobs["daily-IN"].trigger

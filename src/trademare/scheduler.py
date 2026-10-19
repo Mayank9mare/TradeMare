@@ -85,6 +85,41 @@ def intraday_job(market: Market, config_path: str | None = None) -> None:
         _locks[market].release()
 
 
+def ipo_job(config_path: str | None = None) -> list[str]:
+    """Refresh the Indian IPO calendar and send new alerts (opening soon; closing today)."""
+    from sqlalchemy import select
+
+    from trademare.analysis.ipo import build_cards, ipo_alerts
+    from trademare.analysis.ipo_study import load_study
+    from trademare.data.ipo import IpoService, ist_now
+    from trademare.notify.email import send_text_email
+    from trademare.notify.telegram import send_text
+    from trademare.storage.db import EventRow
+
+    config = load_config(config_path)
+    sent: list[str] = []
+    try:
+        now = ist_now()
+        today = now.date()
+        service = IpoService(config.data.cache_dir)
+        cards = build_cards(service.india(today), today, load_study(config.data.cache_dir))
+        db, secrets = database(config), Secrets()
+        with db.session() as s:
+            done = {
+                ev.data.get("key") for ev in s.scalars(select(EventRow).where(EventRow.kind == "ipo_alert"))
+            }
+            for key, text in ipo_alerts(cards, today, now.hour):
+                if key in done:
+                    continue
+                send_text(config, secrets, text)
+                send_text_email(config, secrets, "TradeMare IPO alert", text)
+                db.log(s, "ipo_alert", text, Market.IN.value, key=key)
+                sent.append(text)
+    except Exception:
+        log.exception("IPO check failed")
+    return sent
+
+
 def build_scheduler(config: AppConfig, config_path: str | None = None) -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     for market, cfg in config.enabled_markets().items():
@@ -110,6 +145,12 @@ def build_scheduler(config: AppConfig, config_path: str | None = None) -> Backgr
                 args=[market, config_path], id=f"intraday-{market.value}",
                 misfire_grace_time=300, coalesce=True, max_instances=1,
             )  # fmt: skip
+    if ops.ipo_alerts and Market.IN in config.enabled_markets():
+        scheduler.add_job(
+            ipo_job,
+            CronTrigger(day_of_week="mon-fri", hour="10,14", minute=30, timezone=MarketClock(Market.IN).tz),
+            args=[config_path], id="ipo", misfire_grace_time=3600, coalesce=True, max_instances=1,
+        )  # fmt: skip
     if ops.backup_enabled:
         hour, minute = (int(x) for x in ops.backup_time.split(":"))
         scheduler.add_job(

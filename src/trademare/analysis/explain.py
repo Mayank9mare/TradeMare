@@ -27,6 +27,16 @@ SYSTEM = (
     "Point out risks and anything in the evidence that argues against the trade. Do not tell the "
     "owner to buy or sell; the decision is theirs. Plain English, no markdown, under 250 words."
 )
+IPO_SYSTEM = (
+    "You help the owner of a personal trading system think about an Indian IPO they could apply for. "
+    "Use only the facts provided: the issue terms, the subscription so far by investor category, and "
+    "the track record of past NSE IPOs with similar institutional (QIB) demand. If the facts do not "
+    "answer the question, say so; do not state facts from outside them (financials, valuations, grey "
+    "market premium, news), because you may not know this company. Explain what the numbers mean, "
+    "including that QIB demand is only final at the close and that retail allotment is a lottery when "
+    "oversubscribed. Do not tell the owner to apply or not; the decision is theirs. Plain English, no "
+    "markdown, under 250 words."
+)
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -82,6 +92,10 @@ def signal_prompt(signal: Any, question: str) -> str:
     )
 
 
+def ipo_prompt(facts: dict[str, Any], question: str) -> str:
+    return f"IPO facts:\n{json.dumps(facts, default=str, indent=1)}\n\nOwner's question: {question}"
+
+
 class SignalExplainer:
     def __init__(self, config: AppConfig, client, ledger_dir: str | Path) -> None:
         self.config, self.client = config, client
@@ -97,13 +111,20 @@ class SignalExplainer:
             return 0.0
 
     def ask(self, signal: Any, question: str, day: date | None = None) -> Answer:
-        day = day or date.today()
         question = (question or "").strip()[:MAX_QUESTION_CHARS] or "Why this pick, and what could go wrong?"
+        return self._ask(SYSTEM, signal_prompt(signal, question), question, day or date.today())
+
+    def ask_ipo(self, facts: dict[str, Any], question: str, day: date | None = None) -> Answer:
+        default = "What stands out in this IPO, for and against?"
+        question = (question or "").strip()[:MAX_QUESTION_CHARS] or default
+        return self._ask(IPO_SYSTEM, ipo_prompt(facts, question), question, day or date.today())
+
+    def _ask(self, system: str, prompt: str, question: str, day: date) -> Answer:
         spent = self.spent_today(day)
         if spent >= self.config.llm.max_daily_cost_usd:
             cap = self.config.llm.max_daily_cost_usd
             raise LLMError(f"today's LLM budget (${cap:.2f}, llm.max_daily_cost_usd) is used up")
-        result = self.client.complete_json(SYSTEM, signal_prompt(signal, question), SCHEMA)
+        result = self.client.complete_json(system, prompt, SCHEMA)
         path = self._ledger(day)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"spent_usd": spent + result.cost_usd}))
