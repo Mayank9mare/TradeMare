@@ -181,6 +181,6 @@ def test_decision_outcome_follows_the_order():
 
     assert _decision_outcome("APPROVED", "FILLED") == ("approved", "approved · filled")
     assert _decision_outcome("APPROVED", "OPEN") == ("pending", "approved · waiting")
-    assert _decision_outcome("APPROVED", "EXPIRED") == ("expired", "approved · not filled")
+    assert _decision_outcome("APPROVED", "EXPIRED") == ("unfilled", "approved · not filled")
     assert _decision_outcome("REJECTED", None) == ("rejected", "rejected")
-    assert _decision_outcome("EXPIRED", None) == ("expired", "expired")
+    assert _decision_outcome("EXPIRED", None) == ("lapsed", "expired")

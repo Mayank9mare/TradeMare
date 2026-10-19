@@ -35,12 +35,12 @@ def _decision_outcome(signal_status: str, order_status: str | None) -> tuple[str
         if order_status == "OPEN":
             return "pending", "approved · waiting"
         if order_status in ("EXPIRED", "CANCELLED", "REJECTED"):
-            return "expired", "approved · not filled"
+            return "unfilled", "approved · not filled"
         return "approved", "approved"
     if signal_status == "REJECTED":
         return "rejected", "rejected"
     if signal_status == "EXPIRED":
-        return "expired", "expired"
+        return "lapsed", "expired"  # no decision was made: neutral, not a warning
     return "pending", signal_status.lower()
 
 
