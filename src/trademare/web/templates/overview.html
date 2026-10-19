@@ -83,7 +83,7 @@
     </div>
 
     <div class="grid two" style="margin-top:18px; grid-template-columns: 1fr 1fr">
-      {% if a.equity_line %}{{ spark(a.equity_line, "Account equity") }}{% else %}<div class="empty">Equity chart appears after a few daily runs</div>{% endif %}
+      {% if a.equity_line %}{{ spark(a.equity_line, "Account equity") }}{% else %}<div class="empty">Equity chart appears after 5 daily runs ({{ a.equity_points }} so far)</div>{% endif %}
       {% if c.index_line %}{{ spark(c.index_line, ("Nifty 50" if m.value == "IN" else "S&P 500") ~ " · 6 months") }}{% endif %}
     </div>
 
@@ -106,14 +106,12 @@
     <p class="sub" style="margin:8px 0 0"><a href="/m/{{ m.value }}/ideas">All {{ c.scan.ideas | length }} ideas →</a></p>
     {% else %}<div class="empty">No ideas yet — run <code>trademare scan</code> or wait for the daily job</div>{% endif %}
 
-    <div class="grid two movers" style="margin-top:18px; grid-template-columns: 1fr 1fr">
-      <div><h3>Top gainers today</h3>
-        <table class="mini">{% for r in c.top %}<tr><td><a href="/m/{{ m.value }}/{{ r.symbol | urlencode }}">{{ r.symbol }}</a></td><td class="num {{ r.returns.chg_1d | tone }}">{{ r.returns.chg_1d | pct(1, True) }}</td></tr>{% endfor %}</table>
-      </div>
-      <div><h3>Top losers today</h3>
-        <table class="mini">{% for r in c.bottom %}<tr><td><a href="/m/{{ m.value }}/{{ r.symbol | urlencode }}">{{ r.symbol }}</a></td><td class="num {{ r.returns.chg_1d | tone }}">{{ r.returns.chg_1d | pct(1, True) }}</td></tr>{% endfor %}</table>
-      </div>
-    </div>
+    {% if c.holdings %}
+    <h3 style="margin-top:18px">Your holdings today</h3>
+    <table class="data mini-holdings"><thead><tr><th>Stock</th><th class="num">Today</th><th class="num">Since you bought</th></tr></thead><tbody>
+    {% for h in c.holdings %}<tr><td><a href="/m/{{ m.value }}/{{ h.symbol | urlencode }}"><b>{{ h.symbol }}</b></a></td><td class="num {{ h.today | tone }}">{{ h.today | pct(1, True) }}</td><td class="num {{ h.since_entry | tone }}">{{ h.since_entry | pct(1, True) }}</td></tr>{% endfor %}
+    </tbody></table>
+    {% endif %}
 
     <div class="card-foot">
       <span>Breadth{{ tip("breadth") }} <b class="up">{{ c.advancers }} up</b> / <b class="down">{{ c.decliners }} down</b></span>

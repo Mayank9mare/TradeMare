@@ -31,6 +31,7 @@ from trademare.web.glossary import tip
 from trademare.web.ipo_routes import register_ipo_routes
 from trademare.web.overview_data import (
     account_summary,
+    holdings_today,
     ideas_vs_signals,
     market_status,
     pending_signals,
@@ -158,8 +159,7 @@ def create_app(
                     last_date=max((r.last_date for r in dated), default=None),
                     advancers=sum(1 for r in rows if (r.returns["chg_1d"] or 0) > 0),
                     decliners=sum(1 for r in rows if (r.returns["chg_1d"] or 0) < 0),
-                    top=sorted(dated, key=lambda r: r.returns["chg_1d"] or 0, reverse=True)[:5],
-                    bottom=sorted(dated, key=lambda r: r.returns["chg_1d"] or 0)[:5],
+                    holdings=holdings_today(db, market, rows),
                     scan=scan,
                     ideas=(scan.ideas[:5] if scan else []),
                     pending=[p for p in pending if p.market == market.value],

@@ -15,6 +15,7 @@ from trademare.core.models import Market
 from trademare.storage.db import Database, EquityRow, MarketStateRow, OrderRow, PositionRow, SignalRow
 
 EXCHANGE = {Market.IN: "NSE", Market.US: "NYSE"}
+MIN_EQUITY_POINTS = 5  # fewer daily values draw a misleading chart
 TZ_LABEL = {Market.IN: "IST", Market.US: "New York"}
 
 
@@ -123,6 +124,7 @@ class Account:
     kill_reason: str | None
     last_processed: date | None
     equity_line: Sparkline | None
+    equity_points: int = 0
 
 
 def account_summary(db: Database, market: Market, budget: float) -> Account:
@@ -146,7 +148,8 @@ def account_summary(db: Database, market: Market, budget: float) -> Account:
         kill_switch=bool(state and state.kill_switch),
         kill_reason=state.kill_reason if state else None,
         last_processed=state.last_processed if state else None,
-        equity_line=sparkline(series),
+        equity_line=sparkline(series) if len(series) >= MIN_EQUITY_POINTS else None,
+        equity_points=len(series),
     )
 
 
@@ -233,3 +236,27 @@ def ideas_vs_signals(db: Database, config, market: Market, scan_date: date | Non
             f"(its tested rebalance){when}. Between those days the ideas are for information."
         )
     return made + ": no idea passed the risk limits (open slots, position and sector caps, regime)."
+
+
+def holdings_today(db: Database, market: Market, rows) -> list[dict]:
+    """Open positions with today's move and the move since entry (from the dashboard snapshot rows)."""
+    by_symbol = {r.symbol: r for r in rows}
+    with db.session() as s:
+        held = [(p.symbol, p.direction, p.entry_price, p.last_price) for p in _open(s, market)]
+    out = []
+    for symbol, direction, entry, last in held:
+        r = by_symbol.get(symbol)
+        price = (r.close if r is not None and getattr(r, "close", None) else None) or last
+        sign = 1 if direction == "LONG" else -1
+        out.append({
+            "symbol": symbol,
+            "today": r.returns.get("chg_1d") if r is not None else None,
+            "since_entry": sign * (price / entry - 1) if price and entry else None,
+        })  # fmt: skip
+    return sorted(out, key=lambda h: h["today"] if h["today"] is not None else 0)
+
+
+def _open(s, market: Market) -> list[PositionRow]:
+    return list(
+        s.scalars(select(PositionRow).where(PositionRow.market == market.value, PositionRow.status == "open"))
+    )
