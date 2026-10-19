@@ -72,13 +72,13 @@
   --accent-soft: rgba(126, 164, 255, 0.14); --up: #4cc27e; --down: #ff7b7b; --good: #2fb36b; --warning: #f0b54a;
   --critical: #f05d5d; --sma50: #e07a45; --sma200: #9b8ff0; --card-border: #20242b;
 }
-/* Dim: between light and dark. Mid slate greys and softer contrast, easy on the eyes in a lit room */
+/* Dim: between light and dark. Neutral graphite (no blue cast), lighter than Dark, softer than Light */
 :root[data-theme="dim"] {
   color-scheme: dark;
-  --bg: #22272e; --surface: #2b313a; --surface-2: #343b45; --text: #d5dde6; --muted: #a2adba; --faint: #8592a1;
-  --border: #3b434e; --border-strong: #4a5360; --row-hover: #313843; --accent: #7cb4ff;
-  --accent-soft: rgba(124, 180, 255, 0.15); --up: #6bc47f; --down: #f08279; --good: #4fae66; --warning: #e3b55a;
-  --critical: #e5675e; --sma50: #e08a5a; --sma200: #a99cf0; --card-border: transparent;
+  --bg: #2c2c2b; --surface: #363635; --surface-2: #41413f; --text: #ecebe7; --muted: #bfbcb5; --faint: #9a978f;
+  --border: #4a4946; --border-strong: #5a5955; --row-hover: #3d3d3b; --accent: #8fb4f5;
+  --accent-soft: rgba(143, 180, 245, 0.14); --up: #7ccb8c; --down: #f28b82; --good: #5bb873; --warning: #e8b85c;
+  --critical: #ec6f66; --sma50: #e8925f; --sma200: #b2a6f2; --card-border: transparent;
 }
 
 * { box-sizing: border-box; }
