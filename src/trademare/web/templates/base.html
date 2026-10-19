@@ -24,7 +24,7 @@
 {% set i_rocket = '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M12 15l-3-3c1.5-4.5 5-8 10-9-1 5-4.5 8.5-9 10"/><path d="M9 12H5l2-4h4"/><path d="M12 15v4l4-2v-4"/><path d="M6 17c-1 1-1.5 3-1.5 3s2-.5 3-1.5"/></svg>' %}
 <body>
 <div class="shell">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <a class="brand" href="/"><span class="logo">T</span><span>Trade<span class="mare">Mare</span></span></a>
     {{ nav("/", "Overview", i_home, path == "/") }}
     {{ nav("/signals", "Signals", i_bell, path.startswith("/signals"), ui.pending_total) }}
@@ -43,8 +43,8 @@
   <div class="content">
     <div class="statusbar">
       {% for s in ui.statuses %}
-      <span class="status-chip"><span class="dot{{ ' open' if s.is_open }}"></span><b>{{ s.exchange }}</b> {{ "open" if s.is_open else "closed" }}{% if s.next_run %} · next run {{ s.next_run.strftime("%a %d %b %H:%M") }} {{ s.tz_label }}{{ tip("next_run", "the next run") }}{% endif %}</span>
-      {% if s.prices_through %}<span class="status-chip{{ ' stale' if s.behind }}">{% if s.behind %}⚠ {% endif %}{{ s.exchange }} prices to <b>{{ s.prices_through.strftime("%a %d %b") }}</b>{% if s.behind %} · {{ s.behind }} session{{ "s" if s.behind != 1 }} behind{% endif %}{{ tip("prices_as_of", "price freshness") }}</span>{% endif %}
+      <span class="status-chip"><span class="dot{{ ' open' if s.is_open }}"></span><b>{{ s.exchange }}</b> {{ "open" if s.is_open else "closed" }}{% if s.next_run %}<span class="chip-long"> · next run {{ s.next_run.strftime("%a %d %b %H:%M") }} {{ s.tz_label }}{{ tip("next_run", "the next run") }}</span>{% endif %}</span>
+      {% if s.prices_through %}<span class="status-chip prices{{ ' stale' if s.behind }}">{% if s.behind %}⚠ {% endif %}{{ s.exchange }} prices to <b>{{ s.prices_through.strftime("%a %d %b") }}</b>{% if s.behind %} · {{ s.behind }} session{{ "s" if s.behind != 1 }} behind{% endif %}{{ tip("prices_as_of", "price freshness") }}</span>{% endif %}
       {% endfor %}
       {% if ui.pending_total %}<a class="status-chip" href="/signals"><span class="dot open" style="background:var(--accent);box-shadow:none"></span><b>{{ ui.pending_total }}</b> signal{{ "s" if ui.pending_total != 1 }} awaiting you</a>{% endif %}
     </div>
@@ -52,6 +52,13 @@
     <footer>TradeMare {{ version }} · data from a local cache · not financial advice</footer>
   </div>
 </div>
+<nav class="tabbar" aria-label="Main">
+  <a href="/" class="{{ 'active' if path == '/' }}">{{ i_home | safe }}<span>Overview</span></a>
+  <a href="/signals" class="{{ 'active' if path.startswith('/signals') }}">{{ i_bell | safe }}<span>Signals</span>{% if ui.pending_total %}<i class="count">{{ ui.pending_total }}</i>{% endif %}</a>
+  <a href="/journal" class="{{ 'active' if path == '/journal' }}">{{ i_book | safe }}<span>Journal</span></a>
+  {% if "IN" in markets | map(attribute="value") | list %}<a href="/ipos" class="{{ 'active' if path.startswith('/ipos') }}">{{ i_rocket | safe }}<span>IPOs</span></a>{% endif %}
+  <button type="button" class="tab-more" aria-expanded="false" aria-controls="sidebar"><svg width="17" height="17" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>More</span></button>
+</nav>
 <script src="/static/app.js?v={{ asset_v }}"></script>
 {% block scripts %}{% endblock %}
 </body>

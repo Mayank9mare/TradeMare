@@ -45,6 +45,12 @@ def test_expired_says_why_from_that_sessions_prices():
         "Buy 4 CHENNPETRO expired on Mon 19 Oct without filling: the lowest price, ₹1,411.00, "
         "stayed above your limit ₹1,406.60."
     )
+    mcx = pd.DataFrame(
+        {"open": [3160.0], "high": [3190.0], "low": [3155.6], "close": [3170.0]},
+        index=pd.DatetimeIndex([pd.Timestamp("2026-10-19")]),
+    )
+    _, text = describe(order(status="EXPIRED", symbol="MCX", limit_price=3162.0), Store({"MCX": mcx}))
+    assert "did reach your limit ₹3,162.00 (it traded at ₹3,155.60)" in text
     _, text = describe(order(status="EXPIRED"), Store({}))
     assert text.endswith("without filling: no prices for that session.")
     assert Market(order().market) is Market.IN

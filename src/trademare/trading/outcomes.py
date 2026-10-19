@@ -33,9 +33,16 @@ def unfilled_reason(side: str, limit: float | None, bar: pd.Series | None, marke
     if limit is None:
         return "it was not filled"
     yours = money(limit, market)
+    low, high = float(bar["low"]), float(bar["high"])
+    if (side == "BUY" and low <= limit) or (side == "SELL" and high >= limit):
+        reached = money(low if side == "BUY" else high, market)
+        return (
+            f"the price did reach your limit {yours} (it traded at {reached}), but the order was "
+            "closed before that session's prices were checked"
+        )
     if side == "BUY":
-        return f"the lowest price, {money(float(bar['low']), market)}, stayed above your limit {yours}"
-    return f"the highest price, {money(float(bar['high']), market)}, stayed below your limit {yours}"
+        return f"the lowest price, {money(low, market)}, stayed above your limit {yours}"
+    return f"the highest price, {money(high, market)}, stayed below your limit {yours}"
 
 
 def session_bar(store, market: Market, symbol: str, day: date | None) -> pd.Series | None:

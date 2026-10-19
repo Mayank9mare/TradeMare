@@ -230,15 +230,24 @@ table.mini tr:last-child td { border-bottom: none; }
 .settings-form input[type=text], .settings-form select { width: 11rem; }
 
 /* ---------------------------------------------------------------- responsive */
+.tabbar { display: none; }
 @media (max-width: 960px) {
   .shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: 10px 12px; border-right: none; border-bottom: 1px solid var(--border); gap: 2px; }
-  .brand { padding: 0 10px 0 4px; }
-  .nav-label, .sidebar-foot { display: none; }
-  .nav-link { white-space: nowrap; }
-  .statusbar { position: static; padding: 10px 16px; }
+  /* Phone and tablet: main pages in a bottom tab bar; everything else behind "More" */
+  .sidebar { display: none; position: fixed; inset: 0; z-index: 30; height: auto; width: 100%; border-right: none; padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(76px + env(safe-area-inset-bottom, 0px)); }
+  body.nav-open .sidebar { display: flex; }
+  body.nav-open { overflow: hidden; }
+  .tabbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--border); padding: 4px 4px env(safe-area-inset-bottom, 0px); }
+  .tabbar a, .tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: .68rem; color: var(--muted); text-decoration: none; background: none; border: none; font-family: inherit; cursor: pointer; position: relative; }
+  .tabbar svg { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .tabbar .active, body.nav-open .tab-more { color: var(--accent); }
+  .tabbar .count { position: absolute; top: 2px; left: calc(50% + 6px); font-style: normal; font-size: .62rem; font-weight: 700; background: var(--accent); color: #fff; border-radius: 999px; padding: 0 5px; }
+  .statusbar { flex-wrap: nowrap; overflow-x: auto; padding: 8px 16px; scrollbar-width: none; }
+  .statusbar::-webkit-scrollbar { display: none; }
+  .status-chip { white-space: nowrap; flex: none; }
+  .chip-long, .status-chip.prices:not(.stale) { display: none; }
   main { padding: 20px 16px 40px; }
-  footer { padding: 0 16px 24px; }
+  footer { padding: 0 16px calc(84px + env(safe-area-inset-bottom, 0px)); }
   #chart { height: 320px; }
   .price { text-align: left; }
 }

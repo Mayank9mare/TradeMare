@@ -129,3 +129,16 @@
     form.addEventListener("input", update);
   }
 })();
+
+// Phone: the "More" tab opens the full navigation; tapping a link or More again closes it.
+(() => {
+  const more = document.querySelector(".tab-more");
+  if (!more) return;
+  const toggle = (open) => {
+    document.body.classList.toggle("nav-open", open);
+    more.setAttribute("aria-expanded", String(open));
+  };
+  more.addEventListener("click", () => toggle(!document.body.classList.contains("nav-open")));
+  document.querySelectorAll("#sidebar a").forEach(a => a.addEventListener("click", () => toggle(false)));
+  document.addEventListener("keydown", e => { if (e.key === "Escape") toggle(false); });
+})();
