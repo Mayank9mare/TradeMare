@@ -11,7 +11,7 @@
 <section class="card chart-card">
   <div class="chart-controls">
     {% for y, label in [(0.5, "6M"), (1, "1Y"), (3, "3Y"), (8, "Max")] %}<button data-years="{{ y }}" {% if y == 1 %}class="active"{% endif %}>{{ label }}</button>{% endfor %}
-    <span class="legend"><i class="sw sma50"></i>SMA 50 <i class="sw sma200"></i>SMA 200{{ tip("sma_lines", "the moving averages") }}</span>
+    <span class="legend"><i class="sw sma50"></i>50-day average <i class="sw sma200"></i>200-day average{{ tip("sma_lines", "the moving averages") }}</span>
   </div>
   <div id="chart" data-market="{{ market.value }}" data-symbol="{{ symbol }}"></div>
 </section>
@@ -27,8 +27,8 @@
   <div class="grid two">
   {% for name, a in score.analysts.items() %}
     <div>
-      <h3>{{ name }} {{ score_bar(a.score) }}</h3>
-      <div class="components">{% for k, v in a.details.items() %}<span>{{ k }} {{ score_bar(v) }}</span>{% endfor %}</div>
+      <h3>{{ name | factor_name }} {{ score_bar(a.score) }}</h3>
+      <div class="components">{% for k, v in a.details.items() %}<span>{{ k | factor_name }} {{ score_bar(v) }}</span>{% endfor %}</div>
       <ul class="reasons">{% for r in a.reasons %}<li>{{ r | plain_reason }}</li>{% else %}<li class="muted">No notable factors</li>{% endfor %}</ul>
     </div>
   {% endfor %}

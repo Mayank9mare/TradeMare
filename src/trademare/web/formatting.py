@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001  (times sign in user-facing text)
 """Jinja filters for money, percentages and ratios."""
 
 from __future__ import annotations
@@ -116,3 +117,48 @@ def run_label(overrides: list[str] | None) -> str:
         elif value.lower() not in ("false", "null"):
             parts.append(f"{leaf} {value}")
     return " · ".join(parts) or "settings as configured"
+
+
+UNIVERSE_NAMES = {"nifty500": "Nifty 500", "nifty200": "Nifty 200", "nifty50": "Nifty 50", "sp500": "S&P 500"}
+ANALYST_NAMES = {
+    "technical": "Price trend",
+    "fundamental": "Company quality",
+    "factor": "Factor ranks",
+    "sentiment": "News sentiment",
+    "forensic": "Accounting checks",
+}
+
+
+def universe_name(key: str | None) -> str:
+    return UNIVERSE_NAMES.get(str(key), str(key))
+
+
+def factor_name(key: str) -> str:
+    """Display name for a factor or analyst key, e.g. mom_12_1 -> 12-1 month momentum."""
+    from trademare.analysis.factors import FACTORS
+
+    if key in FACTORS:
+        return FACTORS[key].label
+    return ANALYST_NAMES.get(key, key.replace("_", " ").capitalize())
+
+
+def stop_rule(cfg) -> str:
+    """Plain description of a market's stop-loss and target settings."""
+    sl, tp = cfg.stop_loss, cfg.take_profit
+    method = str(getattr(sl.method, "value", sl.method))
+    if method == "atr":
+        stop = f"stop-loss {sl.atr_multiple:g}× the average daily range (ATR) below entry"
+    elif method == "percent":
+        stop = f"stop-loss {sl.percent:g}% below entry"
+    else:
+        stop = f"stop-loss by {method}"
+    if sl.trailing:
+        stop += ", trailing up as the price rises"
+    tp_method = str(getattr(tp.method, "value", tp.method))
+    if tp_method == "none":
+        target = "no profit target (exits come from the strategy)"
+    elif tp_method == "r_multiple":
+        target = f"profit target at {tp.value:g}× the amount risked"
+    else:
+        target = f"profit target {tp.value:g}% above entry"
+    return f"{stop}; {target}"

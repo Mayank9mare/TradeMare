@@ -10,10 +10,10 @@
   <div class="card-head"><h2>Market regime{{ tip("regime", "market regime") }} · {{ scan.asof }}</h2>{{ regime_badge(scan.regime) }}</div>
   <ul class="reasons">{% for r in scan.regime.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
   <p class="muted small">
-    Weights{{ tip("weights") }}: {% for k, v in scan.weights.items() if v > 0 %}{{ k }} {{ "%.2f" | format(v) }}{{ ", " if not loop.last }}{% endfor %}
-    · long needs score ≥ {{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_off" else 0)) }}
-    {% if cfg.allow_short %}· short needs score ≤ −{{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_on" else 0)) }}{% else %}· shorts disabled{% endif %}
-    · stop: {{ cfg.stop_loss.method }} · target: {{ cfg.take_profit.method }} {{ cfg.take_profit.value }}
+    Ranked on{{ tip("weights") }}: {% for k, v in scan.weights.items() if v > 0 %}{{ k | factor_name }} ({{ v | pct(0) }}){{ ", " if not loop.last }}{% endfor %}.
+    A buy needs a score of at least {{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_off" else 0)) }}{% if scan.regime.label.value == "risk_off" %} (raised because the market is risk-off){% endif %}.
+    {% if cfg.allow_short %}A short needs −{{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_on" else 0)) }} or lower.{% else %}Short selling is off.{% endif %}
+    Exits: {{ cfg | stop_rule }}.
   </p>
 </section>
 
@@ -33,7 +33,7 @@
     </div>
     <div class="levels">
       <div><span>Entry (limit){{ tip("entry_limit", "the entry limit") }}</span><b>{{ lv.entry | money(market, False) }}</b></div>
-      <div><span>Stop ({{ lv.stop_method }}){{ tip("stop", "the stop-loss") }}</span><b class="down">{{ lv.stop | money(market, False) }}</b><small>{{ ((lv.stop / lv.entry) - 1) | pct(1, True) }}</small></div>
+      <div><span>Stop-loss{{ tip("stop", "the stop-loss") }}</span><b class="down">{{ lv.stop | money(market, False) }}</b><small>{{ ((lv.stop / lv.entry) - 1) | pct(1, True) }}</small></div>
       <div><span>Target{{ tip("target") }}</span><b class="up">{{ lv.target | money(market, False) }}</b>{% if lv.target %}<small>{{ ((lv.target / lv.entry) - 1) | pct(1, True) }}</small>{% endif %}</div>
       <div><span>Risk / share{{ tip("risk_per_share", "risk per share") }}</span><b>{{ lv.risk_per_share | money(market, False) }}</b></div>
     </div>

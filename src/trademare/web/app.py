@@ -77,6 +77,9 @@ def create_app(
         local_time=formatting.local_time,
         run_label=formatting.run_label,
         plain_reason=lambda r: plain(str(r))[0],
+        universe_name=formatting.universe_name,
+        factor_name=formatting.factor_name,
+        stop_rule=formatting.stop_rule,
     )
     # Cache-busting: static URLs carry the files' modification time, so browsers fetch new versions.
     asset_v = max(int(f.stat().st_mtime) for f in (HERE / "static").iterdir())

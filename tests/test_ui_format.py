@@ -18,3 +18,16 @@ def test_run_label_names_what_a_backtest_tested():
     ]  # fmt: skip
     assert run_label(overrides) == "momentum + earnings yield · vol targeting · skip top 20% volatile"
     assert run_label([]) == "settings as configured"
+
+
+def test_plain_names():
+    from tests.conftest import REPO_CONFIG
+    from trademare.config import load_config
+    from trademare.core.models import Market
+    from trademare.web.formatting import factor_name, stop_rule, universe_name
+
+    assert universe_name("nifty500") == "Nifty 500" and universe_name("odd") == "odd"
+    assert factor_name("mom_12_1") == "12-1 month momentum" and factor_name("technical") == "Price trend"
+    rule = stop_rule(load_config(REPO_CONFIG).markets[Market.IN])
+    assert rule.startswith("stop-loss 3× the average daily range (ATR) below entry")  # noqa: RUF001
+    assert "no profit target" in rule
