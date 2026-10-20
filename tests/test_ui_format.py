@@ -40,3 +40,11 @@ def test_tone_neutral_near_zero_and_vs_benchmark():
     assert vs(0.07, 0.121) == "down" and vs(0.15, 0.12) == "up"
     assert vs(-0.239, -0.198) == "down"  # deeper drawdown is worse
     assert vs(0.20, 0.15, higher_better=False) == "down" and vs(None, 0.1) == ""
+
+
+def test_link_symbol_links_first_mention_and_escapes():
+    from trademare.web.formatting import link_symbol
+
+    out = str(link_symbol("Buy 3 M&M at <limit>; M&M again", "IN", "M&M"))
+    assert out.startswith('Buy 3 <a href="/m/IN/M%26M"><b>M&amp;M</b></a> at &lt;limit&gt;')
+    assert out.endswith("; M&amp;M again")

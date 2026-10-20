@@ -183,3 +183,13 @@ def stop_rule(cfg) -> str:
     else:
         target = f"profit target {tp.value:g}% above entry"
     return f"{stop}; {target}"
+
+
+def link_symbol(text: str, market: str, symbol: str):
+    """The sentence with its first mention of the stock turned into a link to the stock page."""
+    from urllib.parse import quote
+
+    from markupsafe import Markup, escape
+
+    link = Markup('<a href="/m/{}/{}"><b>{}</b></a>').format(market, quote(symbol, safe=""), symbol)
+    return Markup(str(escape(text)).replace(str(escape(symbol)), str(link), 1))

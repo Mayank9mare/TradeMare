@@ -47,7 +47,7 @@
 {% else %}<p class="muted">No open orders.</p>{% endif %}
 {% if ended %}
 <h2>Orders ended in the last 14 days</h2>
-<ul class="working-list">{% for w in ended %}<li><span class="stage {{ w.status | replace(' ', '-') }}">{{ w.status }}</span> <b>{{ w.order.symbol }}</b> <span>{{ w.text }}</span></li>{% endfor %}</ul>
+<ul class="working-list">{% for w in ended %}<li><span class="stage {{ w.status | replace(' ', '-') }}">{{ w.status }}</span> <span>{{ w.text | link_symbol(w.order.market, w.order.symbol) }}</span></li>{% endfor %}</ul>
 {% endif %}
 
 <div class="grid two" style="margin-top:1rem">

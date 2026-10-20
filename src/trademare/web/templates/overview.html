@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>Overview</h1>
-    <p>Paper trading in {{ cards | length }} market{{ "s" if cards | length != 1 }}{{ tip("paper", "paper trading") }}. Nothing is ordered without your approval. <a href="#" id="show-newcomer" class="sub">How this works</a></p>
+    <p>Paper trading{{ tip("paper", "paper trading") }} in {{ cards | length }} market{{ "s" if cards | length != 1 }}. Nothing is ordered without your approval. <a href="#" id="show-newcomer" class="sub">How this works</a></p>
   </div>
 </div>
 
@@ -39,8 +39,7 @@
   {% for w in working %}{% set o = w.order %}
     <li>
       <span class="stage {{ w.status | replace(' ', '-') }}">{{ w.status }}</span>
-      <a href="/m/{{ o.market }}/{{ o.symbol | urlencode }}"><b>{{ o.symbol }}</b></a>
-      <span>{{ w.text }}</span>
+      <span>{{ w.text | link_symbol(o.market, o.symbol) }}</span>
     </li>
   {% endfor %}
   </ul>
@@ -113,12 +112,14 @@
     </tbody></table>
     {% endif %}
 
-    <div class="card-foot">
-      <span>Breadth{{ tip("breadth") }} <b class="up">{{ c.advancers }} up</b> / <b class="down">{{ c.decliners }} down</b></span>
-      <span>Prices <b>{{ c.bars }}/{{ c.universe_size }}</b> to {{ c.last_date or "—" }}</span>
-      <span>Fundamentals <b>{{ c.fundamentals }}/{{ c.universe_size }}</b> ({{ c.source }})</span>
-      <span>Last processed{{ tip("last_processed", "last processed") }} <b>{{ a.last_processed or "—" }}</b></span>
-    </div>
+    <details class="data-status">
+      <summary>Data · prices to {{ c.last_date or "—" }} · last processed {{ a.last_processed or "—" }}</summary>
+      <div class="card-foot">
+        <span>Breadth{{ tip("breadth") }} <b class="up">{{ c.advancers }} up</b> / <b class="down">{{ c.decliners }} down</b></span>
+        <span>Prices <b>{{ c.bars }}/{{ c.universe_size }}</b> stocks</span>
+        <span>Fundamentals <b>{{ c.fundamentals }}/{{ c.universe_size }}</b> ({{ c.source }})</span>
+      </div>
+    </details>
   </section>
 {% endfor %}
 </div>

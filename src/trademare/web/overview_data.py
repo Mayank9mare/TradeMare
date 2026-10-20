@@ -231,9 +231,10 @@ def ideas_vs_signals(db: Database, config, market: Market, scan_date: date | Non
         except ValueError:
             when = ""
         period = "month" if freq is Rebalance.MONTHLY else "week"
+        on = when.replace("; the next is", " on")
         return (
-            f"{made}: this strategy only buys on the first trading day of each {period} "
-            f"(its tested rebalance){when}. Between those days the ideas are for information."
+            f"No buys until the next rebalance{on}: this strategy buys only on "
+            f"the first trading day of each {period}. Until then the ideas are for information."
         )
     return made + ": no idea passed the risk limits (open slots, position and sector caps, regime)."
 

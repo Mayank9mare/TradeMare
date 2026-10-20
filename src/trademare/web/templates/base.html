@@ -55,8 +55,9 @@
   <div class="content">
     <div class="statusbar">
       {% for s in ui.statuses %}
-      <span class="status-chip"><span class="dot{{ ' open' if s.is_open }}"></span><b>{{ s.exchange }}</b> {{ "open" if s.is_open else "closed" }}{% if s.next_run %}<span class="chip-long"> · next run {{ s.next_run.strftime("%a %d %b %H:%M") }} {{ s.tz_label }}{{ tip("next_run", "the next run") }}</span>{% endif %}</span>
-      {% if s.prices_through %}<span class="status-chip prices{{ ' stale' if s.behind }}">{% if s.behind %}⚠ {% endif %}{{ s.exchange }} prices to <b>{{ s.prices_through.strftime("%a %d %b") }}</b>{% if s.behind %} · {{ s.behind }} session{{ "s" if s.behind != 1 }} behind{% endif %}{{ tip("prices_as_of", "price freshness") }}</span>{% endif %}
+      <span class="status-chip{{ ' stale' if s.behind }}" title="{{ s.exchange }} prices{% if s.prices_through %} up to {{ s.prices_through.strftime('%a %d %b') }}{% endif %}"><span class="dot{{ ' open' if s.is_open }}"></span><b>{{ s.exchange }}</b> {{ "open" if s.is_open else "closed" }}
+        {%- if s.behind %} · prices from {{ s.prices_through.strftime("%a %d %b") }}, {{ s.behind }} day{{ "s" if s.behind != 1 }} behind{{ tip("prices_as_of", "price freshness") }}
+        {%- elif s.next_run %}<span class="chip-long"> · next update {{ s.next_run.strftime("%a %d %b, %H:%M") }}</span>{% endif %}</span>
       {% endfor %}
       {% if ui.pending_total %}<a class="status-chip" href="/signals"><span class="dot open" style="background:var(--accent);box-shadow:none"></span><b>{{ ui.pending_total }}</b> signal{{ "s" if ui.pending_total != 1 }} awaiting you</a>{% endif %}
     </div>

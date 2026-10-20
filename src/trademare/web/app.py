@@ -92,6 +92,7 @@ def create_app(
         universe_name=formatting.universe_name,
         factor_name=formatting.factor_name,
         stop_rule=formatting.stop_rule,
+        link_symbol=formatting.link_symbol,
     )
     # Cache-busting: static URLs carry the files' modification time, so browsers fetch new versions.
     asset_v = max(int(f.stat().st_mtime) for f in (HERE / "static").iterdir())
