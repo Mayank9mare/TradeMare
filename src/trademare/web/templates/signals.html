@@ -4,7 +4,7 @@
 {% block content %}
 <h1>Signals{{ tip("signal", "a signal") }}</h1>
 {% include "_flash.html" %}
-<p class="muted">Approving places an order for the next session: entries as a limit order at the signal price
+<p class="muted c-hide">Approving places an order for the next session: entries as a limit order at the signal price
   (a protective stop is placed once filled), exits at the next open.
   {% for m, c in config.markets.items() %}<b>{{ m.value }}</b>: {{ "validated" if c.validated else "paper only (not validated)" }}{{ " · " if not loop.last }}{% endfor %}</p>
 
@@ -24,7 +24,7 @@
         </div>
         <div class="sub">{% if s.is_expired %}<b class="down">expired</b>{% else %}decide by <b>{{ s.expires_at | local_time(m) }}</b>{% endif %}{{ tip("expires", "the deadline") }} · scanned {{ s.scan_date }}</div>
       </div>
-      <div class="idea-score">{{ score_bar(s.score) }}{{ tip("score") }}</div>
+      <div class="idea-score">{{ score_bar(s.score) }}{{ tip("score") }} <button type="button" class="sig-more-toggle c-only" data-toggle-more aria-expanded="false">Details</button></div>
     </div>
     <div class="levels sig-levels">
       {% if s.action == "ENTRY" %}{% set risk_amt = s.quantity * (s.entry_price - s.stop_price) | abs %}
@@ -42,6 +42,7 @@
     {% if warns %}<p class="sub" style="margin:8px 0 0">Warnings{{ tip("event_alerts", "these warnings") }}</p><ul class="event-alerts">{% for w in warns %}<li class="{{ 'red' if w.startswith('RED FLAG') else 'note' if w.startswith(('Note', 'Tax')) else 'amber' }}">{{ w }}</li>{% endfor %}</ul>{% endif %}
     {% set rs = split_reasons(s.reasons, s.direction) %}
     {% if rs.summary %}<p class="why"><b>Why:</b> {{ rs.summary }}</p>{% endif %}
+    <div class="sig-more">
     <div class="pros-cons">
       {% if rs.pro %}<div class="pros"><span class="pc-head">For</span><ul>{% for r in rs.pro %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
       {% if rs.con %}<div class="cons"><span class="pc-head">Against</span><ul>{% for r in rs.con %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
@@ -65,6 +66,7 @@
         <span class="sub">Takes ~10–30 s. Uses only the evidence on this card; counts toward llm.max_daily_cost_usd.</span>
       </form>{% endif %}
     </details>
+    </div>
     {% if not s.is_expired %}
     <form method="post" action="/signals/{{ s.id }}/approve" class="approve-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

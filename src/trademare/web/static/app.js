@@ -185,3 +185,13 @@
 // While a market is updating, refresh the page every 10 seconds until it finishes.
 // (drops "?msg=…" so the "started" note doesn't linger once the run is done)
 if (document.querySelector("[data-updating]")) setTimeout(() => location.replace(location.pathname), 10000);
+
+// Compact mode: "Details" opens a signal card's reasons, evidence and Ask Claude.
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-toggle-more]");
+  if (!b) return;
+  const card = b.closest(".idea");
+  const open = card.classList.toggle("show-more");
+  b.setAttribute("aria-expanded", String(open));
+  b.textContent = open ? "Hide details" : "Details";
+});

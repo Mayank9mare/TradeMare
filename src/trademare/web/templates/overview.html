@@ -5,12 +5,12 @@
 <div class="page-head">
   <div>
     <h1>Overview</h1>
-    <p>Paper trading{{ tip("paper", "paper trading") }} in {{ cards | length }} market{{ "s" if cards | length != 1 }}. Nothing is ordered without your approval. <a href="#" id="show-newcomer" class="sub">How this works</a></p>
+    <p class="c-hide">Paper trading{{ tip("paper", "paper trading") }} in {{ cards | length }} market{{ "s" if cards | length != 1 }}. Nothing is ordered without your approval. <a href="#" id="show-newcomer" class="sub">How this works</a></p>
   </div>
 </div>
 {% include "_flash.html" %}
 
-<section class="card newcomer" id="newcomer" hidden>
+<section class="card newcomer c-hide" id="newcomer" hidden>
   <button type="button" class="dismiss">Got it, hide this</button>
   <h2 style="margin-top:0">New here? How TradeMare works</h2>
   <ol>
@@ -98,13 +98,13 @@
     {% if a.kill_switch %}<div class="flash bad" style="margin:14px 0 0">Kill switch: {{ a.kill_reason }} — <a href="/portfolio/{{ m.value }}">review and re-arm</a></div>{% endif %}
 
     <h3 style="margin-top:20px">Top ideas{{ tip("score", "the score bar") }}{% if c.scan %} <span class="faint">· scan {{ c.scan.asof }}</span>{% endif %}</h3>
-    {% if c.vs_signals and not c.pending %}<p class="sub" style="margin:-4px 0 6px">{{ c.vs_signals }}</p>{% endif %}
+    {% if c.vs_signals and not c.pending %}<p class="sub c-hide" style="margin:-4px 0 6px">{{ c.vs_signals }}</p>{% endif %}
     {% if c.ideas %}
     <table class="data">
       <tbody>
       {% for i in c.ideas %}
-        <tr>
-          <td><a href="/m/{{ m.value }}/{{ i.symbol | urlencode }}"><b>{{ i.symbol }}</b></a> {{ direction_badge(i.direction.value) }}<div class="sub">{{ i.sector }}</div></td>
+        <tr{% if loop.index > 5 %} class="c-only"{% endif %}>
+          <td><a href="/m/{{ m.value }}/{{ i.symbol | urlencode }}"><b>{{ i.symbol }}</b></a> {{ direction_badge(i.direction.value) }}<div class="sub c-hide">{{ i.sector }}</div></td>
           <td class="num">{{ i.levels.entry | money(m, False) }}<div class="sub">stop {{ ((i.levels.stop / i.levels.entry) - 1) | pct(1, True) }}</div></td>
           <td class="num">{{ score_bar(i.composite) }}</td>
         </tr>
@@ -121,7 +121,7 @@
     </tbody></table>
     {% endif %}
 
-    <details class="data-status">
+    <details class="data-status c-hide">
       <summary>Data · prices to {{ c.last_date or "—" }} · last processed {{ a.last_processed or "—" }}</summary>
       <div class="card-foot">
         <span>Breadth{{ tip("breadth") }} <b class="up">{{ c.advancers }} up</b> / <b class="down">{{ c.decliners }} down</b></span>

@@ -3,14 +3,14 @@
 {% block title %}Ideas · {{ market.value }} · TradeMare{% endblock %}
 {% block content %}
 <h1>{{ "India" if market.value == "IN" else "US" }} · trade ideas</h1>
-<p class="muted">Ideas are every stock the strategy ranks well today. Signals are the trades it actually proposes to you, after the risk rules. {{ vs_signals }} <a href="/signals">Signals →</a></p>
+<p class="muted c-hide">Ideas are every stock the strategy ranks well today. Signals are the trades it actually proposes to you, after the risk rules. {{ vs_signals }} <a href="/signals">Signals →</a></p>
 {% if not scan %}
   <div class="card"><p>No scan yet. Run <code>uv run trademare scan -m {{ market.value }}</code>.</p></div>
 {% else %}
 <section class="card regime-card">
   <div class="card-head"><h2>Market regime{{ tip("regime", "market regime") }} · {{ scan.asof }}</h2>{{ regime_badge(scan.regime) }}</div>
-  <ul class="reasons">{% for r in scan.regime.reasons %}<li>{{ r | plain_reason }}</li>{% endfor %}</ul>
-  <p class="muted small">
+  <ul class="reasons c-hide">{% for r in scan.regime.reasons %}<li>{{ r | plain_reason }}</li>{% endfor %}</ul>
+  <p class="muted small c-hide">
     Ranked on{{ tip("weights") }}: {% for k, v in scan.weights.items() if v > 0 %}{{ k | factor_name }} ({{ v | pct(0) }}){{ ", " if not loop.last }}{% endfor %}.
     A buy needs a score of at least {{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_off" else 0)) }}{% if scan.regime.label.value == "risk_off" %} (raised because the market is risk-off){% endif %}.
     {% if cfg.allow_short %}A short needs −{{ "%.2f" | format(config_min + (penalty if scan.regime.label.value == "risk_on" else 0)) }} or lower.{% else %}Short selling is off.{% endif %}
@@ -21,7 +21,23 @@
 {% if not scan.ideas %}
   <div class="card"><p>No symbol passed the strategy rules on {{ scan.asof }}.</p></div>
 {% endif %}
-<div class="ideas">
+{% if scan.ideas %}
+<div class="table-wrap c-only"><table class="data sortable idea-table">
+  <thead><tr><th class="num">#</th><th data-type="text">Stock</th><th data-type="text">Sector</th><th class="num">Score{{ tip("score") }}</th><th class="num">Entry{{ tip("entry_limit", "the entry limit") }}</th><th class="num">Stop-loss{{ tip("stop", "the stop-loss") }}</th><th class="num">Risk / share</th><th>For · against</th></tr></thead>
+  <tbody>{% for i in scan.ideas %}{% set lv = i.levels %}{% set rs = split_reasons(i.reasons, i.direction) %}
+    <tr>
+      <td class="num rank" data-v="{{ loop.index }}">{{ loop.index }}</td>
+      <td data-v="{{ i.symbol }}"><a href="/m/{{ market.value }}/{{ i.symbol | urlencode }}"><b class="sym">{{ i.symbol }}</b></a> {{ direction_badge(i.direction.value) }}</td>
+      <td class="sub">{{ i.sector }}</td>
+      <td class="num" data-v="{{ i.composite }}">{{ score_bar(i.composite) }}</td>
+      <td class="num" data-v="{{ lv.entry }}">{{ lv.entry | money(market, False) }}</td>
+      <td class="num" data-v="{{ lv.stop / lv.entry - 1 }}">{{ lv.stop | money(market, False) }} <span class="sub">{{ ((lv.stop / lv.entry) - 1) | pct(1, True) }}</span></td>
+      <td class="num" data-v="{{ lv.risk_per_share }}">{{ lv.risk_per_share | money(market, False) }}</td>
+      <td class="pc" title="{{ (rs.pro + rs.con) | join(' · ') }}"><span class="p">▲ {{ rs.pro | length }}</span><span class="c">▼ {{ rs.con | length }}</span>{% if rs.pro %} <span class="sub">{{ rs.pro[0] | truncate(46) }}</span>{% endif %}</td>
+    </tr>
+  {% endfor %}</tbody></table></div>
+{% endif %}
+<div class="ideas c-hide">
 {% for i in scan.ideas %}
   {% set lv = i.levels %}
   <article class="card idea">
@@ -47,6 +63,6 @@
   </article>
 {% endfor %}
 </div>
-<p class="muted small">Ideas are not orders. Position sizing and approval arrive in phases 4–6. Not financial advice.</p>
+<p class="muted small c-hide">Ideas are not orders: signals with sizes and your approval come from these. Not financial advice.</p>
 {% endif %}
 {% endblock %}

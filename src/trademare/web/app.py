@@ -186,7 +186,7 @@ def create_app(
                     decliners=sum(1 for r in rows if (r.returns["chg_1d"] or 0) < 0),
                     holdings=holdings_today(db, market, rows),
                     scan=scan,
-                    ideas=(scan.ideas[:5] if scan else []),
+                    ideas=(scan.ideas[:10] if scan else []),  # 5 shown; compact shows all 10
                     pending=[p for p in pending if p.market == market.value],
                     vs_signals=ideas_vs_signals(db, config, market, scan.asof) if scan else "",
                 )
