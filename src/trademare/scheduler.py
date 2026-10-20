@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -36,6 +37,60 @@ def daily_job(market: Market, config_path: str | None = None) -> None:
         from trademare.notify.telegram import send_failure
 
         send_failure(config, Secrets(), market.value, f"{type(e).__name__}: {e}")
+
+
+# Manual runs started from the dashboard: market -> (started, finished or None, outcome text)
+manual_runs: dict[Market, tuple[datetime, datetime | None, str]] = {}
+_starting = threading.Lock()
+
+
+def is_running(market: Market) -> bool:
+    from trademare.trading.pipeline import _locks
+
+    return _locks[market].locked()
+
+
+def run_block(market: Market, config: AppConfig) -> str | None:
+    """Why a manual run is not allowed now, or None. A trading day is processed at most once:
+    once the latest finished session is done, the button waits for the next one."""
+    if is_running(market):
+        return "a run is already in progress"
+    due = MarketClock(market).last_completed_session()
+    with database(config).session() as s:
+        state = s.get(MarketStateRow, market.value)
+        done = state.last_processed if state else None
+    if done is not None and done >= due:
+        return f"already up to date for {done:%a %d %b}; the next trading day is processed after it closes"
+    return None
+
+
+def start_run(market: Market, config_path: str | None = None) -> str | None:
+    """Start the daily run for one market in the background. Returns why it was refused, or None."""
+    config = load_config(config_path)
+    with _starting:  # check and start as one step, so two quick clicks cannot both start a run
+        current = manual_runs.get(market)
+        if current is not None and current[1] is None:
+            return "a run is already in progress"
+        if (block := run_block(market, config)) is not None:
+            return block
+        manual_runs[market] = (datetime.now(UTC), None, "running")
+
+    def work() -> None:
+        config = load_config(config_path)
+        try:
+            report = run_daily_pipeline(config, market, Secrets())
+            n = len(report.signals)
+            if report.processed:
+                outcome = f"processed {report.processed[-1]:%a %d %b}: {n} new signal{'s' if n != 1 else ''}"
+            else:
+                outcome = "nothing new: that day's prices are not published yet, try again later"
+        except Exception as e:  # shown on the dashboard; the scheduler's job logs failures the same way
+            log.exception("%s manual run failed", market)
+            outcome = f"failed: {type(e).__name__}: {e}"
+        manual_runs[market] = (manual_runs[market][0], datetime.now(UTC), outcome)
+
+    threading.Thread(target=work, daemon=True, name=f"manual-run-{market.value}").start()
+    return None
 
 
 def backup_job(config_path: str | None = None) -> None:

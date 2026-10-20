@@ -59,6 +59,7 @@
         {%- if s.behind %} · prices from {{ s.prices_through.strftime("%a %d %b") }}, {{ s.behind }} day{{ "s" if s.behind != 1 }} behind{{ tip("prices_as_of", "price freshness") }}
         {%- elif s.next_run %}<span class="chip-long"> · next update {{ s.next_run.strftime("%a %d %b, %H:%M") }}</span>{% endif %}</span>
       {% endfor %}
+      {% for code, run in ui.runs.items() if run.running %}<span class="status-chip updating" data-updating><span class="spin"></span><b>{{ "India" if code == "IN" else "US" }}</b> updating…</span>{% endfor %}
       {% if ui.pending_total %}<a class="status-chip" href="/signals"><span class="dot open" style="background:var(--accent);box-shadow:none"></span><b>{{ ui.pending_total }}</b> signal{{ "s" if ui.pending_total != 1 }} awaiting you</a>{% endif %}
     </div>
     <main>{% block content %}{% endblock %}</main>

@@ -181,3 +181,7 @@
   }
   apply();
 })();
+
+// While a market is updating, refresh the page every 10 seconds until it finishes.
+// (drops "?msg=…" so the "started" note doesn't linger once the run is done)
+if (document.querySelector("[data-updating]")) setTimeout(() => location.replace(location.pathname), 10000);

@@ -8,6 +8,7 @@
     <p>Paper trading{{ tip("paper", "paper trading") }} in {{ cards | length }} market{{ "s" if cards | length != 1 }}. Nothing is ordered without your approval. <a href="#" id="show-newcomer" class="sub">How this works</a></p>
   </div>
 </div>
+{% include "_flash.html" %}
 
 <section class="card newcomer" id="newcomer" hidden>
   <button type="button" class="dismiss">Got it, hide this</button>
@@ -60,10 +61,17 @@
   <section class="card">
     <div class="card-head">
       <h2>{{ "India" if m.value == "IN" else "United States" }}</h2>
+      {% set run = ui.runs.get(m.value) %}
       <div class="pills">
         {% if c.scan %}{% set rl = c.scan.regime.label.value %}<span class="mood {{ 'up' if rl == 'risk_on' else 'down' if rl == 'risk_off' else '' }}">Market mood: {{ {"risk_on": "risk-on", "neutral": "neutral", "risk_off": "risk-off"}[rl] }}{{ tip("regime", "market mood") }}</span>{% endif %}
         {% if c.cfg.validated %}<span class="pill good">Live{{ tip("validated") }}</span>{% endif %}
         {% if a.kill_switch %}<span class="pill bad">Kill switch tripped{{ tip("kill_switch", "the kill switch") }}</span>{% endif %}
+        {% if run %}<form method="post" action="/run/{{ m.value }}" class="run-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="back" value="/">
+          {% if run.running %}<button type="button" class="run-btn" disabled><span class="spin"></span>Updating…</button>
+          {% elif run.block %}<button type="button" class="run-btn" disabled title="{{ run.block }}">✓ Up to date</button>
+          {% else %}<button type="submit" class="run-btn" title="Fetch the latest prices, check fills and stops, and look for new signals">↻ Update now</button>{% endif %}
+        </form>{% endif %}
       </div>
     </div>
 
@@ -86,6 +94,7 @@
       {% if c.index_line %}{{ spark(c.index_line, ("Nifty 50" if m.value == "IN" else "S&P 500") ~ " · 6 months") }}{% endif %}
     </div>
 
+    {% if run and run.outcome %}<p class="sub run-outcome">Last manual update: {{ run.outcome }}</p>{% endif %}
     {% if a.kill_switch %}<div class="flash bad" style="margin:14px 0 0">Kill switch: {{ a.kill_reason }} — <a href="/portfolio/{{ m.value }}">review and re-arm</a></div>{% endif %}
 
     <h3 style="margin-top:20px">Top ideas{{ tip("score", "the score bar") }}{% if c.scan %} <span class="faint">· scan {{ c.scan.asof }}</span>{% endif %}</h3>

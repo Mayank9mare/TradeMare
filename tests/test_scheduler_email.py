@@ -63,3 +63,33 @@ def test_digest_saved_to_outbox_without_smtp(tmp_path):
     assert where.startswith("saved to") and list((tmp_path / "data" / "outbox").glob("*.html"))
     empty = DailyReport(market=Market.IN, session=date(2025, 6, 2))
     assert send_digest(config, Secrets(_env_file=None), [empty]).startswith("skipped")
+
+
+def test_manual_run_only_once_per_trading_day(tmp_path, monkeypatch):
+    from trademare import scheduler
+    from trademare.core.clock import MarketClock
+    from trademare.storage.db import Database, MarketStateRow
+
+    config = load_config(REPO_CONFIG).model_copy(deep=True)
+    config.database_url = f"sqlite:///{tmp_path / 'run.db'}"
+    db = Database(config.database_url)
+    due = MarketClock(Market.IN).last_completed_session()
+    with db.session() as s:
+        s.add(MarketStateRow(market="IN", cash=1.0, peak_equity=1.0, last_processed=due))
+    assert "already up to date" in scheduler.run_block(Market.IN, config)
+    with db.session() as s:
+        s.get(MarketStateRow, "IN").last_processed = MarketClock(Market.IN).previous_session(due)
+    assert scheduler.run_block(Market.IN, config) is None
+
+    started = []
+    monkeypatch.setattr(scheduler, "load_config", lambda path=None: config)
+    monkeypatch.setattr(
+        scheduler, "run_daily_pipeline", lambda *a, **k: started.append(a) or DailyReport(Market.IN, due)
+    )
+    monkeypatch.setattr(
+        scheduler.threading, "Thread", lambda target, **k: type("T", (), {"start": lambda self: None})()
+    )
+    scheduler.manual_runs.clear()
+    assert scheduler.start_run(Market.IN) is None
+    assert scheduler.start_run(Market.IN) == "a run is already in progress"  # second click while running
+    scheduler.manual_runs.clear()

@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 import pandas as pd
 import yaml
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +25,7 @@ from trademare.core.models import Market
 from trademare.data.fields import FIELDS
 from trademare.data.service import DataService
 from trademare.data.universe import load_universe
+from trademare.scheduler import is_running, manual_runs, run_block, start_run
 from trademare.storage.db import Database, OrderRow, PositionRow
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
@@ -130,9 +131,18 @@ def create_app(
             raise HTTPException(404, f"market {market} not configured")
         return market
 
+    def run_state(market: Market) -> dict:
+        started, finished, outcome = manual_runs.get(market, (None, None, ""))
+        return {
+            "running": is_running(market) or (started is not None and finished is None),
+            "block": run_block(market, config),
+            "outcome": outcome if finished else "",
+        }
+
     def chrome() -> dict:
         """Context every page needs: market status bar and the pending-signal badge."""
         return {
+            "runs": {m.value: run_state(m) for m, c in config.markets.items() if c.enabled},
             "statuses": [
                 market_status(m, c, store=service.store) for m, c in config.markets.items() if c.enabled
             ],
@@ -142,7 +152,7 @@ def create_app(
     templates.env.globals["chrome"] = chrome
 
     @app.get("/", response_class=HTMLResponse)
-    def overview(request: Request):
+    def overview(request: Request, msg: str | None = None, err: str | None = None):
         pending = pending_signals(db)
         cards = []
         for market, cfg in config.markets.items():
@@ -190,6 +200,8 @@ def create_app(
                 "pending": pending,
                 "first_expiry": first_expiry,
                 "working": working_entries(db, service.store),
+                "msg": msg,
+                "err": err,
             },
         )
 
@@ -399,6 +411,18 @@ def create_app(
                 "errors": [],
             },
         )
+
+    @app.post("/run/{code}")
+    def run_now(code: str, csrf_token: str = Form(...), back: str = Form("/")):
+        """Start the daily run for a market now (at most once per trading day; see scheduler.run_block)."""
+        if not pysecrets.compare_digest(csrf_token, templates.env.globals["csrf_token"]):
+            raise HTTPException(403, "invalid form token; reload the page and try again")
+        market = market_or_404(code)
+        target = back if back.startswith("/") and not back.startswith("//") else "/"
+        name = "India" if market is Market.IN else "US"
+        refused = start_run(market, str(config_path) if config_path else None)
+        msg = f"err={quote(f'{name}: {refused}')}" if refused else f"msg={quote(f'{name} update started')}"
+        return RedirectResponse(f"{target}{'&' if '?' in target else '?'}{msg}", status_code=303)
 
     @app.post("/settings", response_class=HTMLResponse)
     async def save_settings(request: Request):
