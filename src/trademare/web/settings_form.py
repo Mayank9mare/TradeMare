@@ -55,6 +55,13 @@ MARKET_FIELDS: tuple[FieldSpec, ...] = (
 )
 
 GLOBAL_FIELDS: tuple[FieldSpec, ...] = (
+    FieldSpec(
+        "strategy.factor_rebalance",
+        "India: how often to re-rank and buy",
+        "choice",
+        ("daily", "weekly", "monthly"),
+        help="Monthly is the version that passed the history test; daily trades more and pays more costs",
+    ),
     FieldSpec("notifications.email.enabled", "Email digest enabled", "bool"),
     FieldSpec("notifications.email.to", "Email recipients (comma-separated)", "emails"),
     FieldSpec("strategy.risk_off_exposure", "Risk-off exposure (share of slots)", "float"),
@@ -82,6 +89,7 @@ TESTED: dict[str, Any] = {
     "IN.stop_loss.trailing": False,
     "IN.take_profit.method": "none",
     "IN.time_stop_days": None,
+    "strategy.factor_rebalance": "monthly",
     "strategy.risk_off_exposure": 0.5,
     "strategy.vol_target": True,
     "strategy.exclude_high_vol_pct": 0.2,

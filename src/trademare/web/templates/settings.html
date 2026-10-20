@@ -30,9 +30,10 @@
     <h2 style="margin-top:0">General</h2>
     {% for f in global_fields %}{% set v = values[f.key] %}
     {% set t_known = f.key in tested %}{% set t = tested.get(f.key) %}{% set t_differs = f.key in drift %}
-    <label class="field{{ ' untested' if t_differs }}"><span>{{ f.label }}{% if t_known %} <small class="tested-note">{{ "differs from" if t_differs else "as" }} tested{% if t_differs %} ({{ "on" if t is sameas true else "off" if t is sameas false else t }}){% endif %}</small>{% endif %}</span>
+    <label class="field{{ ' untested' if t_differs }}"><span>{{ f.label }}{% if f.help %} <small class="muted">— {{ f.help }}</small>{% endif %}{% if t_known %} <small class="tested-note">{{ "differs from" if t_differs else "as" }} tested{% if t_differs %} ({{ "on" if t is sameas true else "off" if t is sameas false else t }}){% endif %}</small>{% endif %}</span>
       {% if f.kind == "bool" %}<input type="checkbox" name="{{ f.key }}" {% if v in (true, "on", "true") %}checked{% endif %}>
       {% elif f.kind == "emails" %}<input type="text" name="{{ f.key }}" value="{{ v | join(', ') if v is not string else v }}">
+      {% elif f.kind == "choice" %}<select name="{{ f.key }}">{% for c in f.choices %}<option {% if c == (v | string) %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
       {% else %}<input type="text" inputmode="decimal" name="{{ f.key }}" value="{{ v }}">{% endif %}
     </label>
     {% endfor %}

@@ -38,3 +38,20 @@ def no_event_network(monkeypatch, request):
         return CorporateEvents(market.value, symbol, datetime.now(UTC))
 
     monkeypatch.setattr(EventsService, "_fetch", offline)
+
+
+@pytest.fixture(autouse=True)
+def ignore_personal_overrides(monkeypatch, tmp_path_factory):
+    """The repo's config/settings.local.yaml holds the owner's personal choices; tests use the
+    committed settings only. Overrides next to temporary configs still work."""
+    from trademare.config import loader
+    from trademare.web import settings_form
+
+    real = loader.local_override_path
+    elsewhere = tmp_path_factory.mktemp("no-local") / "settings.local.yaml"
+
+    def override_path(path):
+        return elsewhere if Path(path).resolve() == REPO_CONFIG.resolve() else real(Path(path))
+
+    monkeypatch.setattr(loader, "local_override_path", override_path)
+    monkeypatch.setattr(settings_form, "local_override_path", override_path)
