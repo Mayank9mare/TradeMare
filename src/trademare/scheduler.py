@@ -55,13 +55,25 @@ def run_block(market: Market, config: AppConfig) -> str | None:
     once the latest finished session is done, the button waits for the next one."""
     if is_running(market):
         return "a run is already in progress"
-    due = MarketClock(market).last_completed_session()
+    clock = MarketClock(market)
+    due = clock.last_completed_session()
     with database(config).session() as s:
         state = s.get(MarketStateRow, market.value)
         done = state.last_processed if state else None
     if done is not None and done >= due:
-        return f"already up to date for {done:%a %d %b}; the next trading day is processed after it closes"
+        return f"already up to date for {done:%a %d %b}; next update {next_available(market):%a %d %b, %H:%M}"
     return None
+
+
+def next_available(market: Market) -> datetime:
+    """When the next session's prices are final enough to process (local market time)."""
+    from datetime import timedelta
+
+    clock = MarketClock(market)
+    day = clock.now().date()
+    if not clock.is_session(day) or clock.now() >= clock.session_close(day) + timedelta(hours=1):
+        day = clock.next_session(day)
+    return clock.session_close(day) + timedelta(hours=1)
 
 
 def start_run(market: Market, config_path: str | None = None) -> str | None:

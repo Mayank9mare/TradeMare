@@ -25,7 +25,7 @@ from trademare.core.models import Market
 from trademare.data.fields import FIELDS
 from trademare.data.service import DataService
 from trademare.data.universe import load_universe
-from trademare.scheduler import is_running, manual_runs, run_block, start_run
+from trademare.scheduler import is_running, manual_runs, next_available, run_block, start_run
 from trademare.storage.db import Database, OrderRow, PositionRow
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.web import formatting
@@ -136,6 +136,7 @@ def create_app(
         return {
             "running": is_running(market) or (started is not None and finished is None),
             "block": run_block(market, config),
+            "next": next_available(market),
             "outcome": outcome if finished else "",
         }
 

@@ -69,7 +69,7 @@
         {% if run %}<form method="post" action="/run/{{ m.value }}" class="run-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="back" value="/">
           {% if run.running %}<button type="button" class="run-btn" disabled><span class="spin"></span>Updating…</button>
-          {% elif run.block %}<button type="button" class="run-btn" disabled title="{{ run.block }}">✓ Up to date</button>
+          {% elif run.block %}<button type="button" class="run-btn" disabled title="{{ run.block }}">✓ Up to date · next {{ run.next | local_time(m) }}</button>
           {% else %}<button type="submit" class="run-btn" title="Fetch the latest prices, check fills and stops, and look for new signals">↻ Update now</button>{% endif %}
         </form>{% endif %}
       </div>
