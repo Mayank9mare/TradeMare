@@ -377,6 +377,59 @@ def cmd_ipo_study(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_brief(args: argparse.Namespace) -> int:
+    import json
+
+    from trademare.brain import build_brief
+    from trademare.data.service import DataService
+    from trademare.trading.pipeline import database
+
+    config = load_config(args.config)
+    markets = [Market(args.market)] if args.market else None
+    brief = build_brief(config, database(config), DataService(config, Secrets()), markets)
+    if args.json:
+        print(json.dumps(brief, indent=1, default=str))
+        return 0
+    for code, m in brief["markets"].items():
+        behind = f", {m['sessions_behind']} session(s) behind" if m["sessions_behind"] else ""
+        print(
+            f"== {code}: prices to {m['prices_through']}{behind}; processed {m['last_processed']}; "
+            f"mood {m['regime']}; {len(m['holdings'])} holding(s)"
+        )
+        for sig in m["pending_signals"]:
+            print(
+                f"  signal {sig['id']} {sig['action']} {sig['quantity']} {sig['symbol']}"
+                f" @ {sig['limit_or_last_price']:,.2f}"
+                f" stop {sig['stop']} · {sig['hours_left']}h left · {sig['why']}"
+            )
+        for h in m["holdings"]:
+            print(
+                f"  holding {h['symbol']} x{h['quantity']} {h['return_pct']:+.2f}%"
+                f" stop {h['stop_distance_pct']}% away"
+            )
+        for o in m["recent_orders"][:3]:
+            print(f"  order: {o}")
+    for p in brief["health_problems"]:
+        print(f"HEALTH: {p}")
+    return 0
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    from trademare.brain import save_review
+    from trademare.trading.pipeline import database
+
+    config = load_config(args.config)
+    try:
+        sig = save_review(database(config), args.signal_id, args.question, args.answer, args.risk or [])
+    except KeyError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 1
+    print(
+        f"review saved on {sig.market} {sig.symbol} ({sig.id}); it shows under Ask Claude on the Signals page"
+    )
+    return 0
+
+
 def cmd_daily(args: argparse.Namespace) -> int:
     from trademare.trading.pipeline import run_daily_pipeline
 
@@ -678,6 +731,20 @@ def build_parser() -> argparse.ArgumentParser:
     restore = dbp.add_parser("restore", help="list backups, or restore one (stop the server first)")
     restore.add_argument("file", nargs="?", help="backup file to restore")
     restore.set_defaults(func=cmd_db_restore)
+
+    brief = sub.add_parser(
+        "brief", help="snapshot for a reviewer: freshness, signals, holdings, orders, health"
+    )
+    brief.add_argument("--json", action="store_true", help="machine-readable output")
+    brief.add_argument("-m", "--market", choices=["IN", "US"])
+    brief.set_defaults(func=cmd_brief)
+
+    review = sub.add_parser("review", help="save a written review on a signal (shown under Ask Claude)")
+    review.add_argument("signal_id")
+    review.add_argument("--question", default="Should I take this trade?")
+    review.add_argument("--answer", required=True)
+    review.add_argument("--risk", action="append", help="a risk to list (repeatable)")
+    review.set_defaults(func=cmd_review)
 
     ipo = sub.add_parser("ipo", help="Indian IPOs: list current issues, or run the demand study")
     ipo_sub = ipo.add_subparsers(dest="ipo_cmd")

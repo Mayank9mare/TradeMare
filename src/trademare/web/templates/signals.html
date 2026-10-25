@@ -56,7 +56,7 @@
         <p class="ask-q">{{ a.question }}</p>
         <p class="ask-a">{{ a.answer }}</p>
         {% if a.risks %}<ul class="reasons">{% for r in a.risks %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
-        <p class="sub">{{ a.ts.strftime("%Y-%m-%d %H:%M") }} UTC · ${{ "%.3f" | format(a.cost_usd or 0) }} · from the evidence above only</p>
+        <p class="sub">{{ a.ts.strftime("%Y-%m-%d %H:%M") }} UTC · {% if a.source == "claude-code" %}review from your Claude Code session (evidence above plus news it searched){% else %}${{ "%.3f" | format(a.cost_usd or 0) }} · from the evidence above only{% endif %}</p>
       </div>{% endfor %}
       {% if llm_missing %}<p class="sub">To use this, {{ llm_missing }}.</p>
       {% else %}<form method="post" action="/signals/{{ s.id }}/ask" class="ask-form">
