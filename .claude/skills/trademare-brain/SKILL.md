@@ -37,8 +37,9 @@ uv run trademare brief --json            # both markets; -m IN or -m US for one
 
 It reads only the local database and caches (no network, no orders). Key fields per market:
 `prices_through`, `sessions_behind`, `last_processed`, `regime` (market mood), `pending_signals`
-(each with `id`, `action`, `quantity`, `limit_or_last_price`, `stop`, `most_you_can_lose`,
-`hours_left`, `for`, `against`, `warnings`, `next_results`, `red_flags`, `recent_filings`, metrics),
+(each with `id`, `action`, `sector`, `quantity`, `limit_or_last_price`, `stop`, `most_you_can_lose`,
+`hours_left`, `for`, `against`, `warnings`, `next_results`, `flags` with `red_flag_count` /
+`amber_flag_count`, `filings_coverage`, `recent_filings`, metrics),
 `holdings` (return, stop distance, days held), `recent_orders` (one sentence each, e.g. why an order
 did not fill), `top_ideas`, and top-level `health_problems`.
 
@@ -62,7 +63,9 @@ all of them unasked.
 ### Review a signal ("should I take MCX?", "review my signals")
 Work through the signal's own evidence first, then the outside world:
 1. From the brief: why it was picked (`for`), what argues against it (`against`), risk in rupees
-   (`most_you_can_lose`) and as a share of capital, stop distance, `next_results`, flags, filings.
+   (`most_you_can_lose`) and as a share of capital, stop distance, `next_results`, `flags`,
+   `recent_filings`. If `filings_coverage` says the company files only with BSE, the automatic
+   check relied on news headlines, so your own search matters more.
 2. Search recent news and filings (last ~2 weeks) for the company: results, guidance, block deals,
    promoter pledges or selling, regulatory action, management exits, fraud allegations. For NSE use
    the company name plus "NSE announcement" or "results"; BSE-only filers (the brief warns) need

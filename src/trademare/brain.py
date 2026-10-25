@@ -25,7 +25,7 @@ def _day(d: date | datetime | None) -> str | None:
     return d.isoformat() if d else None
 
 
-def _signal(sig: SignalRow, now: datetime) -> dict[str, Any]:
+def _signal(sig: SignalRow, now: datetime, sector: str | None = None) -> dict[str, Any]:
     from trademare.web.reasons import split_reasons
 
     ev = sig.evidence or {}
@@ -59,9 +59,13 @@ def _signal(sig: SignalRow, now: datetime) -> dict[str, Any]:
         "against": rs.con,
         "also_noted": rs.neutral,
         "warnings": (sig.reasons or {}).get("events", []) + (sig.reasons or {}).get("tax", []),
+        "sector": sector,
         "next_results": events.get("next_results"),
-        "red_flags": events.get("red") or [],
-        "amber_flags": events.get("amber") or [],
+        "sessions_to_results": events.get("sessions_to_results"),
+        "flags": events.get("flags") or [],  # red-flag / caution findings from filings or news
+        "red_flag_count": events.get("red") or 0,
+        "amber_flag_count": events.get("amber") or 0,
+        "filings_coverage": events.get("coverage"),
         "recent_filings": (events.get("recent") or [])[:MAX_EVIDENCE_REASONS],
         "forensic": fund.get("forensic"),
         "fundamental_metrics": fund.get("metrics"),
@@ -117,6 +121,7 @@ def build_brief(
             sign = 1 if p.direction == "LONG" else -1
             holdings.append({
                 "symbol": p.symbol,
+                "sector": p.sector,
                 "quantity": p.quantity,
                 "entry_price": p.entry_price,
                 "entry_date": _day(p.entry_date),
@@ -128,6 +133,7 @@ def build_brief(
                 "days_held": (date.today() - p.entry_date).days,
             })  # fmt: skip
         live = [s for s in pending if not s.expires_at or s.expires_at.replace(tzinfo=UTC) > now]
+        sectors = _sectors(cfg.universe)
         try:
             scan = load_latest_scan(service, market)
         except Exception:  # an unreadable scan file should not stop the brief
@@ -145,7 +151,7 @@ def build_brief(
             "cash": state.cash if state else None,
             "regime": scan.regime.label.value if scan else None,
             "ideas_vs_signals": ideas_vs_signals(db, config, market, scan.asof) if scan else None,
-            "pending_signals": [_signal(s, now) for s in live],
+            "pending_signals": [_signal(s, now, sectors.get(s.symbol)) for s in live],
             "holdings": holdings,
             "recent_orders": [describe(o, store)[1] for o in recent_orders],
             "top_ideas": [
@@ -158,6 +164,16 @@ def build_brief(
     study = load_study(config.data.cache_dir)
     out["ipo_study_available"] = study is not None
     return out
+
+
+def _sectors(universe: str) -> dict[str, str]:
+    from trademare.data.universe import load_universe
+
+    try:
+        u = load_universe(universe)
+        return dict(zip(u["symbol"], u["sector"].fillna(""), strict=True))
+    except Exception:  # a missing universe file only costs the sector labels
+        return {}
 
 
 def save_review(db: Database, signal_id: str, question: str, answer: str, risks: list[str]) -> SignalRow:
