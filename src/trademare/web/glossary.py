@@ -217,6 +217,14 @@ GLOSSARY: dict[str, str] = {
     "prices_as_of": "The last trading day whose closing prices TradeMare has. Prices are fetched at each "
     "daily run; if a finished session is still missing (the data provider was late), the chip turns "
     "amber and that day's fills and stops wait until the prices arrive.",
+    "outside_holdings": "Stocks in your Zerodha account that you bought yourself, outside TradeMare. "
+    "They are shown so you see your whole portfolio, but TradeMare never trades them: no orders, "
+    "stops or exits.",
+    "outside_rank": "Where the stock sits among the ~200 most-traded Nifty 500 stocks on TradeMare's "
+    "own ranking (momentum and earnings yield). Near #1 means the strategy likes it; near the "
+    "bottom means it would not buy it today. It is one view, not a sell signal.",
+    "trend_200d": "Whether the price is above its average of the last 200 trading days (about ten months), a "
+    "common test of a long-term uptrend.",
     # ---------------------------------------------------------------- IPOs
     "ipo": "Initial public offering: a company selling shares to the public for the first time. You bid "
     "during a few days; shares are allotted (often by lottery) and start trading on the listing day.",

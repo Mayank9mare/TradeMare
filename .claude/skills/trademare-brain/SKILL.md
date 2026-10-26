@@ -97,6 +97,16 @@ The system already exits on its rules (stop-loss, falling out of the top ranks);
 flag what the rules cannot see, such as a fraud allegation or an earnings date, and say clearly
 when nothing needs doing. Suggest a manual exit only with a concrete reason; the owner decides.
 
+### The owner's own stocks at Zerodha ("analyse my existing stocks")
+The brief's `outside_holdings_IN` lists stocks the owner bought outside TradeMare (snapshot from
+Zerodha; refresh with `uv run trademare broker holdings`, which needs that day's
+`trademare broker login zerodha`). TradeMare never trades these. For each: return, weight in the
+portfolio, TradeMare's rank (`rank` of `ranked_of`; near the bottom means the strategy would not
+buy it today), trend (`above_200d`), and `next_results`. Point out concentration (sector, single
+stock), losers with weak rank and broken trend, results due this week, and any news. Frame it as
+observations and questions for the owner; selling is their decision, and remind them of tax
+(short-term gains are taxed more within 12 months of buying; losses can offset gains).
+
 ### Orders and "why" questions ("why didn't my order fill?", "why no signals today?")
 `recent_orders` already says why an order ended (e.g. "the lowest price stayed above your limit").
 `ideas_vs_signals` says why ideas did not become signals (e.g. risk limits, rebalance day, regime).

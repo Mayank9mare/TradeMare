@@ -96,6 +96,24 @@ class ZerodhaBroker(BrokerAdapter):
         except kex.KiteException as e:
             raise BrokerError(f"Zerodha: {e}") from e
 
+    def get_holdings_detail(self) -> list[dict]:
+        """Demat holdings with average buy price and Kite's latest price (read-only)."""
+        kite = self._client()
+        out = []
+        for r in self._call(kite.holdings):
+            qty = int(r.get("quantity") or 0) + int(r.get("t1_quantity") or 0)
+            if qty <= 0:
+                continue
+            out.append({
+                "symbol": r["tradingsymbol"],
+                "exchange": r.get("exchange"),
+                "quantity": qty,
+                "average_price": float(r.get("average_price") or 0),
+                "last_price": float(r.get("last_price") or 0),
+                "day_change_pct": float(r.get("day_change_percentage") or 0),
+            })  # fmt: skip
+        return out
+
     # ------------------------------------------------------------------ orders
     def _market_open(self) -> bool:
         from trademare.core.clock import MarketClock

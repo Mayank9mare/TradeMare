@@ -49,6 +49,10 @@ def run_daily_pipeline(
             log.info("%s fundamentals: %s", market, report.summary())
         desk = TradingDesk(service, db or database(config), market, secrets)
         result = desk.run_daily()
+        if market is Market.IN:  # your other stocks at Zerodha, shown read-only on the dashboard
+            from trademare.execution.outside_holdings import try_sync
+
+            log.info("IN outside holdings: %s", try_sync(config, secrets, db or database(config)))
         if notify:
             where = send_digest(config, secrets, [result], config.notifications.dashboard_url)
             log.info("%s digest: %s", market, where)

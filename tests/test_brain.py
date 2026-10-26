@@ -31,3 +31,25 @@ def test_review_is_saved_and_shown_on_the_signal_card(tmp_path, monkeypatch):
     assert recent_reviews(db)[0]["source"] == "claude-code"
     with pytest.raises(KeyError):
         save_review(db, "nope", "q", "a", [])
+
+
+def test_outside_holdings_view_and_portfolio_section(tmp_path, monkeypatch):
+    import json
+
+    from trademare.execution import outside_holdings
+
+    client, _db = make_app(tmp_path, monkeypatch)
+    config = load_config(REPO_CONFIG).model_copy(deep=True)
+    config.data.cache_dir = str(tmp_path / "cache")
+    path = outside_holdings.snapshot_path(config)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"broker": "zerodha", "fetched_at": "2026-10-27T05:00:00+00:00", "holdings": [
+        {"symbol": "INFY", "exchange": "NSE", "quantity": 5, "average_price": 1190.5, "last_price": 1166.0,
+         "day_change_pct": 0.9},
+    ]}))  # fmt: skip
+    v = outside_holdings.view(config, DataService(config, Secrets(_env_file=None)))
+    [row] = v["rows"]
+    assert row["value"] == 5 * 1166.0 and round(row["return"], 4) == round(1166 / 1190.5 - 1, 4)
+    page = client.get("/portfolio/IN").text
+    assert "Your other stocks at Zerodha" in page and "INFY" in page and "Refresh from Zerodha" in page
+    assert "Your other stocks" not in client.get("/portfolio/US").text

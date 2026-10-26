@@ -19,6 +19,7 @@ from trademare.config.schema import AppConfig
 from trademare.config.secrets import Secrets
 from trademare.core.models import Direction, Market
 from trademare.data.service import DataService
+from trademare.execution import outside_holdings
 from trademare.storage.db import Database, EquityRow, EventRow, OrderRow, PositionRow, SignalRow
 from trademare.strategy.evidence import FUND_METRICS, TECH_METRICS
 from trademare.trading.desk import DeskError, TradingDesk
@@ -273,6 +274,7 @@ def register_trading_routes(
                     if w["order"].market == market.value and w["status"] != "waiting"
                 ],
                 "closed": closed,
+                "outside": outside_holdings.view(config, service, market) if market is Market.IN else None,
                 "events": events,
                 "realized": realized,
                 "drawdown": equity / state.peak_equity - 1 if state.peak_equity else 0.0,
@@ -324,6 +326,15 @@ def register_trading_routes(
                 "simulated": desk(market).broker.simulated,
             },
         )
+
+    @app.post("/portfolio/{code}/outside/refresh")
+    def refresh_outside(code: str, csrf_token: str = Form(...)):
+        check_csrf(csrf_token)
+        market = market_of(code)
+        result = outside_holdings.try_sync(config, secrets, db, market)
+        if result.startswith("not synced") or result.startswith("no Zerodha"):
+            return back(f"/portfolio/{market.value}", err=f"Zerodha holdings: {result}")
+        return back(f"/portfolio/{market.value}", msg=f"Zerodha holdings refreshed: {result}")
 
     @app.post("/portfolio/{code}/rearm")
     def rearm(code: str, csrf_token: str = Form(...)):

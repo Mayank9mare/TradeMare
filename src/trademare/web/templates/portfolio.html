@@ -35,6 +35,34 @@
 </table></div>
 {% else %}<p class="muted">No open positions.</p>{% endif %}
 
+{% if outside %}{% set o = outside %}
+<h2>Your other stocks at Zerodha{{ tip("outside_holdings", "your other stocks") }} <small class="muted">{{ o.rows | length }} · read-only</small></h2>
+<p class="muted">Bought outside TradeMare. Shown with TradeMare's view of each stock; it never places orders or stops on these. Snapshot {{ o.fetched_at | local_time(market) }}.
+  <form method="post" action="/portfolio/{{ market.value }}/outside/refresh" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="run-btn">↻ Refresh from Zerodha</button></form></p>
+<div class="ratios four">
+  <div class="ratio"><span>Invested</span><b>{{ o.invested | money(market, False) }}</b></div>
+  <div class="ratio"><span>Value now</span><b>{{ o.value | money(market, False) }}</b></div>
+  <div class="ratio"><span>Profit / loss</span><b class="{{ o.pnl | tone }}">{{ o.pnl | money(market, False) }}</b></div>
+  <div class="ratio"><span>Return</span><b class="{{ o.return | tone }}">{{ o.return | pct(1, True) }}</b></div>
+</div>
+<div class="table-wrap" style="margin-top:.75rem"><table class="data sortable">
+  <thead><tr><th data-type="text">Stock</th><th class="num">Qty</th><th class="num">Avg cost</th><th class="num">Price</th><th class="num">Value</th><th class="num">P&amp;L</th><th class="num">Return</th><th class="num">TradeMare rank{{ tip("outside_rank", "TradeMare rank") }}</th><th>Trend{{ tip("trend_200d", "the trend") }}</th><th>Next results</th></tr></thead>
+  <tbody>{% for r in o.rows %}
+    <tr>
+      <td data-v="{{ r.symbol }}"><a href="/m/{{ market.value }}/{{ r.symbol | urlencode }}"><b>{{ r.symbol }}</b></a></td>
+      <td class="num">{{ r.quantity }}</td>
+      <td class="num" data-v="{{ r.average_price }}">{{ r.average_price | money(market, False) }}</td>
+      <td class="num" data-v="{{ r.price }}">{{ r.price | money(market, False) }}<div class="sub">{{ r.price_day.strftime("%d %b") }}</div></td>
+      <td class="num" data-v="{{ r.value }}">{{ r.value | money(market, False) }}</td>
+      <td class="num {{ r.pnl | tone }}" data-v="{{ r.pnl }}">{{ r.pnl | money(market, False) }}</td>
+      <td class="num {{ r.return | tone }}" data-v="{{ r.return }}">{{ r.return | pct(1, True) }}</td>
+      <td class="num" data-v="{{ r.rank or 9999 }}">{% if r.rank %}#{{ r.rank }} <span class="sub">of {{ r.ranked_of }}</span>{% else %}<span class="sub">not ranked</span>{% endif %}</td>
+      <td>{% if r.above_200d is none %}<span class="sub">—</span>{% elif r.above_200d %}<span class="up">▲ uptrend</span>{% else %}<span class="down">▼ below 200-day</span>{% endif %}</td>
+      <td data-v="{{ r.next_results or '9999' }}">{% if r.next_results %}<span class="{{ 'stage unfilled' if r.results_soon else '' }}">{{ r.next_results.strftime("%a %d %b") }}</span>{% else %}<span class="sub">—</span>{% endif %}</td>
+    </tr>
+  {% endfor %}</tbody></table></div>
+{% endif %}
+
 <h2>Open orders{{ tip("limit_order", "order types") }}</h2>
 {% if orders %}
 <div class="table-wrap"><table class="data">

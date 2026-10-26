@@ -159,6 +159,21 @@ def build_brief(
                 for i in (scan.ideas[:10] if scan else [])
             ],
         }
+    from trademare.execution import outside_holdings
+
+    outside = outside_holdings.view(config, service)
+    if outside:
+        out["outside_holdings_IN"] = {
+            "note": "bought outside TradeMare; read-only, never traded by the system",
+            "as_of": outside["fetched_at"].isoformat(),
+            "invested": round(outside["invested"]),
+            "value": round(outside["value"]),
+            "return_pct": round(outside["return"] * 100, 1) if outside["return"] is not None else None,
+            "rows": [
+                {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in r.items()}
+                for r in outside["rows"]
+            ],
+        }
     health = check_health(config)
     out["health_problems"] = health.problems
     study = load_study(config.data.cache_dir)

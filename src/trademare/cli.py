@@ -583,6 +583,29 @@ def cmd_broker_login(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_broker_holdings(args: argparse.Namespace) -> int:
+    from trademare.data.service import DataService
+    from trademare.execution import outside_holdings
+    from trademare.trading.pipeline import database
+
+    config = load_config(args.config)
+    secrets = Secrets()
+    try:
+        outside_holdings.sync(config, secrets, database(config))
+    except Exception as e:
+        print(f"could not read Zerodha holdings: {e}", file=sys.stderr)
+        return 1
+    v = outside_holdings.view(config, DataService(config, secrets))
+    for r in v["rows"]:
+        print(
+            f"{r['symbol']:12} x{r['quantity']:<5} avg {r['average_price']:>10,.2f}  now {r['price']:>10,.2f}"
+            f"  {r['return'] * 100:+6.1f}%  rank {r['rank'] or '-'}"
+        )
+    print(f"total: invested {v['invested']:,.0f}, now {v['value']:,.0f} ({v['return'] * 100:+.1f}%)")
+    print("shown on the India portfolio page (read-only; TradeMare never trades these)")
+    return 0
+
+
 def cmd_broker_check(args: argparse.Namespace) -> int:
     from trademare.execution.brokers import BrokerError, create_broker
     from trademare.storage.db import PositionRow
@@ -794,6 +817,9 @@ def build_parser() -> argparse.ArgumentParser:
     login = broker.add_parser("login", help="daily Zerodha Kite login (stores today's access token)")
     login.add_argument("name", choices=["zerodha"])
     login.set_defaults(func=cmd_broker_login)
+    broker.add_parser(
+        "holdings", help="read your Zerodha holdings (bought outside TradeMare) for the dashboard"
+    ).set_defaults(func=cmd_broker_holdings)
     check = broker.add_parser("check", help="connect, show funds, compare broker holdings with TradeMare")
     check.add_argument("-m", "--market", choices=[m.value for m in Market])
     check.set_defaults(func=cmd_broker_check)
