@@ -45,6 +45,12 @@ def token_valid_for(token_day: date, now: datetime | None = None) -> bool:
     return now < datetime.combine(token_day + timedelta(days=1), TOKEN_ROLLOVER, IST)
 
 
+def session_active(now: datetime | None = None) -> bool:
+    """True when today's Zerodha login is saved and still valid (no network call)."""
+    stored = load_token("zerodha")
+    return stored is not None and token_valid_for(stored[1], now)
+
+
 @register_broker
 class ZerodhaBroker(BrokerAdapter):
     name = "zerodha"

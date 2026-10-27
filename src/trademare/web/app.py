@@ -140,10 +140,18 @@ def create_app(
             "outcome": outcome if finished else "",
         }
 
+    def zerodha_login_needed() -> bool:
+        """A live market trades through Zerodha and today's login is missing."""
+        from trademare.execution.brokers.zerodha import session_active
+
+        india = config.markets.get(Market.IN)
+        return bool(india and india.enabled and india.broker == "zerodha" and not session_active())
+
     def chrome() -> dict:
         """Context every page needs: market status bar and the pending-signal badge."""
         return {
             "runs": {m.value: run_state(m) for m, c in config.markets.items() if c.enabled},
+            "login_needed": zerodha_login_needed(),
             "statuses": [
                 market_status(m, c, store=service.store) for m, c in config.markets.items() if c.enabled
             ],

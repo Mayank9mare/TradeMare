@@ -105,6 +105,32 @@ def start_run(market: Market, config_path: str | None = None) -> str | None:
     return None
 
 
+def login_reminder_job(config_path: str | None = None) -> str:
+    """08:30 IST on trading days: remind the owner to log in to Zerodha when a live market needs it.
+    Without a session no new orders are sent; standing stop orders (GTT) stay active at Zerodha."""
+    from trademare.execution.brokers.zerodha import session_active
+    from trademare.notify.email import send_text_email
+    from trademare.notify.telegram import send_text
+
+    config = load_config(config_path)
+    cfg = config.markets.get(Market.IN)
+    if cfg is None or not cfg.enabled or cfg.broker != "zerodha":
+        return "not needed"
+    clock = MarketClock(Market.IN)
+    if not clock.is_session(clock.now().date()):
+        return "not a trading day"
+    if session_active():
+        return "logged in"
+    text = (
+        "TradeMare: Zerodha login needed before 9:15 am. Run `uv run trademare broker login zerodha`. "
+        "Until then no new orders are sent; your standing stop-loss orders at Zerodha stay active."
+    )
+    secrets = Secrets()
+    return "; ".join(
+        [send_text(config, secrets, text), send_text_email(config, secrets, "Zerodha login needed", text)]
+    )
+
+
 def backup_job(config_path: str | None = None) -> None:
     from trademare.ops import backup_database
 
@@ -217,6 +243,13 @@ def build_scheduler(config: AppConfig, config_path: str | None = None) -> Backgr
             ipo_job,
             CronTrigger(day_of_week="mon-fri", hour="10,14", minute=30, timezone=MarketClock(Market.IN).tz),
             args=[config_path], id="ipo", misfire_grace_time=3600, coalesce=True, max_instances=1,
+        )  # fmt: skip
+    india = config.markets.get(Market.IN)
+    if india is not None and india.enabled and india.broker == "zerodha":
+        scheduler.add_job(
+            login_reminder_job,
+            CronTrigger(day_of_week="mon-fri", hour=8, minute=30, timezone=MarketClock(Market.IN).tz),
+            args=[config_path], id="login-reminder", misfire_grace_time=1800, coalesce=True, max_instances=1,
         )  # fmt: skip
     if ops.backup_enabled:
         hour, minute = (int(x) for x in ops.backup_time.split(":"))

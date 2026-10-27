@@ -93,3 +93,23 @@ def test_manual_run_only_once_per_trading_day(tmp_path, monkeypatch):
     assert scheduler.start_run(Market.IN) is None
     assert scheduler.start_run(Market.IN) == "a run is already in progress"  # second click while running
     scheduler.manual_runs.clear()
+
+
+def test_login_reminder_only_for_live_zerodha(tmp_path, monkeypatch):
+    from trademare import scheduler
+    from trademare.execution.brokers import zerodha
+
+    config = load_config(REPO_CONFIG).model_copy(deep=True)
+    monkeypatch.setattr(scheduler, "load_config", lambda path=None: config)
+    assert scheduler.login_reminder_job() == "not needed"  # paper broker
+    config.markets[Market.IN].broker = "zerodha"
+    sent = []
+    monkeypatch.setattr(zerodha, "session_active", lambda now=None: False)
+    monkeypatch.setattr("trademare.notify.telegram.send_text", lambda c, s, text: sent.append(text) or "tg")
+    monkeypatch.setattr("trademare.notify.email.send_text_email", lambda c, s, subj, text: "mail")
+    monkeypatch.setattr(scheduler.MarketClock, "is_session", lambda self, day: True)
+    assert scheduler.login_reminder_job() == "tg; mail" and "Zerodha login needed" in sent[0]
+    monkeypatch.setattr(zerodha, "session_active", lambda now=None: True)
+    assert scheduler.login_reminder_job() == "logged in"
+    jobs = {j.id for j in scheduler.build_scheduler(config).get_jobs()}
+    assert "login-reminder" in jobs
