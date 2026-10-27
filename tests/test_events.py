@@ -270,3 +270,29 @@ def test_one_off_gains_do_not_count_as_profit():
     f = compute_forensics(stmts, date(2026, 6, 30), "Telecommunication")
     assert f.piotroski_detail["roa_positive"] is False
     assert f.piotroski_detail["cash_beats_profit"] is True
+
+
+def test_debenture_maturity_suspension_is_not_a_red_flag():
+    from datetime import date
+
+    from trademare.analysis.red_flags import red_flags
+    from trademare.data.events import Announcement, CorporateEvents
+
+    ncd = Announcement(
+        day=date(2026, 8, 4), category="Suspension of Trading", source="NSE",
+        text="Trading in Non-Convertible Debentures of Shriram Finance Limited shall be suspended "
+        "w.e.f. August 05, 2026 on account of Maturity.",
+    )  # fmt: skip
+    shares = Announcement(
+        day=date(2026, 8, 4), category="Suspension of Trading", source="NSE",
+        text="Trading in equity shares of XYZ Limited shall be suspended for non-compliance.",
+    )  # fmt: skip
+    from datetime import UTC, datetime
+
+    from trademare.core.models import Market
+
+    events = CorporateEvents(
+        market=Market.IN, symbol="X", fetched_at=datetime.now(UTC), announcements=[ncd, shares]
+    )
+    titles = [(f.title, f.detail[:30]) for f in red_flags(events, date(2026, 8, 10))]
+    assert titles == [("Trading suspended", "Trading in equity shares of XY")]

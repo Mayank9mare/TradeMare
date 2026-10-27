@@ -69,11 +69,17 @@ class Rule:
     unless: re.Pattern[str] | None = None
 
 
+DEBT_ONLY = _rx(
+    r"non[- ]?convertible debenture", r"\bncds?\b", r"\bdebentures?\b", r"\bbonds?\b",
+    r"commercial paper", r"on account of (?:maturity|redemption)",
+)  # fmt: skip
+
 NSE_RULES: list[Rule] = [
     Rule("red", "Insolvency proceedings", _rx(r"insolvency", r"\bcirp\b", r"liquidation")),
     Rule("red", "Fraud, default or arrest", _rx(r"fraud/default/arrest")),
     Rule("red", "Default on interest or principal", _rx(r"defaults? on payment"), unless=NIL),
-    Rule("red", "Trading suspended", _rx(r"suspension of trading")),
+    # Debentures and bonds stop trading when they mature or are redeemed: routine, not a red flag
+    Rule("red", "Trading suspended", _rx(r"suspension of trading"), unless=DEBT_ONLY),
     Rule(
         "red",
         "Auditor resigned",
@@ -144,6 +150,8 @@ def _sec_flag(a: Announcement) -> Flag | None:
 def _news_flag(a: Announcement) -> Flag | None:
     for title, rx in NEWS_RULES:
         if rx.search(a.text):
+            if title == "trading suspended" and DEBT_ONLY.search(a.text):
+                continue  # a bond or debenture maturing, not the shares
             return Flag("amber", f"In the news: {title}", a.day, a.text, "News", a.url)
     return None
 
