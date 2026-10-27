@@ -52,6 +52,9 @@ def desk(tmp_path, monkeypatch):
         0,
     )
     india.budget, india.slippage_bps = 1_000_000, 0
+    # These tests replay 2025 sessions; pre-trade checks compare with today's date and are tested
+    # on their own (tests/test_pretrade.py).
+    india.pretrade.enabled = False
     service = DataService(config, Secrets(_env_file=None))
     n = len(SESSIONS)
     service.store.write_bars(Market.IN, "^NSEI", on_sessions(make_bars(n, drift=0.0005, seed=99)))

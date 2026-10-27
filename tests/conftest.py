@@ -55,3 +55,11 @@ def ignore_personal_overrides(monkeypatch, tmp_path_factory):
 
     monkeypatch.setattr(loader, "local_override_path", override_path)
     monkeypatch.setattr(settings_form, "local_override_path", override_path)
+
+
+@pytest.fixture(autouse=True)
+def no_surveillance_network(monkeypatch):
+    """Pre-trade checks never call NSE in tests; tests that need the lists stub them."""
+    from trademare.data import surveillance
+
+    monkeypatch.setattr(surveillance.SurveillanceService, "flagged", lambda self, today=None: {})

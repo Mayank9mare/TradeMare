@@ -116,6 +116,20 @@ class TaxConfig(_Strict):
     long_term_rate_pct: float | None = Field(None, ge=0, le=100, description="For the saving estimate")
 
 
+class PreTradeConfig(_Strict):
+    """Last checks before an order reaches a live broker (paper trading logs them as warnings)."""
+
+    enabled: bool = True
+    price_band_pct: float = Field(
+        5.0, gt=0, le=50, description="A buy's limit must be within this % of the last close"
+    )
+    max_orders_per_day: int = Field(10, ge=1, description="New buy orders allowed per day")
+    check_funds: bool = Field(True, description="Live: refuse a buy the broker account cannot pay for")
+    check_surveillance: bool = Field(
+        True, description="India: no new buys in stocks on NSE's ASM/GSM surveillance lists"
+    )
+
+
 class MarketConfig(_Strict):
     enabled: bool = True
     validated: bool = Field(
@@ -164,6 +178,7 @@ class MarketConfig(_Strict):
     signal_expiry_sessions: int = Field(1, ge=1)
     kill_switch: KillSwitchConfig = KillSwitchConfig()
     tax: TaxConfig = TaxConfig()
+    pretrade: PreTradeConfig = PreTradeConfig()
 
     @property
     def deployable_capital(self) -> float:

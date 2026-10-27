@@ -66,6 +66,12 @@ markets:
       short_term_rate_pct: 20  # listed equity STCG (Finance Act 2024)
       long_term_rate_pct: 12.5 # LTCG, above the yearly ₹1.25 lakh exemption
 
+    pretrade:                  # last checks before a live order (paper: logged as warnings only)
+      price_band_pct: 5        # a buy's limit must be within 5% of the last close
+      max_orders_per_day: 10   # new buy orders per day
+      check_funds: true        # refuse a buy the Zerodha account cannot pay for
+      check_surveillance: true # no new buys in stocks on NSE's ASM/GSM lists
+
   US:
     enabled: true
     validated: false           # no factor passed selection (v2); swing v1 has no edge: signals only

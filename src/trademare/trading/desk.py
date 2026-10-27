@@ -51,6 +51,8 @@ from trademare.data.universe import load_universe
 from trademare.execution.brokers import BrokerError, LoginRequired, OrderUpdate, create_broker
 from trademare.execution.fills import Bar, gapped_past_limit, limit_fill, slipped, stop_fill, target_fill
 from trademare.risk.manager import Exposure, RiskManager
+from trademare.risk.pretrade import PreTradeContext
+from trademare.risk.pretrade import check as pretrade_check
 from trademare.risk.tax import tax_hint
 from trademare.storage.db import Database, EquityRow, EventRow, OrderRow, PositionRow, SignalRow
 from trademare.strategy.evidence import (
@@ -297,6 +299,69 @@ class TradingDesk:
             state.peak_equity = equity  # otherwise an ongoing drawdown would re-trip immediately
             self.db.log(s, "rearm", f"kill switch re-armed at equity {equity:,.2f}", self.market.value)
 
+    # ------------------------------------------------------------------ pre-trade checks
+    def _guard(
+        self, s: Session, model: Order, purpose: str, opening: bool, position_qty: int | None = None
+    ) -> list[str]:
+        """Run the pre-trade checks. Live: returns the problems (the caller refuses the order).
+        Paper: logs them as warnings and returns nothing, so paper trading rehearses the checks
+        without changing its results."""
+        cfg = self.cfg.pretrade
+        if not cfg.enabled:
+            return []
+        live = not self.broker.simulated
+        ctx = PreTradeContext(purpose=purpose, opening=opening, position_qty=position_qty)
+        if opening:
+            today = date.today()
+            ctx.last_close = self._last_close(model.symbol, today)
+            ctx.budget, ctx.max_position_pct = self.cfg.budget, self.cfg.max_position_pct
+            ctx.price_band_pct, ctx.max_orders_per_day = cfg.price_band_pct, cfg.max_orders_per_day
+            ctx.in_universe = model.symbol in self._universe_symbols()
+            ctx.sessions_behind = self._sessions_behind()
+            start = datetime.combine(today, datetime.min.time())
+            ctx.orders_today = sum(
+                1 for o in self._orders(s, purpose="entry") if o.created_at and o.created_at >= start
+            )
+            ctx.committed = sum(
+                (o.limit_price or 0) * o.quantity
+                for o in self._orders(s, purpose="entry", status=OPEN)
+                if o.side == OrderSide.BUY.value
+            )
+            if live and cfg.check_funds:
+                try:
+                    ctx.funds = getattr(self.broker.get_funds(), "cash_available", None)
+                except BrokerError as e:
+                    return [f"could not read free cash at the broker ({e})"]
+            if live and cfg.check_surveillance and self.market is Market.IN:
+                from trademare.data.surveillance import SurveillanceService
+
+                flagged = SurveillanceService(self.service.config.data.cache_dir).flagged()
+                ctx.surveillance = flagged.get(model.symbol)
+        problems = pretrade_check(model, ctx)
+        if problems:
+            verdict = "BLOCKED" if live else "paper warning (would block live)"
+            what = f"{model.side.value} {model.quantity} {model.symbol}"
+            self.db.log(
+                s, "pretrade", f"{verdict}: {what}: {'; '.join(problems)}",
+                self.market.value, symbol=model.symbol, problems=problems, blocked=live,
+            )  # fmt: skip
+        return problems if live else []
+
+    def _universe_symbols(self) -> set[str]:
+        if getattr(self, "_universe_cache", None) is None:
+            try:
+                self._universe_cache = set(load_universe(self.cfg.universe)["symbol"])
+            except Exception:  # an unreadable universe file should not block exits; entries check it
+                self._universe_cache = set()
+        return self._universe_cache
+
+    def _sessions_behind(self) -> int:
+        through = self._data_through()
+        due = self.clock.last_completed_session()
+        if through is None or through >= due:
+            return 0
+        return len(self.clock.sessions_between(through, due))
+
     def _new_order(
         self,
         s: Session,
@@ -321,6 +386,12 @@ class TradingDesk:
             trigger_price=trigger,
             signal_id=sig.id if sig else None,
         )
+        pos_qty = None
+        if purpose != "entry" and position_id is not None:
+            held = s.get(PositionRow, position_id)
+            pos_qty = held.quantity if held is not None else 0
+        if problems := self._guard(s, model, purpose, opening=purpose == "entry", position_qty=pos_qty):
+            raise DeskError("pre-trade check failed: " + "; ".join(problems))
         try:
             broker_id = self.broker.place_order(model)
         except BrokerError as e:
@@ -781,6 +852,9 @@ class TradingDesk:
             quantity=pos.quantity,
             order_type=OrderType.MARKET,
         )
+        if problems := self._guard(s, model, "exit", opening=False, position_qty=pos.quantity):
+            report.notes.append(f"WARNING {pos.symbol}: {reason} — exit NOT sent ({'; '.join(problems)})")
+            return
         try:
             broker_id = self.broker.place_order(model)
         except BrokerError as e:
