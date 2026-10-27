@@ -299,6 +299,37 @@ class TradingDesk:
             state.peak_equity = equity  # otherwise an ongoing drawdown would re-trip immediately
             self.db.log(s, "rearm", f"kill switch re-armed at equity {equity:,.2f}", self.market.value)
 
+    # ------------------------------------------------------------------ reconciliation
+    def reconcile(self, s: Session, report: DailyReport) -> list[str]:
+        """Compare the broker's shares with the positions TradeMare believes it holds.
+
+        Holding more at the broker is normal (the owner's own shares). Holding fewer means a
+        position was sold or never filled without TradeMare knowing: new entries stop (kill switch)
+        until the owner has looked. Stops and exits keep working."""
+        try:
+            held: dict[str, int] = {}
+            for p in self.broker.get_positions():
+                held[p.symbol] = held.get(p.symbol, 0) + p.quantity
+        except (LoginRequired, BrokerError) as e:
+            report.notes.append(f"WARNING reconciliation skipped: could not read broker holdings ({e})")
+            return []
+        mine: dict[str, int] = {}
+        for pos in self.db.open_positions(s, self.market.value):
+            mine[pos.symbol] = mine.get(pos.symbol, 0) + pos.quantity
+        problems = [
+            f"{sym}: TradeMare holds {q} but the broker shows {held.get(sym, 0)}"
+            for sym, q in sorted(mine.items())
+            if held.get(sym, 0) < q
+        ]
+        if problems:
+            state = self.account_state(s)
+            reason = "reconciliation mismatch: " + "; ".join(problems)
+            if not state.kill_switch:
+                state.kill_switch, state.kill_reason, state.kill_at = True, reason[:250], datetime.now(UTC)
+            report.notes.append(f"ALERT {reason}. New entries are stopped until you check and re-arm.")
+            self.db.log(s, "reconcile", reason, self.market.value, problems=problems)
+        return problems
+
     # ------------------------------------------------------------------ pre-trade checks
     def _guard(
         self, s: Session, model: Order, purpose: str, opening: bool, position_qty: int | None = None
@@ -1335,6 +1366,8 @@ class TradingDesk:
                 self._snapshot(s, d, report)
                 state.last_processed = d
                 report.processed.append(d)
+            if not self.broker.simulated:
+                self.reconcile(s, report)
             report.expired = self.expire_signals(s, now)
             if generate and day in report.processed:
                 self.check_holdings(s, day, report)

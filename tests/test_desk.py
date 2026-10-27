@@ -290,7 +290,20 @@ class ScriptedBroker(broker_base.BrokerAdapter):
         return self.protections[protection_id]
 
     def get_positions(self):
-        return []
+        """Shares from filled buy and sell orders, as a real broker's holdings would show."""
+        from trademare.core.models import Direction, Position
+
+        net: dict[str, int] = {}
+        for bid, order in self.placed:
+            upd = self.orders.get(bid)
+            if upd is not None and upd.status is OrderStatus.FILLED:
+                sign = 1 if order.side.value == "BUY" else -1
+                net[order.symbol] = net.get(order.symbol, 0) + sign * upd.filled_quantity
+        return [
+            Position(market=Market.IN, symbol=sym, direction=Direction.LONG, quantity=q, average_price=1.0)
+            for sym, q in net.items()
+            if q > 0
+        ]
 
     def get_funds(self): ...
     def get_ltp(self, symbols):
@@ -496,3 +509,25 @@ def test_ensure_evidence_backfills_old_signals(desk):
     assert desk.ensure_evidence() == len(entry_signals(desk))
     assert all(sig.evidence["technical"] for sig in entry_signals(desk))
     assert desk.ensure_evidence() == 0
+
+
+def test_reconciliation_stops_entries_when_the_broker_holds_fewer_shares(live_desk):
+    desk, broker = live_desk, live_desk.broker
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    bid, placed = broker.placed[0]
+    broker.orders[bid] = broker_base.OrderUpdate(OrderStatus.FILLED, placed.quantity, sig.entry_price)
+    day1, day2 = SESSIONS[SESSIONS.index(DAY0) + 1 : SESSIONS.index(DAY0) + 3]
+    report = desk.run_daily(day1, generate=False)
+    assert not any("reconciliation" in n for n in report.notes)
+    with desk.db.session() as s:
+        assert not s.get(MarketStateRow, "IN").kill_switch
+    broker.get_positions = lambda: []  # sold outside TradeMare, or never delivered
+    report = desk.run_daily(day2, generate=False)
+    assert any(n.startswith("ALERT reconciliation mismatch") for n in report.notes)
+    with desk.db.session() as s:
+        state = s.get(MarketStateRow, "IN")
+        assert (
+            state.kill_switch and f"{placed.symbol}: TradeMare holds {placed.quantity}" in state.kill_reason
+        )

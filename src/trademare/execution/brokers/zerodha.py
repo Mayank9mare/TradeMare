@@ -251,19 +251,30 @@ class ZerodhaBroker(BrokerAdapter):
 
     # ------------------------------------------------------------------ account
     def get_positions(self) -> list[Position]:
+        """Delivery shares held: demat holdings (including yesterday's unsettled buys) plus today's
+        delivery buys and sells, which Kite lists under positions until they settle."""
         from trademare.core.models import Direction
 
         kite = self._client()
+        qty: dict[str, int] = {}
+        avg: dict[str, float] = {}
+        for h in self._call(kite.holdings):
+            q = int(h["quantity"]) + int(h.get("t1_quantity") or 0)
+            if q > 0 and h["average_price"] > 0:
+                qty[h["tradingsymbol"]] = q
+                avg[h["tradingsymbol"]] = float(h["average_price"])
+        for p in (self._call(kite.positions) or {}).get("net", []):
+            if p.get("product") != "CNC" or p.get("exchange") != "NSE":
+                continue
+            sym = p["tradingsymbol"]
+            day_qty = int(p.get("day_buy_quantity") or 0) - int(p.get("day_sell_quantity") or 0)
+            if day_qty:
+                qty[sym] = qty.get(sym, 0) + day_qty
+                avg.setdefault(sym, float(p.get("average_price") or 0) or 1.0)
         return [
-            Position(
-                market=Market.IN,
-                symbol=h["tradingsymbol"],
-                direction=Direction.LONG,
-                quantity=h["quantity"] + h.get("t1_quantity", 0),
-                average_price=h["average_price"],
-            )
-            for h in self._call(kite.holdings)
-            if h["quantity"] + h.get("t1_quantity", 0) > 0 and h["average_price"] > 0
+            Position(market=Market.IN, symbol=s, direction=Direction.LONG, quantity=q, average_price=avg[s])
+            for s, q in qty.items()
+            if q > 0
         ]
 
     def get_funds(self) -> Funds:
