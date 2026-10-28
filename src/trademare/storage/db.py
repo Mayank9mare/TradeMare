@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    event,
     inspect,
     select,
     text,
@@ -162,6 +163,19 @@ class Database:
             self.engine: Engine = create_engine(
                 url, future=True, poolclass=StaticPool, connect_args={"check_same_thread": False}
             )
+        elif url.startswith("sqlite"):
+            # Two markets' runs, the dashboard and the intraday checks share one file: wait for a
+            # lock instead of failing (SQLite's default is 5 s), and use write-ahead logging so pages
+            # keep reading while a run writes.
+            self.engine = create_engine(url, future=True, connect_args={"timeout": 300})
+
+            @event.listens_for(self.engine, "connect")
+            def _sqlite_pragmas(dbapi_conn, _record) -> None:
+                cur = dbapi_conn.cursor()
+                cur.execute("PRAGMA journal_mode=WAL")
+                cur.execute("PRAGMA busy_timeout=300000")
+                cur.close()
+
         else:
             self.engine = create_engine(url, future=True)
         Base.metadata.create_all(self.engine)

@@ -275,6 +275,12 @@ def catch_up(config: AppConfig, config_path: str | None = None) -> list[Market]:
             last = state.last_processed if state else None
         due = MarketClock(market).last_completed_session()
         if last is not None and last < due:
-            threading.Thread(target=daily_job, args=(market, config_path), daemon=True).start()
             started.append(market)
+    if started:  # one market after the other: both write to the same database
+
+        def run_all() -> None:
+            for market in started:
+                daily_job(market, config_path)
+
+        threading.Thread(target=run_all, daemon=True, name="catch-up").start()
     return started
