@@ -99,18 +99,18 @@ position → halt and reconcile by hand.
 
 ## 7. Engineering backlog
 
-| # | Item | Phase | Size |
+| # | Item | Phase | Status |
 |---|---|---|---|
-| 1 | Zerodha: market protection on API market orders (or marketable limit exits) | 0 | S |
-| 2 | Pre-trade checks: price band, order value, funds, surveillance lists, results-soon | 0 | M |
-| 3 | Evening reconciliation job with halt-and-alert on mismatch | 0 | S |
-| 4 | Login-missing reminder and order block; session status on the dashboard | 0 | S |
-| 5 | Red-flag rules: ignore debenture (NCD) maturity "suspensions" (false alarm seen on SHRIRAMFIN) | 0 | S |
-| 6 | Corporate-action handling for live stops (splits, bonuses) | 0 | M |
-| 7 | Telegram Approve / Reject buttons | 1 | M |
-| 8 | Server deployment hardening (private network, service user, off-site backups) | 2 | M |
-| 9 | Auto-approve with veto window and guardrails (section 5), off by default | 3 | M |
-| 10 | Optional: Sell button for personal holdings (owner-triggered, confirm screen) | any | M |
+| 1 | Zerodha: market protection on API market orders | 0 | **Done** (already sent `market_protection=-1`; Dhan and Groww send plain market orders, which brokers say they convert to protected orders; confirm before using them live) |
+| 2 | Pre-trade checks on every order, buys and sells (`risk/pretrade.py`) | 0 | **Done**: buys need a price within 5% of the last close, size within the cap, cash at the broker, universe membership, no ASM/GSM surveillance, current prices, ≤ 10 new orders a day; sells may never exceed TradeMare's own shares; protective exits are never blocked. Live refuses; paper logs warnings |
+| 3 | Evening reconciliation with halt-and-alert on mismatch | 0 | **Done**: broker holding fewer shares than TradeMare trips the kill switch with an ALERT; Zerodha holdings include today's delivery trades |
+| 4 | Login-missing reminder and order block; session status on the dashboard | 0 | **Done**: 08:30 IST reminder (Telegram/email) when India trades through Zerodha; amber "Zerodha login needed" chip; orders already refuse without a session |
+| 5 | Red-flag rules: ignore debenture (NCD) maturity "suspensions" | 0 | **Done** |
+| 6 | Corporate-action handling for live stops (splits, bonuses) | 0 | **Done**: positions adjusted once per action; live stops re-placed |
+| 7 | Telegram Approve / Reject buttons | 1 | To do |
+| 8 | Server deployment hardening (private network, service user, off-site backups) | 2 | To do |
+| 9 | Auto-approve with veto window and guardrails (section 5), off by default | 3 | To do |
+| 10 | Optional: Sell button for personal holdings (owner-triggered, confirm screen) | any | To do |
 
 ## 8. Monitoring and review
 
