@@ -531,3 +531,29 @@ def test_reconciliation_stops_entries_when_the_broker_holds_fewer_shares(live_de
         assert (
             state.kill_switch and f"{placed.symbol}: TradeMare holds {placed.quantity}" in state.kill_reason
         )
+
+
+def test_split_adjusts_an_open_position_once(desk):
+    desk.run_daily(DAY0)
+    sig = entry_signals(desk)[0]
+    desk.approve(sig.id, now=datetime(2025, 6, 2, tzinfo=UTC))
+    day1, day2, day3 = SESSIONS[SESSIONS.index(DAY0) + 1 : SESSIONS.index(DAY0) + 4]
+    set_bar(desk, sig.symbol, day1, open=sig.entry_price * 0.998, low=sig.entry_price * 0.997)
+    desk.run_daily(day1, generate=False)
+    with desk.db.session() as s:
+        pos = s.query(PositionRow).one()
+        qty, entry, stop = pos.quantity, pos.entry_price, pos.stop_price
+        assert pos.status == "open"
+    desk.split_source = lambda symbol: pd.Series(
+        [2.0] if symbol == sig.symbol else [],
+        index=pd.DatetimeIndex([pd.Timestamp(day2)] if symbol == sig.symbol else []),
+    )
+    report = desk.run_daily(day2, generate=False)
+    assert any("split/bonus (2 for 1)" in n for n in report.notes)
+    with desk.db.session() as s:
+        pos = s.query(PositionRow).one()
+        assert pos.quantity == qty * 2
+        assert pos.entry_price == pytest.approx(entry / 2) and pos.stop_price == pytest.approx(stop / 2)
+    desk.run_daily(day3, generate=False)  # the same split is not applied twice
+    with desk.db.session() as s:
+        assert s.query(PositionRow).one().quantity == qty * 2

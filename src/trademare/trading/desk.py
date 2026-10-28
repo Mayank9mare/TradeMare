@@ -916,6 +916,69 @@ class TradingDesk:
             s, "stop_gap", f"{pos.symbol}: {reason}; market exit placed", self.market.value, position=pos.id
         )
 
+    # ------------------------------------------------------------------ corporate actions
+    split_source = None  # symbol -> pd.Series of split ratios by date (tests inject one)
+
+    def _splits(self, symbol: str) -> pd.Series:
+        if self.split_source is not None:
+            return self.split_source(symbol)
+        import yfinance as yf
+
+        from trademare.data.providers.yfinance_provider import yf_symbol
+
+        try:
+            return yf.Ticker(yf_symbol(self.market, symbol)).splits
+        except Exception as e:  # network: try again on the next run
+            log.warning("%s: split history unavailable: %s", symbol, e)
+            return pd.Series(dtype=float)
+
+    def apply_corporate_actions(self, s: Session, day: date, report: DailyReport) -> None:
+        """Splits and bonus issues change share counts and prices (a 1:1 bonus doubles the shares and
+        halves the price). Each open position is adjusted once per action, so quantities match the
+        broker and stops stay at the same distance; live stops are re-placed for the new quantity."""
+        positions = self.db.open_positions(s, self.market.value)
+        if not positions:
+            return
+        done = {
+            (ev.data.get("position"), ev.data.get("date"))
+            for ev in s.scalars(
+                select(EventRow).where(EventRow.kind == "split", EventRow.market == self.market.value)
+            )
+        }
+        for pos in positions:
+            splits = self._splits(pos.symbol)
+            if splits is None or splits.empty:
+                continue
+            for when, ratio in splits.items():
+                when_day = (
+                    pd.Timestamp(when).tz_localize(None).date()
+                    if pd.Timestamp(when).tzinfo
+                    else pd.Timestamp(when).date()
+                )
+                if not (pos.entry_date < when_day <= day) or not ratio or ratio == 1:
+                    continue
+                if (pos.id, when_day.isoformat()) in done:
+                    continue
+                r = float(ratio)
+                old_qty = pos.quantity
+                pos.quantity = round(pos.quantity * r)
+                for attr in ("entry_price", "stop_price", "target_price", "last_price", "initial_risk"):
+                    value = getattr(pos, attr)
+                    if value:
+                        setattr(pos, attr, value / r)
+                if not self.broker.simulated:
+                    self._cancel_protection(s, pos, report)  # re-placed for the new quantity this run
+                note = f"NOTE {pos.symbol}: split/bonus ({r:g} for 1) on {when_day}: "
+                note += f"{old_qty} -> {pos.quantity} shares"
+                if pos.stop_price:
+                    note += f", stop now {pos.stop_price:,.2f}"
+                report.notes.append(note)
+                self.db.log(
+                    s, "split", f"{pos.symbol} adjusted for {r:g}-for-1 on {when_day}", self.market.value,
+                    position=pos.id, date=when_day.isoformat(), ratio=r,
+                )  # fmt: skip
+                done.add((pos.id, when_day.isoformat()))
+
     def _cancel_protection(self, s: Session, pos: PositionRow, report: DailyReport) -> None:
         for o in self._orders(s, position_id=pos.id, purpose="stop", status=OPEN):
             try:
@@ -1360,6 +1423,8 @@ class TradingDesk:
             sessions = (
                 self.clock.sessions_between(state.last_processed, day) if state.last_processed else [day]
             )
+            if sessions:
+                self.apply_corporate_actions(s, sessions[-1], report)
             for d in sessions:
                 self.process_session(s, d, report)
                 self._trail_and_mark(s, d, report)

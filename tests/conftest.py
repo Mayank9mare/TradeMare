@@ -63,3 +63,13 @@ def no_surveillance_network(monkeypatch):
     from trademare.data import surveillance
 
     monkeypatch.setattr(surveillance.SurveillanceService, "flagged", lambda self, today=None: {})
+
+
+@pytest.fixture(autouse=True)
+def no_split_network(monkeypatch):
+    """Corporate-action checks never call Yahoo in tests; tests that need splits set desk.split_source."""
+    import pandas as pd
+
+    from trademare.trading.desk import TradingDesk
+
+    monkeypatch.setattr(TradingDesk, "split_source", staticmethod(lambda symbol: pd.Series(dtype=float)))
