@@ -108,7 +108,8 @@ def test_login_reminder_only_for_live_zerodha(tmp_path, monkeypatch):
     monkeypatch.setattr("trademare.notify.telegram.send_text", lambda c, s, text: sent.append(text) or "tg")
     monkeypatch.setattr("trademare.notify.email.send_text_email", lambda c, s, subj, text: "mail")
     monkeypatch.setattr(scheduler.MarketClock, "is_session", lambda self, day: True)
-    assert scheduler.login_reminder_job() == "tg; mail" and "Zerodha login needed" in sent[0]
+    result = scheduler.login_reminder_job()
+    assert result.startswith("tg") and result.endswith("mail") and "Zerodha login needed" in sent[0]
     monkeypatch.setattr(zerodha, "session_active", lambda now=None: True)
     assert scheduler.login_reminder_job() == "logged in"
     jobs = {j.id for j in scheduler.build_scheduler(config).get_jobs()}

@@ -13,7 +13,7 @@ from trademare.config.secrets import Secrets
 from trademare.core.models import Market
 from trademare.data.service import DataService
 from trademare.notify.email import send_digest
-from trademare.notify.telegram import send_alerts
+from trademare.notify.phone import send_alerts
 from trademare.storage.db import Database
 from trademare.trading.desk import DailyReport, TradingDesk
 

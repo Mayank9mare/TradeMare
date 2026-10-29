@@ -274,23 +274,41 @@ def cmd_telegram_setup(args: argparse.Namespace) -> int:
 
 
 def cmd_notify_test(args: argparse.Namespace) -> int:
-    from trademare.notify.telegram import send_message
+    """Send a test alert on every channel that has credentials (even if not enabled yet)."""
+    from trademare.notify import telegram, whatsapp
 
     config, secrets = load_config(args.config), Secrets()
+    tried = 0
     tg = config.notifications.telegram
-    if not (secrets.telegram_bot_token and tg.chat_id):
+    if secrets.telegram_bot_token and tg.chat_id:
+        tried += 1
+        try:
+            telegram.send_message(
+                secrets.telegram_bot_token.get_secret_value(), tg.chat_id, "✅ TradeMare alerts are working."
+            )
+            print(
+                "telegram: sent"
+                + ("" if tg.enabled else " (notifications.telegram.enabled is false: daily runs won't send)")
+            )
+        except Exception as e:
+            print(f"telegram: FAILED: {e}")
+    wa = config.notifications.whatsapp
+    if secrets.whatsapp_token and wa.phone_number_id and wa.to:
+        tried += 1
+        try:
+            n = whatsapp.send_message(config, secrets, "test message: your alerts are working")
+            print(
+                f"whatsapp: sent {n} message(s)"
+                + ("" if wa.enabled else " (notifications.whatsapp.enabled is false: daily runs won't send)")
+            )
+        except Exception as e:
+            print(f"whatsapp: FAILED: {e}")
+    if not tried:
         print(
-            "Set TELEGRAM_BOT_TOKEN in .env and notifications.telegram.chat_id first "
-            "(trademare notify telegram-setup)."
+            "No channel is set up. WhatsApp: docs/whatsapp-setup.md. "
+            "Telegram: trademare notify telegram-setup."
         )
         return 1
-    send_message(
-        secrets.telegram_bot_token.get_secret_value(), tg.chat_id, "✅ TradeMare alerts are working."
-    )
-    print(
-        "sent"
-        + ("" if tg.enabled else " (note: notifications.telegram.enabled is false, so daily runs won't send)")
-    )
     return 0
 
 

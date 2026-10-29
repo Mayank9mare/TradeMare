@@ -165,7 +165,7 @@ def alert_health(config: AppConfig, secrets: Secrets, report: HealthReport, toda
         return "already alerted today"
 
     from trademare.notify.email import send_text_email
-    from trademare.notify.telegram import send_text
+    from trademare.notify.phone import send_text
 
     body = "TradeMare health check found a problem:\n\n" + "\n\n".join(f"• {p}" for p in report.problems)
     sent = [

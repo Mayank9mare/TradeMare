@@ -7,7 +7,7 @@ here and loaded from YAML, so behaviour changes never require code changes.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -267,9 +267,29 @@ class TelegramConfig(_Strict):
     send_empty: bool = Field(False, description="Also message on days with no signals or alerts")
 
 
+class WhatsAppConfig(_Strict):
+    """Alerts on WhatsApp via Meta's Cloud API (setup: docs/whatsapp-setup.md)."""
+
+    enabled: bool = False
+    to: list[str] = Field(
+        default_factory=list, description="Your WhatsApp number(s) with country code, e.g. 919812345678"
+    )
+    phone_number_id: str | None = Field(
+        None, description="The sending number's id from Meta's WhatsApp > API Setup page"
+    )
+    template: str = Field("trademare_alert", description="Approved utility template with one {{1}} parameter")
+    language: str = Field("en", description="The template's language code")
+    mode: Literal["template", "text"] = Field(
+        "template", description="text only reaches you within 24 hours of your last message to the number"
+    )
+    api_version: str = "v21.0"
+    send_empty: bool = Field(False, description="Also message on days with no signals or alerts")
+
+
 class NotificationsConfig(_Strict):
     email: EmailConfig = EmailConfig()
     telegram: TelegramConfig = TelegramConfig()
+    whatsapp: WhatsAppConfig = WhatsAppConfig()
     dashboard_url: str = Field("http://127.0.0.1:8000", description="Used for links in emails and messages")
 
 

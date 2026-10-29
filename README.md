@@ -20,7 +20,7 @@ An automated swing-trading engine for **Indian (NSE/BSE)** and **US** equities. 
   - 🇺🇸 Alpaca
   - Built-in paper broker for simulation
 - **Corporate events and forensic checks:** NSE/SEC filings scanned for red flags (news headlines for BSE-only filers), upcoming results dates, and Piotroski, Altman and Beneish scores on every signal.
-- **Alerts and safety nets:** Telegram and email alerts, an intraday stop check every 15 minutes in market hours, nightly database backups, and a watchdog that alerts you if a daily run is missed.
+- **Alerts and safety nets:** WhatsApp (docs/whatsapp-setup.md), Telegram and email alerts, an intraday stop check every 15 minutes in market hours, nightly database backups, and a watchdog that alerts you if a daily run is missed.
 - **Trade journal:** entry price, current profit and loss, closed-trade results, and how the signals you passed on did, plus a hint when a gain turns long-term for tax within 60 days.
 - **Ask Claude:** each signal has a box to ask Claude about it, answered only from that signal's evidence (needs `ANTHROPIC_API_KEY`).
 - **IPOs (India):** open, upcoming and recent NSE mainboard IPOs with live subscription by investor category, lot size and issue type, and how past IPOs with similar institutional (QIB) demand listed. A pre-registered study of 411 IPOs from 2016 to 2026 found QIB demand strongly predicts listing-day gains (`docs/research/2026-10-19-ipo-demand-plan.md`). Alerts arrive when an IPO opens and on its last afternoon of bidding. TradeMare never applies for you. `trademare ipo` lists current issues; `trademare ipo study` re-runs the study.

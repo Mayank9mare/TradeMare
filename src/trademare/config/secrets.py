@@ -32,6 +32,7 @@ class Secrets(BaseSettings):
 
     # LLM
     telegram_bot_token: SecretStr | None = None
+    whatsapp_token: SecretStr | None = None  # Meta system-user token (WhatsApp Cloud API)
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
 

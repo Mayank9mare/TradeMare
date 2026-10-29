@@ -34,7 +34,7 @@ def daily_job(market: Market, config_path: str | None = None) -> None:
         )
     except Exception as e:
         log.exception("%s daily run failed", market)
-        from trademare.notify.telegram import send_failure
+        from trademare.notify.phone import send_failure
 
         send_failure(config, Secrets(), market.value, f"{type(e).__name__}: {e}")
 
@@ -110,7 +110,7 @@ def login_reminder_job(config_path: str | None = None) -> str:
     Without a session no new orders are sent; standing stop orders (GTT) stay active at Zerodha."""
     from trademare.execution.brokers.zerodha import session_active
     from trademare.notify.email import send_text_email
-    from trademare.notify.telegram import send_text
+    from trademare.notify.phone import send_text
 
     config = load_config(config_path)
     cfg = config.markets.get(Market.IN)
@@ -139,7 +139,7 @@ def backup_job(config_path: str | None = None) -> None:
         backup_database(config)
     except Exception as e:
         log.exception("database backup failed")
-        from trademare.notify.telegram import send_text
+        from trademare.notify.phone import send_text
 
         send_text(config, Secrets(), f"TradeMare database backup failed: {type(e).__name__}: {e}")
 
@@ -158,7 +158,7 @@ def health_job(config_path: str | None = None) -> None:
 
 def intraday_job(market: Market, config_path: str | None = None) -> None:
     from trademare.data.service import DataService
-    from trademare.notify.telegram import send_text
+    from trademare.notify.phone import send_text
     from trademare.trading.desk import TradingDesk
     from trademare.trading.pipeline import _locks
 
@@ -186,7 +186,7 @@ def ipo_job(config_path: str | None = None) -> list[str]:
     from trademare.analysis.ipo_study import load_study
     from trademare.data.ipo import IpoService, ist_now
     from trademare.notify.email import send_text_email
-    from trademare.notify.telegram import send_text
+    from trademare.notify.phone import send_text
     from trademare.storage.db import EventRow
 
     config = load_config(config_path)

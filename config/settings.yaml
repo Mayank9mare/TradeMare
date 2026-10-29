@@ -166,6 +166,14 @@ notifications:
     enabled: false
     chat_id: null              # set in settings.local.yaml (trademare notify telegram-setup finds it)
     send_empty: false          # message only when there are signals or alerts
+  whatsapp:                    # Meta WhatsApp Cloud API; token in .env (WHATSAPP_TOKEN); docs/whatsapp-setup.md
+    enabled: false
+    to: []                     # your number with country code, e.g. 919812345678 (settings.local.yaml)
+    phone_number_id: null      # from Meta's WhatsApp > API Setup page (settings.local.yaml)
+    template: trademare_alert  # approved utility template: "TradeMare update: {{1}}. Open your dashboard for details."
+    language: en
+    mode: template             # "text" only reaches you within 24 h of your last message to the number
+    send_empty: false
   dashboard_url: http://127.0.0.1:8000   # for links in emails and messages
 
 llm:                           # optional news-sentiment overlay: vetoes entries with red-flag news
