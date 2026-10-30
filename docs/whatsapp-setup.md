@@ -5,14 +5,18 @@ reminders) through Meta's official **WhatsApp Cloud API**. You receive them on y
 About 20 minutes, once.
 
 ## 1. Create the Meta app and get a sending number
-1. Go to **developers.facebook.com** → *My Apps* → **Create app**. Choose the **Business** type and
-   create (or pick) a business portfolio when asked.
-2. In the app, add the **WhatsApp** product. Meta gives you a free **test phone number** that can
-   message up to 5 numbers you verify.
-3. Open **WhatsApp → API Setup**:
-   - Copy the **Phone number ID** (a long number, not the phone number itself).
-   - Under **To**, add **your own WhatsApp number** and verify it with the code Meta sends.
-   - Press **Send message** once; the "hello_world" template should arrive on your phone.
+1. Go to **developers.facebook.com**. If the top right shows **Get Started** instead of **My Apps**,
+   your Facebook account is not a developer yet: click it, agree, verify a mobile number by SMS,
+   confirm your email and pick "Developer".
+2. **My Apps → Create App**. Name it (e.g. `TradeMare Alerts`), then on **Use cases** tick
+   **Connect with customers through WhatsApp**, pick (or create) a business portfolio, and
+   **Create app**. An unverified portfolio is fine for the test number.
+3. **Use cases → Customize** on the WhatsApp use case, accept the WhatsApp terms, then open
+   **Step 1. Try it out**:
+   - Copy the **Phone number ID** (a long number, not the phone number itself). The **Messaging
+     account ID** next to it is needed only to create the template through the API (step 2).
+   - Under **Recipient → Manage phone number list**, add **your own WhatsApp number** and enter the
+     code WhatsApp sends you. The test number can message up to 5 verified numbers.
 
 ## 2. Create the alert template
 Meta only lets a business start a conversation with an approved template.
@@ -23,15 +27,28 @@ Meta only lets a business start a conversation with an approved template.
    TradeMare update: {{1}}. Open your dashboard for details.
    ```
    Sample for `{{1}}`: `IN · 2026-10-29 · LONG HSCL x14 @ 536.25`
-4. Submit. Approval usually takes minutes to a few hours.
+4. Submit. Approval usually takes minutes, sometimes up to 24-48 hours (longer for new apps and
+   unverified portfolios).
+
+Or create it through the API with your token (step 3) and the Messaging account ID:
+```
+curl -X POST "https://graph.facebook.com/v21.0/<MESSAGING_ACCOUNT_ID>/message_templates" \
+  -H "Authorization: Bearer $WHATSAPP_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"trademare_alert","category":"UTILITY","language":"en","components":[{"type":"BODY",
+       "text":"TradeMare update: {{1}}. Open your dashboard for details.",
+       "example":{"body_text":[["IN · 2026-10-29 · LONG HSCL x14 @ 536.25"]]}}]}'
+```
+Until it is approved, alerts fail with `(#132001) Template name does not exist in the translation`.
 
 If you can't get a template approved, set `mode: text` (step 4). Plain text messages only reach
 you within 24 hours of your last message to the TradeMare number, so send it "hi" each morning.
 
 ## 3. Get a permanent access token
-The token on the API Setup page expires within a day. Make a lasting one:
-1. **business.facebook.com → Business settings → Users → System users → Add** (role: Admin).
-2. **Assign assets**: your app (*Full control*) and your WhatsApp account (*Full control*).
+The token from **Generate token** on the Try-it-out page expires within a day (fine for a first
+test). Make a lasting one:
+1. **business.facebook.com → Settings → Users → System users → Add** (role: Admin).
+2. **Assign assets**: your app (*Full control*) **and** your WhatsApp account (*Full control*);
+   without the WhatsApp account the token cannot send.
 3. **Generate token** for your app, expiry **Never**, permissions `whatsapp_business_messaging`
    and `whatsapp_business_management`.
 4. Put it in TradeMare's `.env` (never commit it):
