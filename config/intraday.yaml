@@ -1,0 +1,21 @@
+# Intraday research and paper trading (docs/plans/2026-11-01-intraday-plan.md).
+# Independent of settings.yaml; personal overrides go in config/intraday.local.yaml (git-ignored).
+data_dir: data/intraday        # own database, candles and universe list
+universe: nifty50
+interval: 5minute
+history_start: 2018-01-01
+entry_start: "09:20"           # IST: no new entries before this
+entry_end: "14:45"             # or after this
+squareoff: "15:15"             # every position closes by this time
+stop_valid_candles: 3          # entry stop orders last this many candles
+slippage_bps: 2                # per stop or market fill
+cost_notional: 50000           # position size for the cost estimate (INR)
+port: 8766                     # its own dashboard
+
+paper:                         # live paper trading (never real orders)
+  capital: 100000
+  risk_pct: 0.5
+  max_positions: 5
+  max_position_pct: 50         # no leverage
+  strategies: []               # ids to paper-trade, chosen on the intraday dashboard
+  require_record: true
