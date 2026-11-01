@@ -62,9 +62,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     symbols = store.symbols()
     print(f"settings: {args.config or cfgmod.DEFAULT_PATH}; data: {cfg.root}; interval {cfg.interval}")
     if not symbols:
-        print(
-            "no candles yet: run `trademare-intraday universe`, then `trademare-intraday data update`"
-        )
+        print("no candles yet: run `trademare-intraday universe`, then `trademare-intraday data update`")
         return 0
     spans = [(s, b.index[0], b.index[-1], len(b)) for s in symbols if (b := store.read(s)) is not None]
     print(f"{len(spans)} symbols; earliest {min(x[1] for x in spans)}; latest {max(x[2] for x in spans)}")
