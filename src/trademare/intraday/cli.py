@@ -70,6 +70,47 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pct(x) -> str:
+    return "    -   " if x is None else f"{x * 100:+.3f}%"
+
+
+def cmd_study(args: argparse.Namespace) -> int:
+    from trademare.intraday import study
+    from trademare.intraday.strategies import STRATEGIES
+
+    cfg = cfgmod.load(args.config)
+    ids = args.strategy or None
+    if ids and (bad := [s for s in ids if s not in STRATEGIES]):
+        print(f"unknown strategy {bad}; choose from {', '.join(STRATEGIES)}")
+        return 1
+    if args.show:
+        result = study.load(cfg)
+        if result is None:
+            print("no study yet: run `trademare-intraday study`")
+            return 1
+    else:
+        try:
+            result = study.run(cfg, ids, progress=lambda m: print(m, end="\r"))
+        except FileNotFoundError as e:
+            print(e)
+            return 1
+        study.save(cfg, result)
+        print()
+    print(f"candles {result['data_from']} to {result['data_through']}, {result['symbols']} stocks")
+    for sid, r in result["records"].items():
+        cells = []
+        for p in study.PERIODS:
+            st = r["periods"][p]
+            if not st["trades"]:
+                cells.append(f"{p}: no trades")
+                continue
+            cells.append(
+                f"{p}: {st['trades']:5d} tr {st['win_rate'] * 100:3.0f}% won avg {_pct(st['avg_ret'])}"
+            )
+        print(f"{sid:17} " + " | ".join(cells) + f" | {'pass' if r['passes'] else 'fail'}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="trademare-intraday", description="Intraday research and paper trading")
     p.add_argument("--config", default=None, help="settings file (default config/intraday.yaml)")
@@ -86,6 +127,10 @@ def build_parser() -> argparse.ArgumentParser:
     up.add_argument("--full", action="store_true", help="re-download everything from the start date")
     up.set_defaults(func=cmd_data_update)
     sub.add_parser("status", help="what data and settings the module has").set_defaults(func=cmd_status)
+    st = sub.add_parser("study", help="track record of each strategy on the cached candles (minutes)")
+    st.add_argument("-s", "--strategy", action="append", help="only this strategy (repeatable)")
+    st.add_argument("--show", action="store_true", help="print the saved study without re-running it")
+    st.set_defaults(func=cmd_study)
     return p
 
 
