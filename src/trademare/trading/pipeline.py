@@ -47,6 +47,14 @@ def run_daily_pipeline(
             log.info("%s prices: %s", market, report.summary())
             report = service.update_fundamentals(market, symbols)
             log.info("%s fundamentals: %s", market, report.summary())
+            if market is Market.IN:  # results published since the last run: refresh now, not weekly
+                from trademare.data.results_refresh import owner_symbols, refresh_after_results
+
+                try:
+                    interest = owner_symbols(config, db or database(config), market)
+                    log.info("IN results refresh: %s", refresh_after_results(service, market, interest))
+                except Exception:  # never let a data refresh stop the daily run
+                    log.exception("IN results refresh failed")
         desk = TradingDesk(service, db or database(config), market, secrets)
         result = desk.run_daily()
         if market is Market.IN:  # your other stocks at Zerodha, shown read-only on the dashboard

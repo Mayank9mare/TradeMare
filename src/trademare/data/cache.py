@@ -151,17 +151,23 @@ def _adjustment_changed(cached: pd.DataFrame, new: pd.DataFrame) -> bool:
 
 
 class FinancialsCache:
-    def __init__(self, source: FinancialsSource, store: ParquetStore, workers: int = 4) -> None:
+    def __init__(
+        self,
+        source: FinancialsSource,
+        store: ParquetStore,
+        workers: int = 4,
+        augment: Callable[[str, pd.DataFrame], pd.DataFrame] | None = None,
+    ) -> None:
         self.source = source
         self.store = store
         self.workers = workers
+        self.augment = augment  # e.g. NSE publication dates and newest quarters (data/nse_results.py)
 
     def get_financials(self, market: Market, symbol: str) -> pd.DataFrame:
         df = self.store.read_financials(market, self.source.source, symbol)
-        if df is None:
-            return empty_financials()
         # Files cached before a field was added lack its column: add it as NaN.
-        return df.reindex(columns=list(COLUMNS))
+        df = empty_financials() if df is None else df.reindex(columns=list(COLUMNS))
+        return self.augment(symbol, df) if self.augment is not None else df
 
     def update(
         self,

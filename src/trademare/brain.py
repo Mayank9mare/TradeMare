@@ -137,6 +137,9 @@ def build_brief(
             })  # fmt: skip
         live = [s for s in pending if not s.expires_at or s.expires_at.replace(tzinfo=UTC) > now]
         sectors = _sectors(cfg.universe)
+        results = _results_lookup(service, market)
+        for h in holdings:
+            h["latest_results"] = results(h["symbol"])
         try:
             scan = load_latest_scan(service, market)
         except Exception:  # an unreadable scan file should not stop the brief
@@ -154,7 +157,9 @@ def build_brief(
             "cash": state.cash if state else None,
             "regime": scan.regime.label.value if scan else None,
             "ideas_vs_signals": ideas_vs_signals(db, config, market, scan.asof) if scan else None,
-            "pending_signals": [_signal(s, now, sectors.get(s.symbol)) for s in live],
+            "pending_signals": [
+                {**_signal(s, now, sectors.get(s.symbol)), "latest_results": results(s.symbol)} for s in live
+            ],
             "holdings": holdings,
             "recent_orders": [describe(o, store)[1] for o in recent_orders],
             "top_ideas": [
@@ -175,6 +180,7 @@ def build_brief(
             "return_pct": round(outside["return"] * 100, 1) if outside["return"] is not None else None,
             "rows": [
                 {k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in r.items()}
+                | {"latest_results": _results_lookup(service, Market.IN)(r["symbol"])}
                 for r in outside["rows"]
             ],
         }
@@ -183,6 +189,17 @@ def build_brief(
     study = load_study(config.data.cache_dir)
     out["ipo_study_available"] = study is not None
     return out
+
+
+def _results_lookup(service, market: Market):
+    """symbol -> the latest quarter NSE has on file (published date, revenue, profit, growth);
+    India only, from the local cache (no network). None when nothing is cached."""
+    if market is not Market.IN:
+        return lambda symbol: None
+    from trademare.data.nse_results import latest_result
+
+    cache = service.nse_results()
+    return lambda symbol: latest_result(cache.cached(symbol))
 
 
 def _book_setups(service, market: Market, cfg) -> dict[str, Any]:

@@ -44,10 +44,17 @@ class DataService:
         if market not in self._markets:
             cfg = self.config.markets[market]
             prices = PriceCache(YFinancePriceProvider(), self.store)  # only source so far
+            augment = None
+            if market is Market.IN and self.config.data.nse_results:
+                from trademare.data.nse_results import overlay
+
+                results = self.nse_results()
+                augment = lambda symbol, df: overlay(df, results.cached(symbol))  # noqa: E731
             financials = FinancialsCache(
                 self._fundamentals_source(market, cfg.fundamentals_source),
                 self.store,
                 workers=self.config.data.fundamentals_workers,
+                augment=augment,
             )
             self._markets[market] = MarketData(market, prices, financials)
         return self._markets[market]
@@ -67,6 +74,14 @@ class DataService:
             log.warning("SEC_USER_AGENT not set in .env; using yfinance for %s fundamentals", market)
         cache = Path(self.config.data.cache_dir) / "financials" / market.value / "yfinance_currency.json"
         return YFinanceFundamentalsProvider(currencies=CurrencyCache(cache))
+
+    def nse_results(self):
+        """NSE results filings for Indian stocks (data/nse_results.py), cached on disk."""
+        if getattr(self, "_nse_results", None) is None:
+            from trademare.data.nse_results import NseResults
+
+            self._nse_results = NseResults(self.config.data.cache_dir)
+        return self._nse_results
 
     def events(self) -> EventsService:
         """Corporate filings and results dates (built once; cached on disk for ~a day)."""

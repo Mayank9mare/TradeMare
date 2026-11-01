@@ -366,6 +366,12 @@ class DataConfig(_Strict):
         2, ge=1, le=16, description="Parallel fundamentals downloads (Yahoo rate-limits)"
     )
     batch_size: int = Field(50, ge=1, le=500, description="Symbols per bulk price request")
+    nse_results: bool = Field(
+        False,
+        description="India: use NSE results filings for real publication dates and the newest quarters "
+        "in rankings (docs/research/2026-11-01-nse-results-dates-plan.md); off = Yahoo with the 45-day "
+        "deadline estimate, as tested",
+    )
 
 
 class BacktestConfig(_Strict):
