@@ -170,7 +170,7 @@ notifications:
     enabled: false
     to: []                     # your number with country code, e.g. 919812345678 (settings.local.yaml)
     phone_number_id: null      # from Meta's WhatsApp > API Setup page (settings.local.yaml)
-    template: trademare_alert  # approved utility template: "TradeMare update: {{1}}. Open your dashboard for details."
+    template: trademare_account_alert  # approved utility template (body in docs/whatsapp-setup.md)
     language: en
     mode: template             # "text" only reaches you within 24 h of your last message to the number
     send_empty: false

@@ -21,22 +21,24 @@ About 20 minutes, once.
 ## 2. Create the alert template
 Meta only lets a business start a conversation with an approved template.
 1. Open **WhatsApp Manager → Message templates → Create template**.
-2. Category **Utility**, name **`trademare_alert`**, language **English (`en`)**.
+2. Category **Utility**, name **`trademare_account_alert`**, language **English (`en`)**.
 3. Body (exactly; the variable may not be at the very start or end):
    ```
-   TradeMare update: {{1}}. Open your dashboard for details.
+   Alert about your TradeMare trading account: {{1}}. This is an automatic notice about your orders and positions.
    ```
-   Sample for `{{1}}`: `IN · 2026-10-29 · LONG HSCL x14 @ 536.25`
+   Sample for `{{1}}`: `stop-loss hit on HSCL, sold 14 shares at 512.40`
 4. Submit. Approval usually takes minutes, sometimes up to 24-48 hours (longer for new apps and
    unverified portfolios).
+   Word it as a notice about the recipient's own account: Meta moved a generic "TradeMare update: …"
+   wording to **Marketing** (about 7x the price, and WhatsApp may drop marketing messages).
 
 Or create it through the API with your token (step 3) and the Messaging account ID:
 ```
 curl -X POST "https://graph.facebook.com/v21.0/<MESSAGING_ACCOUNT_ID>/message_templates" \
   -H "Authorization: Bearer $WHATSAPP_TOKEN" -H "Content-Type: application/json" \
-  -d '{"name":"trademare_alert","category":"UTILITY","language":"en","components":[{"type":"BODY",
-       "text":"TradeMare update: {{1}}. Open your dashboard for details.",
-       "example":{"body_text":[["IN · 2026-10-29 · LONG HSCL x14 @ 536.25"]]}}]}'
+  -d '{"name":"trademare_account_alert","category":"UTILITY","language":"en","components":[{"type":"BODY",
+       "text":"Alert about your TradeMare trading account: {{1}}. This is an automatic notice about your orders and positions.",
+       "example":{"body_text":[["stop-loss hit on HSCL, sold 14 shares at 512.40"]]}}]}'
 ```
 Until it is approved, alerts fail with `(#132001) Template name does not exist in the translation`.
 
@@ -64,7 +66,7 @@ notifications:
     enabled: true
     to: ["919812345678"]          # your number with country code, no + or spaces
     phone_number_id: "123456789012345"
-    # template: trademare_alert   # default
+    # template: trademare_account_alert   # default
     # mode: text                  # only if you skip the template (24-hour window)
 ```
 
@@ -72,8 +74,8 @@ notifications:
 ```
 uv run trademare notify test
 ```
-You should get "TradeMare update: test message: your alerts are working. Open your dashboard for
-details." Then restart `trademare serve` so the scheduled runs pick up the settings.
+You should get "Alert about your TradeMare trading account: test message: your alerts are working.
+This is an automatic notice about your orders and positions." Then restart `trademare serve` so the scheduled runs pick up the settings.
 
 ## Cost and limits
 - India utility template messages cost about **₹0.12 + GST each** (October 2026 rates; check

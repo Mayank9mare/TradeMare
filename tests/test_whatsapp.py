@@ -40,7 +40,7 @@ def test_template_message_is_sent_to_each_number():
     url, body, headers = session.calls[0]
     assert url == "https://graph.facebook.com/v21.0/1234567890/messages"
     assert headers["Authorization"] == "Bearer tok" and body["to"] == "919812345678"
-    assert body["type"] == "template" and body["template"]["name"] == "trademare_alert"
+    assert body["type"] == "template" and body["template"]["name"] == "trademare_account_alert"
     assert body["template"]["components"][0]["parameters"][0]["text"] == "line one · line two"
     config, secrets = configured(mode="text")
     whatsapp.send_message(config, secrets, "hi", session=(s := Session()))

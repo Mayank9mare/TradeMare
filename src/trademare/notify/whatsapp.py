@@ -2,7 +2,8 @@
 
 A business number (Meta gives a free test number) messages the owner's own WhatsApp. Messages a
 business starts must use a template Meta has approved, so alerts are sent as the template
-``trademare_alert`` whose body is ``TradeMare update: {{1}}. Open your dashboard for details.``
+``trademare_account_alert`` whose body is ``Alert about your TradeMare trading account: {{1}}.
+This is an automatic notice about your orders and positions.``
 Template parameters cannot contain line breaks, so each alert is flattened onto one line and long
 alerts are split into several messages. Each message costs about ₹0.12 + GST in India (utility
 rate, Oct 2026). Sending never raises: a failed alert is logged and the caller carries on.

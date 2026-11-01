@@ -277,7 +277,9 @@ class WhatsAppConfig(_Strict):
     phone_number_id: str | None = Field(
         None, description="The sending number's id from Meta's WhatsApp > API Setup page"
     )
-    template: str = Field("trademare_alert", description="Approved utility template with one {{1}} parameter")
+    template: str = Field(
+        "trademare_account_alert", description="Approved utility template with one {{1}} parameter"
+    )
     language: str = Field("en", description="The template's language code")
     mode: Literal["template", "text"] = Field(
         "template", description="text only reaches you within 24 hours of your last message to the number"
