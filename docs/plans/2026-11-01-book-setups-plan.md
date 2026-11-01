@@ -25,14 +25,14 @@ signal day's high, valid the next session only (the book's "buy above the high o
 
 | id | Book | Family | Signal (all on the daily close) | Stop | Target / exit |
 |---|---|---|---|---|---|
-| `supertrend_rsi` | 4.2 | Trend | Close above Supertrend(10, 3) and RSI(14) crosses above 60 today | Supertrend line | No target; stop trails the Supertrend; exit on a close below it |
-| `ichimoku` | 1.7 | Trend | Conversion line (9) above base line (26) and the close crosses above the cloud top today | Leading span A (cloud edge) | 3R |
+| `supertrend_rsi` | 4.2 | Trend | Close above Supertrend(10, 3) in an up trend and RSI(14) above 60, both holding today for the first time (in either order) | Supertrend line | No target; stop trails the Supertrend; exit on a close below it |
+| `ichimoku` | 1.7 | Trend | Conversion line (9) above base line (26) and the close above the cloud top, both holding today for the first time | Leading span A (cloud edge) | 3R |
 | `sector_rs` | 4.3 | Trend | The stock's sector (equal-weight of universe members) 63-day return turns from below to above the Nifty's; buy that sector's most-traded stock | 3 ATR | Exit when the sector's 63-day return falls back below the Nifty's |
 | `rally_base_breakout` | 7.2 | Breakout | Rise of ≥ 15% in the 60 sessions before a 20-session base whose high-low range is ≤ 15%; base volume < 0.8 x vol50; today closes above the base high on ≥ 1.5 x vol50 with a body ≥ 60% of the day's range | Base low, but at least 5% below entry | 3R |
 | `vcp` | 7.6 | Breakout | Uptrend (close > SMA50 > SMA200); three consecutive 15-session windows with shrinking high-low ranges, the last ≤ 10%, and falling average volume; today closes above the 45-session high on ≥ 1.5 x vol50 | Low of the last window | 3R |
 | `bb_squeeze` | 1.6 | Breakout | Bollinger(20, 2) width in the lowest 20% of the last 126 sessions at some point in the previous 5; today closes above the upper band and the width is rising | Middle band | No target; stop trails the middle band; exit on a close below it |
 | `triangle_breakout` | 1.4 | Breakout | Close > SMA50; over the previous 15 sessions highs slope down and lows slope up (linear fit) with falling volume; today closes above that window's high on ≥ 1.5 x vol50 | Window low | 2R |
-| `breakout_retest` | 7.4 | Pullback | A close above the prior 40-session high happened 3-15 sessions ago; since then the low came within 2% of that breakout level without closing more than 2% below it; today closes above yesterday's high | Lowest low since the breakout | 3R |
+| `breakout_retest` | 7.4 | Pullback | A close above the prior 40-session high happened 3-15 sessions ago (later higher closes do not reset the level while the setup is live); since then the low came within 2% of that breakout level without closing more than 2% below it; today closes above yesterday's high | Lowest low since the breakout | 3R |
 | `williams_pullback` | 1.2 | Pullback | Close > SMA14; Williams %R(14) was above -20 in the last 10 sessions, dipped to -50 or lower, and crosses back above -50 today | 10-session low | 2R |
 | `macd_fib` | 1.3 | Pullback | Close > SMA50; price pulled back into the 38.2-61.8% retracement of the move from the 60-session low to the 20-session high; MACD(12, 26, 9) crosses above its signal today on a green candle | Lowest low of the pullback | The 20-session high, or 2R if that is further |
 | `rsi_w` | 4.4 | Reversal | RSI(14) "W": a dip below 30, a rise above 30, a second dip that stays above the first dip's RSI low, and a cross back above 30 today, all within 25 sessions | Lowest low of the pattern | Exit when RSI reaches 70 |
@@ -84,6 +84,13 @@ at least 100 trades in each period, positive average gain after costs in both, a
 3. Trading: config, strategy tag on signals and positions, sleeve sizing and exits, Settings and
    signal-card changes.
 4. Brain skill and docs.
+
+## Amendments before any results
+
+- 1 Nov 2026, while writing unit tests and before any study run: `supertrend_rsi` and `ichimoku`
+  fire on the first day both conditions hold rather than requiring both to change on the same day
+  (the book's charts show either order); `breakout_retest` keeps the first breakout level while the
+  setup is live, so the higher closes right after a breakout do not move it.
 
 ## What would change this plan
 

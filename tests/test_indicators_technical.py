@@ -57,3 +57,39 @@ def test_breakout_detected():
 
 def test_too_little_history_returns_none():
     assert score_features(technical_features(make_bars(40)).iloc[-1]) is None
+
+
+def test_supertrend_follows_the_trend_and_flips():
+    up = ind.supertrend(make_bars(200, drift=0.004))
+    assert up["up"].iloc[-1] and up["line"].iloc[-1] < make_bars(200, drift=0.004)["close"].iloc[-1]
+    falling = make_bars(300, drift=-0.004, seed=3)
+    down = ind.supertrend(falling)
+    assert not down["up"].iloc[-1] and down["line"].iloc[-1] > falling["close"].iloc[-1]
+    # The lower band never falls while the trend stays up.
+    st = ind.supertrend(make_bars(300, drift=0.003, seed=2))
+    run = st[st["up"]]["line"]
+    same_run = (st["up"] == st["up"].shift()).loc[run.index]
+    assert (run.diff()[same_run.to_numpy()].dropna() >= -1e-9).all()
+
+
+def test_bollinger_ichimoku_williams_basics():
+    bars = make_bars(300)
+    bb = ind.bollinger(bars["close"])
+    valid = bb.dropna()
+    assert (valid["upper"] >= valid["mid"]).all() and (bb["width"].dropna() > 0).all()
+    flat = ind.bollinger(pd.Series([10.0] * 30))
+    assert flat["width"].iloc[-1] == 0
+    ich = ind.ichimoku(bars)
+    assert ich["span_a"].first_valid_index() > ich["base"].first_valid_index()
+    wr = ind.williams_r(bars).dropna()
+    assert wr.between(-100, 0).all()
+
+
+def test_new_indicators_are_causal():
+    bars = make_bars(300, seed=4)
+    for full, part in [
+        (ind.supertrend(bars), ind.supertrend(bars.iloc[:200])),
+        (ind.bollinger(bars["close"]), ind.bollinger(bars["close"].iloc[:200])),
+        (ind.ichimoku(bars), ind.ichimoku(bars.iloc[:200])),
+    ]:
+        pd.testing.assert_frame_equal(full.iloc[:200], part, check_freq=False)
