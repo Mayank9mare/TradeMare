@@ -111,6 +111,13 @@ def cmd_study(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    from trademare.intraday.server import serve
+
+    serve(args.config, args.port)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="trademare-intraday", description="Intraday research and paper trading")
     p.add_argument("--config", default=None, help="settings file (default config/intraday.yaml)")
@@ -131,6 +138,9 @@ def build_parser() -> argparse.ArgumentParser:
     st.add_argument("-s", "--strategy", action="append", help="only this strategy (repeatable)")
     st.add_argument("--show", action="store_true", help="print the saved study without re-running it")
     st.set_defaults(func=cmd_study)
+    sv = sub.add_parser("serve", help="intraday dashboard and paper trading during market hours (port 8766)")
+    sv.add_argument("--port", type=int, default=None)
+    sv.set_defaults(func=cmd_serve)
     return p
 
 

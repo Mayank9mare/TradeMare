@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intraday · TradeMare</title>
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --text:#1f2328; --muted:#6a6f76; --line:#e4e2dd; --up:#1a7f4b; --down:#b4372f; --accent:#3a5a8c; --soft:#eef2f8; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181b; --card:#1e2125; --text:#e6e6e3; --muted:#9a9ea4; --line:#2e3237; --up:#5cc98d; --down:#ef7a70; --accent:#8fb0e3; --soft:#232a35; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 22px 18px 60px; }
+  h1 { font-size: 24px; margin: 0 0 4px; } h2 { font-size: 17px; margin: 0 0 10px; }
+  .sub, .muted { color: var(--muted); font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 14px 0; }
+  .row { display:flex; gap: 10px 18px; flex-wrap: wrap; align-items: center; }
+  .pill { display:inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
+  .good { color: var(--up); } .bad { color: var(--down); }
+  .pill.good { border-color: color-mix(in srgb, var(--up) 40%, transparent); } .pill.bad { border-color: color-mix(in srgb, var(--down) 40%, transparent); }
+  .wrap { overflow-x: auto; } table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .rule { white-space: normal; max-width: 42ch; color: var(--muted); font-size: 12.5px; }
+  button { font: inherit; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .flash { padding: 8px 12px; border-radius: 8px; margin: 10px 0; background: var(--soft); }
+  .flash.err { color: var(--down); }
+  .big { font-size: 22px; font-weight: 650; }
+  label { cursor: pointer; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body><main>
+<h1>Intraday · paper trading</h1>
+<p class="sub">Separate from the daily TradeMare system (its own settings, data and database). Strategies from <i>51 Trading Strategies</i>, chapter 2, plus an opening-range baseline, on 5-minute Nifty 50 candles. Paper only: no real orders are ever sent.
+  <a href="https://github.com/Mayank9mare/TradeMare/blob/main/docs/plans/2026-11-01-intraday-plan.md">Exact rules</a></p>
+{% if msg %}<div class="flash">{{ msg }}</div>{% endif %}{% if err %}<div class="flash err">{{ err }}</div>{% endif %}
+
+<section class="card">
+  <div class="row">
+    <span>Kite login today: {% if kite_ok %}<b class="good">active</b>{% else %}<b class="bad">missing</b> <span class="sub">(run <code>uv run trademare broker login zerodha</code>)</span>{% endif %}</span>
+    <span>Paper-trading: {% if running %}<b>{{ running | join(", ") }}</b>{% else %}<b>nothing</b>{% endif %}</span>
+    {% if held_back %}<span class="bad">held back by the evidence bar: {{ held_back | join(", ") }}</span>{% endif %}
+    <form method="post" action="/poll" style="margin-left:auto"><input type="hidden" name="token" value="{{ token }}"><button>Poll now</button></form>
+  </div>
+  <p class="sub" style="margin:8px 0 0">Polls every 5 minutes on NSE trading days, 09:20–15:35 IST. Capital ₹{{ "{:,.0f}".format(cfg.paper.capital) }}, {{ cfg.paper.risk_pct }}% risk a trade, at most {{ cfg.paper.max_positions }} open positions, no leverage, everything closed by {{ cfg.squareoff.strftime("%H:%M") }}.
+  {% if polls %}Last poll {{ polls[0].ts.replace("T", " ") }}: <span class="{{ 'good' if polls[0].ok else 'bad' }}">{{ polls[0].message }}</span>.{% endif %}</p>
+</section>
+
+<section class="card">
+  <h2>Today{% if today %} · as of {{ today.as_of[11:16] }}{% endif %}</h2>
+  {% if not today %}<p class="sub">No paper trades today yet.</p>
+  {% else %}
+  <div class="row"><div><div class="sub">Realised</div><div class="big {{ 'good' if today.realised > 0 else 'bad' if today.realised < 0 else '' }}">₹{{ "{:,.0f}".format(today.realised) }}</div></div>
+    <div><div class="sub">Open</div><div class="big {{ 'good' if today.open_pnl > 0 else 'bad' if today.open_pnl < 0 else '' }}">₹{{ "{:,.0f}".format(today.open_pnl) }}</div></div></div>
+  {% if today.rows %}
+  <div class="wrap"><table>
+    <thead><tr><th>Entry</th><th>Stock</th><th>Strategy</th><th>Side</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Stop</th><th class="num">Exit / last</th><th>How</th><th class="num">P&amp;L</th></tr></thead>
+    <tbody>{% for r in today.rows %}
+      <tr{% if not r.taken %} class="muted"{% endif %}>
+        <td>{{ r.entry_time[11:16] }}</td><td><b>{{ r.symbol }}</b></td><td>{{ strategies[r.strategy].name }}</td>
+        <td>{{ "Buy" if r.side > 0 else "Short" }}</td><td class="num">{{ r.qty }}</td>
+        <td class="num">{{ "%.2f" | format(r.entry) }}</td><td class="num">{{ "%.2f" | format(r.stop) }}</td>
+        <td class="num">{{ "%.2f" | format(r.exit) }}</td>
+        <td>{% if not r.taken %}{{ r.note }}{% elif r.status == "open" %}<span class="pill">open</span>{% else %}{{ r.reason }} {{ r.exit_time[11:16] }}{% endif %}</td>
+        <td class="num {{ 'good' if r.pnl > 0 else 'bad' if r.pnl < 0 else '' }}">{{ "{:,.0f}".format(r.pnl) }}</td>
+      </tr>{% endfor %}</tbody></table></div>
+  {% endif %}{% endif %}
+</section>
+
+<section class="card">
+  <h2>Strategies and their record</h2>
+  {% if not record %}<p class="sub">No study yet. Once candles are downloaded (<code>trademare-intraday data update</code>), run <code>trademare-intraday study</code>.</p>
+  {% else %}<p class="sub" style="margin-top:0">Every past signal on {{ record.symbols }} stocks, {{ record.data_from }} to {{ record.data_through }}, as one trade after Zerodha intraday costs. Average is per trade, as a share of the position.</p>{% endif %}
+  <form method="post" action="/strategies">
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="wrap"><table>
+      <thead><tr><th>Paper-trade</th><th>Strategy</th>{% for p in periods %}<th class="num">{{ p }} trades</th><th class="num">won</th><th class="num">avg</th>{% endfor %}<th>Bar</th></tr></thead>
+      <tbody>{% for sid, s in strategies.items() %}{% set r = record.records.get(sid) if record else none %}
+        <tr>
+          <td><input type="checkbox" name="strategy" value="{{ sid }}" {{ "checked" if sid in cfg.paper.strategies }}></td>
+          <td><b>{{ s.name }}</b> <span class="sub">{{ s.book }}</span><div class="rule">{{ s.summary }}</div></td>
+          {% for p in periods %}{% set x = r.periods[p] if r else none %}
+            {% if x and x.trades %}<td class="num">{{ x.trades }}</td><td class="num">{{ "%.0f" | format(x.win_rate * 100) }}%</td><td class="num {{ 'good' if x.avg_ret > 0 else 'bad' }}">{{ "%+.3f" | format(x.avg_ret * 100) }}%</td>
+            {% else %}<td class="num">—</td><td></td><td></td>{% endif %}
+          {% endfor %}
+          <td>{% if r %}<span class="pill {{ 'good' if r.passes else 'bad' }}" title="{{ r.verdict }}">{{ "pass" if r.passes else "fail" }}</span>{% endif %}</td>
+        </tr>{% endfor %}</tbody></table></div>
+    <p class="row"><label><input type="checkbox" name="require_record" {{ "checked" if cfg.paper.require_record }}> Only strategies that pass the evidence bar</label>
+      <button class="primary">Save</button></p>
+  </form>
+</section>
+
+{% if history %}
+<section class="card">
+  <h2>Past days</h2>
+  <div class="wrap"><table><thead><tr><th>Day</th><th class="num">Trades</th><th class="num">Winners</th><th class="num">P&amp;L</th></tr></thead>
+    <tbody>{% for h in history %}<tr><td>{{ h.day }}</td><td class="num">{{ h.trades }}</td><td class="num">{{ h.wins }}</td><td class="num {{ 'good' if h.pnl > 0 else 'bad' if h.pnl < 0 else '' }}">₹{{ "{:,.0f}".format(h.pnl) }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endif %}
+</main></body></html>

@@ -1,6 +1,6 @@
 # Intraday module: research and paper trading (independent of the daily system)
 
-*Written 1 Nov 2026. Status: plan. Paper only: this module never places real orders.*
+*Written 1 Nov 2026. Status: built (phases 1-4); waiting for Kite Connect data to run the study. Paper only: this module never places real orders.*
 
 ## Goal
 
