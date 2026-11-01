@@ -178,7 +178,9 @@ class NseResults:
         except (ValueError, TypeError, KeyError):
             return None
 
-    def get(self, symbol: str, refresh: bool = False, figures: bool = True) -> SymbolResults:
+    def get(
+        self, symbol: str, refresh: bool = False, figures: bool = True, quarters: int = XBRL_QUARTERS
+    ) -> SymbolResults:
         """Filings (and figures for the latest quarters) for one symbol, cached for about a day."""
         hit = self.cached(symbol)
         if hit and not refresh and not hit.error:
@@ -195,7 +197,7 @@ class NseResults:
                 return hit
         res.figures = dict(hit.figures) if hit else {}
         if figures and not res.error:
-            self._fetch_figures(res)
+            self._fetch_figures(res, quarters)
         self._path(symbol).parent.mkdir(parents=True, exist_ok=True)
         self._path(symbol).write_text(json.dumps(asdict(res), indent=1))
         return res
@@ -226,9 +228,9 @@ class NseResults:
                 )
         return out
 
-    def _fetch_figures(self, res: SymbolResults) -> None:
-        quarters = sorted({f.quarter_end for f in res.filings if f.fmt == "integrated"}, reverse=True)
-        for q in quarters[:XBRL_QUARTERS]:
+    def _fetch_figures(self, res: SymbolResults, quarters: int = XBRL_QUARTERS) -> None:
+        recent = sorted({f.quarter_end for f in res.filings if f.fmt == "integrated"}, reverse=True)
+        for q in recent[:quarters]:
             if q in res.figures:
                 continue
             cands = [
