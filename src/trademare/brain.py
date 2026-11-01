@@ -54,6 +54,8 @@ def _signal(sig: SignalRow, now: datetime, sector: str | None = None) -> dict[st
         "decide_by_utc": exp.isoformat() if exp else None,
         "hours_left": round((exp - now).total_seconds() / 3600, 1) if exp else None,
         "exit_reason": sig.exit_reason,
+        "strategy": sig.strategy or "core",  # "setup:<id>" = a book setup (see book_setups)
+        "setup_notes": (sig.reasons or {}).get("setup", []),
         "why": rs.summary,
         "for": rs.pro,
         "against": rs.con,
@@ -129,6 +131,7 @@ def build_brief(
                 "return_pct": round(sign * (last / p.entry_price - 1) * 100, 2),
                 "unrealised_pnl": round(sign * (last - p.entry_price) * p.quantity - (p.entry_costs or 0), 2),
                 "stop": p.stop_price,
+                "strategy": p.strategy or "core",
                 "stop_distance_pct": round((p.stop_price / last - 1) * 100, 2) if p.stop_price else None,
                 "days_held": (date.today() - p.entry_date).days,
             })  # fmt: skip
@@ -158,6 +161,7 @@ def build_brief(
                 {"symbol": i.symbol, "score": round(i.composite, 2), "sector": i.sector}
                 for i in (scan.ideas[:10] if scan else [])
             ],
+            "book_setups": _book_setups(service, market, cfg),
         }
     from trademare.execution import outside_holdings
 
@@ -179,6 +183,44 @@ def build_brief(
     study = load_study(config.data.cache_dir)
     out["ipo_study_available"] = study is not None
     return out
+
+
+def _book_setups(service, market: Market, cfg) -> dict[str, Any]:
+    """Chart setups from 51 Trading Strategies: trading switch, saved track record, latest matches."""
+    from trademare.strategy.setup_study import load_record
+    from trademare.strategy.setups import SETUPS
+
+    record = load_record(service, market) or {}
+    summary = {}
+    for sid, r in record.get("records", {}).items():
+        periods = {
+            p: {
+                "trades": st["trades"],
+                "avg_ret_pct": round(st["avg_ret"] * 100, 2) if st["avg_ret"] is not None else None,
+                "nifty_same_days_pct": round(st["avg_bench"] * 100, 2)
+                if st.get("avg_bench") is not None
+                else None,
+            }
+            for p, st in r["periods"].items()
+        }
+        summary[sid] = {
+            "name": SETUPS[sid].name,
+            "book": SETUPS[sid].book,
+            "passes_bar": r["passes"],
+            **periods,
+        }
+    return {
+        "trading_enabled": cfg.setups.enabled,
+        "selected": cfg.setups.selected,
+        "budget_pct": cfg.setups.budget_pct,
+        "max_positions": cfg.setups.max_positions,
+        "record_through": record.get("data_through"),
+        "records": summary,
+        "latest_matches": [
+            {k: m[k] for k in ("setup", "symbol", "entry", "stop", "target", "risk_pct")}
+            for m in record.get("matches", [])
+        ],
+    }
 
 
 def _sectors(universe: str) -> dict[str, str]:

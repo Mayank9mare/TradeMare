@@ -124,6 +124,24 @@ an offer for sale (owners cashing out), valuation versus listed peers if you can
 it), and that retail allotment is a lottery. The owner applies through their bank or broker; the
 system never applies.
 
+### Book setups ("which setups match today?", "should I trade VCP?", a signal tagged setup:<id>)
+TradeMare also runs 12 chart setups from *51 Trading Strategies* (Aseem Singhal) as exact daily
+rules (`src/trademare/strategy/setups.py`; rules and results in
+`docs/plans/2026-11-01-book-setups-plan.md`). The brief's `book_setups` per market has the
+trading switch (`trading_enabled`, `selected`), each setup's record (`passes_bar`, and per period
+`avg_ret_pct` against `nifty_same_days_pct`), and `latest_matches`. Signals and holdings carry
+`strategy`: `core` is the tested strategy; `setup:<id>` is a setup trade in its own budget share.
+- A setup entry is a **buy-stop**: it fills only if the price trades above `limit_or_last_price`
+  next session. Say so; it is not a limit order.
+- Judge a setup signal by its own record, not the core strategy's: a setup that "passes the bar"
+  but earned less than `nifty_same_days_pct` added nothing over an index fund. Only VCP beat the
+  Nifty in both periods in the 1 Nov 2026 study; most setups are near zero before 2020.
+- The core strategy never sells setup positions; they exit on their setup's rule, stop or holding
+  limit (60 sessions). Setups that trail (Supertrend + RSI, Bollinger squeeze) move the stop daily.
+- Turning setups on or off is the owner's choice on the Setups page; do not edit
+  `markets.*.setups` unasked. `uv run trademare setups list` / `setups scan -s vcp` print the record
+  and today's matches.
+
 ### Research and strategy changes ("should we run India daily?", "tighten the stop?")
 This project only changes strategy through pre-registered studies; that is why its results can
 be trusted. Follow the existing pattern in `docs/research/`:
@@ -148,6 +166,7 @@ answer.
 | `uv run trademare health` | missed runs, kill switch, stale backups |
 | `uv run trademare daily -m IN` | process the latest finished day now (once per day) |
 | `uv run trademare ipo` | Indian IPOs |
+| `uv run trademare setups [list\|scan -s <id>]` | book setups: track record, today's matches |
 | `uv run trademare backtest ...` / `walkforward ...` | research, after a written plan |
 
 The dashboard runs at http://127.0.0.1:8765 (Overview, Signals, Trade journal, Portfolio,
