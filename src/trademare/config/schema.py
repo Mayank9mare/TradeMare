@@ -130,6 +130,33 @@ class PreTradeConfig(_Strict):
     )
 
 
+class SetupsConfig(_Strict):
+    """Chart setups from "51 Trading Strategies" as a separate paper-trading sleeve.
+
+    See docs/plans/2026-11-01-book-setups-plan.md. Off by default; the core strategy is unaffected.
+    """
+
+    enabled: bool = Field(False, description="Let the selected setups create signals for approval")
+    selected: list[str] = Field(default_factory=list, description="Setup ids, e.g. vcp, rally_base_breakout")
+    budget_pct: float = Field(
+        30.0, gt=0, le=100, description="Share of the market budget that setup trades may use"
+    )
+    max_positions: int = Field(3, ge=1, description="Open setup positions at most")
+    require_record: bool = Field(
+        True,
+        description="Only setups that pass the evidence bar on this market's history create signals",
+    )
+
+    @model_validator(mode="after")
+    def _known_setups(self) -> Self:
+        from trademare.strategy.setups import SETUPS  # lazy: keeps config import light
+
+        unknown = [x for x in self.selected if x not in SETUPS]
+        if unknown:
+            raise ValueError(f"unknown setup(s) {unknown}; choose from {sorted(SETUPS)}")
+        return self
+
+
 class MarketConfig(_Strict):
     enabled: bool = True
     validated: bool = Field(
@@ -179,6 +206,7 @@ class MarketConfig(_Strict):
     kill_switch: KillSwitchConfig = KillSwitchConfig()
     tax: TaxConfig = TaxConfig()
     pretrade: PreTradeConfig = PreTradeConfig()
+    setups: SetupsConfig = SetupsConfig()
 
     @property
     def deployable_capital(self) -> float:

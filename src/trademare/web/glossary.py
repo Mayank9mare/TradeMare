@@ -225,6 +225,16 @@ GLOSSARY: dict[str, str] = {
     "bottom means it would not buy it today. It is one view, not a sell signal.",
     "trend_200d": "Whether the price is above its average of the last 200 trading days (about ten months), a "
     "common test of a long-term uptrend.",
+    # ---------------------------------------------------------------- book setups
+    "book_setup": "A chart pattern from the book 51 Trading Strategies (for example a breakout after a quiet "
+    "base), written as exact rules so a computer can find it every day and test how it did in the past.",
+    "buy_stop": "An order that buys only if the price rises to a level, here the signal day's high. If the "
+    "stock never trades that high the next day, there is no trade, which filters out weak follow-through.",
+    "setup_edge": "The setup's average gain per trade minus what the Nifty itself gained over the same days. "
+    "Positive means the setup beat simply holding the index; negative means an index fund did better.",
+    "evidence_bar": "The test a setup must pass before it may propose paper trades: at least 100 past trades "
+    "in each period, a profit after costs in both, and a profit factor of 1.1 or more since 2020. "
+    "Fixed before any results were seen.",
     # ---------------------------------------------------------------- IPOs
     "ipo": "Initial public offering: a company selling shares to the public for the first time. You bid "
     "during a few days; shares are allotted (often by lottery) and start trading on the listing day.",

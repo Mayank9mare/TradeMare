@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Setups · {{ market.value }} · TradeMare{% endblock %}
+{% macro stat(p, key, digits=2, signed=True) %}{% set v = p[key] %}{% if v is none %}—{% else %}{{ v | pct(digits, signed) }}{% endif %}{% endmacro %}
+{% block content %}
+<h1>Chart setups{{ tip("book_setup", "a chart setup") }}</h1>
+<p class="muted">Setups from <i>51 Trading Strategies</i> (Aseem Singhal, 2023), written as exact daily rules and tested on {{ "Nifty 500" if market.value == "IN" else "S&amp;P 500" }} history since 2010.
+  Pick one or more to see today's matches. The book shows hand-picked charts and no tested results, so the track record below is TradeMare's own.
+  <a href="https://github.com/Mayank9mare/TradeMare/blob/main/docs/plans/2026-11-01-book-setups-plan.md">Exact rules</a></p>
+
+{% if not record %}
+<div class="card"><p><b>Working out each setup's track record…</b> This takes about a minute the first time. Refresh the page shortly.</p></div>
+{% elif not current %}
+<div class="card note-card"><p class="sub" style="margin:0">{% if computing %}Updating the record for newer prices (about a minute); showing the one from {{ record.data_through }}. Refresh shortly.{% else %}This record is from {{ record.data_through }}.
+  <form method="post" action="/setups/{{ market.value }}/refresh" style="display:inline"><button type="submit">Update now</button></form>{% endif %}</p></div>
+{% endif %}
+
+<form method="get" action="/setups/{{ market.value }}" class="card setup-picker" id="picker">
+  <div class="card-head"><h2>Choose setups</h2>
+    <div class="pills"><button type="submit">Show matches</button>
+      <a class="sub" href="#" data-pick="pass">Only passing</a><a class="sub" href="#" data-pick="all">All</a><a class="sub" href="#" data-pick="none">None</a></div></div>
+  <div class="setup-groups">
+  {% for family, items in groups %}
+    <fieldset><legend>{{ family }}</legend>
+    {% for st in items %}{% set r = records.get(st.id) %}
+      <label class="setup-choice" title="{{ st.summary }}">
+        <input type="checkbox" name="s" value="{{ st.id }}" data-pass="{{ 1 if r and r.passes else 0 }}" {{ "checked" if st.id in chosen }}>
+        <span><b>{{ st.name }}</b> <span class="sub">{{ st.book }}</span>
+          {% if r %}<span class="pill {{ 'good' if r.passes else 'bad' }}">{{ "passes" if r.passes else "fails" }}</span>{% endif %}
+          {% if st.id in trading.selected and trading.enabled %}<span class="pill info">trading</span>{% endif %}</span>
+      </label>
+    {% endfor %}
+    </fieldset>
+  {% endfor %}
+  </div>
+</form>
+
+{# ------------------------------------------------------------------ matches #}
+<section class="card">
+  <div class="card-head"><h2>Today's matches{% if record %} · {{ record.data_through }}{% endif %}</h2><span class="sub">{{ matches | length }} stock{{ "" if matches | length == 1 else "s" }}</span></div>
+  {% if not chosen %}<p class="sub">Choose at least one setup above.</p>
+  {% elif not matches %}<p class="sub">No liquid stock matched {{ "this setup" if chosen | length == 1 else "these setups" }} on the latest session.</p>
+  {% else %}
+  <p class="sub" style="margin-top:0">The entry is a buy-stop{{ tip("buy_stop", "a buy-stop") }}: the trade starts only if the price rises above the signal day's high in the next session. Stocks matching several setups come first.</p>
+  <div class="table-wrap"><table class="data sortable">
+    <thead><tr><th data-type="text">Stock</th><th data-type="text">Setup</th><th class="num">Close</th><th class="num">Entry above</th><th class="num">Stop-loss{{ tip("stop", "the stop-loss") }}</th><th class="num">Risk</th><th class="num">Target{{ tip("target") }}</th><th data-type="text">Sector</th></tr></thead>
+    <tbody>{% for m in matches %}
+      <tr>
+        <td data-v="{{ m.symbol }}"><a href="/m/{{ market.value }}/{{ m.symbol | urlencode }}"><b class="sym">{{ m.symbol }}</b></a><div class="sub">{{ m.name | truncate(28) }}</div></td>
+        <td data-v="{{ m.setups | length }}">{% for sid in m.setups %}<span class="pill plain" title="{{ setups[sid].summary }}">{{ setups[sid].name }}</span>{% endfor %}</td>
+        <td class="num" data-v="{{ m.close }}">{{ m.close | money(market, False) }}</td>
+        <td class="num" data-v="{{ m.entry }}">{{ m.entry | money(market, False) }}</td>
+        <td class="num" data-v="{{ m.stop }}">{{ m.stop | money(market, False) }}</td>
+        <td class="num" data-v="{{ m.risk_pct }}">{{ m.risk_pct | pct(1) }}</td>
+        <td class="num" data-v="{{ m.target or 0 }}">{% if m.target %}{{ m.target | money(market, False) }}{% else %}<span class="sub">trailing</span>{% endif %}</td>
+        <td class="sub">{{ m.sector }}</td>
+      </tr>
+    {% endfor %}</tbody></table></div>
+  {% endif %}
+</section>
+
+{# ------------------------------------------------------------------ record #}
+{% if record %}
+<section class="card">
+  <div class="card-head"><h2>Track record on {{ "Indian" if market.value == "IN" else "US" }} stocks</h2><span class="sub">data through {{ record.data_through }}</span></div>
+  <p class="sub" style="margin-top:0">Every past signal as one trade with the book's entry, stop and exit, after costs, one trade per stock at a time.
+    <b>Nifty, same days</b> is what simply holding the index earned over each trade's days, and <b>Edge</b> is the setup's average minus that: a negative edge means an index fund did better.
+    Results use today's index list (some survivorship bias{{ tip("survivorship") }}) and 2020 onwards was a strong bull market, so treat both columns as optimistic.
+    The evidence bar{{ tip("evidence_bar", "the evidence bar") }} was fixed before any results.</p>
+  <div class="table-wrap"><table class="data record-table">
+    <thead>
+      <tr><th rowspan="2">Setup</th>{% for p in periods %}<th colspan="6" class="group">{{ p }}</th>{% endfor %}<th rowspan="2">Bar</th></tr>
+      <tr>{% for p in periods %}<th class="num">Trades</th><th class="num">Won{{ tip("win_rate") }}</th><th class="num">Avg / trade</th><th class="num">Nifty, same days</th><th class="num">Edge{{ tip("setup_edge", "edge") }}</th><th class="num">PF{{ tip("profit_factor") }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>{% for sid, st in setups.items() %}{% set r = records.get(sid) %}
+      <tr class="{{ 'chosen' if sid in chosen }}">
+        <td><b>{{ st.name }}</b> <span class="sub">{{ st.book }}</span><div class="sub setup-rule">{{ st.summary }} {{ st.exit_text }}</div></td>
+        {% for p in periods %}{% set x = r.periods[p] if r else none %}
+          {% if x %}
+          <td class="num">{{ x.trades }}</td>
+          <td class="num">{{ x.win_rate | pct(0) if x.win_rate is not none else "—" }}</td>
+          <td class="num {{ x.avg_ret | tone }}">{{ stat(x, "avg_ret") }}</td>
+          <td class="num sub">{{ stat(x, "avg_bench") }}</td>
+          {% set edge = (x.avg_ret - x.avg_bench) if x.avg_ret is not none and x.avg_bench is not none else none %}
+          <td class="num {{ edge | tone }}">{% if edge is none %}—{% else %}{{ edge | pct(2, True) }}{% endif %}</td>
+          <td class="num">{{ "%.2f" | format(x.profit_factor) if x.profit_factor else "—" }}</td>
+          {% else %}<td colspan="6" class="sub">—</td>{% endif %}
+        {% endfor %}
+        <td>{% if r %}<span class="pill {{ 'good' if r.passes else 'bad' }}" title="{{ r.verdict }}">{{ "pass" if r.passes else "fail" }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}</tbody></table></div>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2 style="margin-top:0">Trading these setups</h2>
+  {% if trading.enabled and trading.selected %}
+  <p>Paper signals are on for: {% for sid in trading.selected %}<b>{{ setups[sid].name }}</b>{{ ", " if not loop.last }}{% endfor %}.
+    They use up to {{ trading.budget_pct | round | int }}% of the budget and {{ trading.max_positions }} open positions, and go through the usual approval and risk checks.
+    {% if trading.require_record %}Setups that fail the evidence bar are skipped.{% endif %} Change this in <a href="/settings">Settings</a>.</p>
+  {% else %}
+  <p class="sub">Setups are analysis only on this market. To let them propose paper trades for your approval, turn them on in <a href="/settings">Settings</a>
+    (Book setups). They run as a separate share of the budget, so the tested strategy's trades are unaffected.</p>
+  {% endif %}
+</section>
+
+<script>
+document.querySelectorAll("[data-pick]").forEach(a => a.addEventListener("click", e => {
+  e.preventDefault();
+  const mode = a.dataset.pick;
+  document.querySelectorAll("#picker input[name=s]").forEach(box => {
+    box.checked = mode === "all" || (mode === "pass" && box.dataset.pass === "1");
+  });
+}));
+</script>
+{% endblock %}

@@ -518,3 +518,15 @@ details.data-status .card-foot { border-top: none; margin-top: 6px; padding-top:
 :root[data-density="compact"] .card table.data td .sub { display: inline; margin-left: 6px; }
 :root[data-density="compact"] .regime-card { margin-bottom: 12px; }
 :root[data-density="compact"] .regime-card .card-head { margin-bottom: 0; }
+
+/* ------------------------------------------------------------ book setups */
+.setup-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.setup-groups fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px 10px; margin: 0; min-width: 0; }
+.setup-groups legend { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 0 4px; }
+.setup-choice { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; cursor: pointer; line-height: 1.35; }
+.setup-choice input { margin-top: 3px; }
+.setup-choice .pill { margin-left: 4px; }
+.record-table th.group { text-align: center; border-bottom: 1px solid var(--border); }
+.record-table tr.chosen td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.record-table .setup-rule { max-width: 34ch; white-space: normal; }
+.setup-picker .pills a { text-decoration: none; }

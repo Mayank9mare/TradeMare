@@ -395,6 +395,59 @@ def cmd_ipo_study(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pct(x: float | None) -> str:
+    return "  -  " if x is None else f"{x * 100:+.2f}%"
+
+
+def cmd_setups_list(args: argparse.Namespace) -> int:
+    from trademare.data.service import DataService
+    from trademare.strategy.setup_study import PERIODS, current_record
+    from trademare.strategy.setups import SETUPS
+
+    config = load_config(args.config)
+    market = Market(args.market)
+    record = current_record(DataService(config, Secrets()), market, refresh=args.refresh)
+    print(f"{market.value} setups, track record on data through {record['data_through']}")
+    print(f"{'setup':22} {'book':5} " + "  ".join(f"{p:>34}" for p in PERIODS) + "  bar")
+    for sid, setup in SETUPS.items():
+        r = record["records"][sid]
+        cells = []
+        for p in PERIODS:
+            st = r["periods"][p]
+            cells.append(
+                f"{st['trades']:5d} tr {(st['win_rate'] or 0) * 100:3.0f}% won "
+                f"avg {_pct(st['avg_ret'])} nifty {_pct(st['avg_bench'])}"
+            )
+        print(f"{sid:22} {setup.book:5} " + "  ".join(cells) + f"  {'pass' if r['passes'] else 'fail'}")
+    return 0
+
+
+def cmd_setups_scan(args: argparse.Namespace) -> int:
+    from trademare.data.service import DataService
+    from trademare.strategy.setup_study import Universe, todays_matches
+    from trademare.strategy.setups import SETUPS
+
+    config = load_config(args.config)
+    market = Market(args.market)
+    ids = args.setup or list(SETUPS)
+    unknown = [s for s in ids if s not in SETUPS]
+    if unknown:
+        print(f"unknown setup(s): {', '.join(unknown)}; choose from {', '.join(SETUPS)}")
+        return 1
+    universe = Universe(DataService(config, Secrets()), market)
+    matches = todays_matches(universe, ids)
+    print(f"{market.value} matches on {universe.data_through} (buy-stop at the entry, next session only)")
+    for m in sorted(matches, key=lambda m: (m.setup, -m.strength)):
+        target = f"{m.target:,.2f}" if m.target else "trail"
+        print(
+            f"{m.setup:20} {m.symbol:12} entry {m.entry:,.2f} stop {m.stop:,.2f} "
+            f"({m.risk_pct:.1%} risk) target {target}  {m.sector}"
+        )
+    if not matches:
+        print("no matches today")
+    return 0
+
+
 def cmd_brief(args: argparse.Namespace) -> int:
     import json
 
@@ -796,6 +849,22 @@ def build_parser() -> argparse.ArgumentParser:
     ipo_sub.add_parser(
         "study", help="re-run the pre-registered study of QIB demand vs listing gains (slow the first time)"
     ).set_defaults(func=cmd_ipo_study)
+
+    setups = sub.add_parser(
+        "setups", help="chart setups from 51 Trading Strategies: track record and matches"
+    )
+    setups_sub = setups.add_subparsers(dest="setups_cmd")
+    setups.set_defaults(func=cmd_setups_list, market="IN", refresh=False)
+    sl = setups_sub.add_parser(
+        "list", help="each setup's track record on cached history (recomputed if stale)"
+    )
+    sl.add_argument("-m", "--market", choices=["IN", "US"], default="IN")
+    sl.add_argument("--refresh", action="store_true", help="recompute even if the saved record is current")
+    sl.set_defaults(func=cmd_setups_list)
+    ss = setups_sub.add_parser("scan", help="stocks matching setups on the latest session")
+    ss.add_argument("-m", "--market", choices=["IN", "US"], default="IN")
+    ss.add_argument("-s", "--setup", action="append", help="setup id (repeatable; default all)")
+    ss.set_defaults(func=cmd_setups_scan)
 
     daily = sub.add_parser("daily", help="run the daily process now: data, paper fills, signals, digest")
     daily.add_argument("-m", "--market", choices=[m.value for m in Market])

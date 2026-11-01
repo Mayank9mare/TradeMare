@@ -133,3 +133,72 @@ def test_backtest_list_tolerates_runs_without_splits(tmp_path, monkeypatch):
     )
     page = TestClient(app).get("/backtests")
     assert page.status_code == 200 and "+5.0%" in page.text
+
+
+def test_setups_page_shows_record_and_matches(client, monkeypatch):
+    import json
+    from pathlib import Path
+
+    from trademare.strategy import setup_study
+    from trademare.web import setup_routes
+
+    monkeypatch.setattr(setup_routes, "current_record", lambda *a, **k: None)  # no background study
+    stats = {
+        "trades": 150,
+        "win_rate": 0.45,
+        "avg_ret": 0.012,
+        "median_ret": 0.0,
+        "avg_r": 0.2,
+        "avg_bench": 0.008,
+        "profit_factor": 1.3,
+        "median_days": 20,
+        "best": 0.3,
+        "worst": -0.1,
+    }
+    records = {
+        sid: {
+            "setup": sid,
+            "periods": {p: stats for p in setup_study.PERIODS},
+            "by_year": {},
+            "passes": sid == "vcp",
+            "verdict": "x",
+            "recent": [],
+        }
+        for sid in setup_study.SETUPS
+    }
+    match = {
+        "setup": "vcp",
+        "symbol": "M&M",
+        "name": "Mahindra",
+        "sector": "Automobile",
+        "signal_date": "2025-06-30",
+        "close": 100.0,
+        "entry": 101.0,
+        "stop": 95.0,
+        "target": 119.0,
+        "risk_pct": 0.059,
+        "strength": 1.0,
+        "liquid": True,
+    }
+    result = {
+        "market": "IN",
+        "data_through": "2025-06-30",
+        "rules_version": "old",
+        "records": records,
+        "matches": [match, {**match, "setup": "ichimoku", "target": None}],
+    }
+    path = Path("cache") / "setups" / "IN-record.json"  # the fixture's cache_dir, relative to its cwd
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result))
+
+    r = client.get("/setups/IN")
+    assert r.status_code == 200
+    assert "Volatility contraction (VCP)" in r.text and "Rally, quiet base, breakout" in r.text
+    assert "M&amp;M" in r.text  # the passing setup is chosen by default, so its match shows
+    assert "This record is from 2025-06-30" in r.text or "Updating the record" in r.text
+    both = client.get("/setups/IN?s=vcp&s=ichimoku")
+    assert both.text.count("Mahindra") == 1 and "Ichimoku cloud</span>" in both.text
+    none = client.get("/setups/IN?s=pin_bar_range")
+    assert "No liquid stock matched" in none.text
+    assert client.get("/setups/XX").status_code == 404
+    assert client.get("/setups", follow_redirects=False).status_code == 307

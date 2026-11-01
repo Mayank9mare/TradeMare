@@ -50,6 +50,7 @@ from trademare.web.settings_form import (
     drifted,
     untested,
 )
+from trademare.web.setup_routes import register_setup_routes
 from trademare.web.snapshot import SnapshotCache
 from trademare.web.trading_routes import register_trading_routes
 
@@ -111,6 +112,7 @@ def create_app(
 
     register_trading_routes(app, templates, config, service, db, secrets)
     register_ipo_routes(app, templates, config, db, secrets)
+    register_setup_routes(app, templates, config, service)
     scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}
 
     def latest_scan(market: Market) -> ScanResult | None:
