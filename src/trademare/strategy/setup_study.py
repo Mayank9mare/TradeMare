@@ -2,7 +2,9 @@
 
 Every signal becomes one simulated trade with the book's rules, filled from daily bars:
 
-- entry: a buy-stop at the signal day's high, next session only; a gap above it fills at the open;
+- entry: a buy-stop at the signal day's high, next session only, with a limit ``limit_buffer_pct``
+  above it (as the live stop-limit order): a gap up within the buffer fills at the open, a bigger
+  gap means no trade;
 - exits, checked each day in this order: the open at or below the stop (fill at the open), the low
   touching the stop (fill at the stop), the target reached (at the open if it gapped past, else at
   the target), then after the close: the stop trails up to the setup's trail level, and the setup's
@@ -102,6 +104,7 @@ def simulate(
     slippage_bps: float = 5.0,
     start: date = STUDY_START,
     benchmark: pd.Series | None = None,
+    limit_buffer_pct: float = 1.0,
 ) -> list[Trade]:
     o, h, lo, c = (bars[k].to_numpy(dtype=float) for k in ("open", "high", "low", "close"))
     signal = (frame["signal"] & eligible.reindex(frame.index, fill_value=False)).to_numpy()
@@ -125,6 +128,9 @@ def simulate(
         j = i + 1
         level = entry_lvl[i]
         if h[j] < level:  # the buy-stop never triggered
+            i += 1
+            continue
+        if o[j] > level * (1 + limit_buffer_pct / 100):  # gapped past the stop-limit: no fill
             i += 1
             continue
         fill = max(o[j], level)
@@ -310,9 +316,16 @@ def run_study(
             if (m := _match(u, sid, symbol, bars, frame)) is not None:
                 matches.append(asdict(m))
             trades += simulate(
-                setup, symbol, bars, frame, u.eligible(symbol), market, u.cfg.slippage_bps,
+                setup,
+                symbol,
+                bars,
+                frame,
+                u.eligible(symbol),
+                market,
+                u.cfg.slippage_bps,
                 benchmark=u.benchmark,
-            )  # fmt: skip
+                limit_buffer_pct=u.cfg.stop_loss.limit_buffer_pct,
+            )
         records[sid] = asdict(summarize(sid, trades))
     return {
         "market": market.value,

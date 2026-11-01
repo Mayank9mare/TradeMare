@@ -58,6 +58,8 @@ class SignalRow(Base):
     evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     exit_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
     position_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # None = the market's core strategy; "setup:<id>" = a book setup (strategy/setups.py).
+    strategy: Mapped[str | None] = mapped_column(String(40), nullable=True)
     status: Mapped[str] = mapped_column(String(12), index=True)  # see SignalStatus
     scan_date: Mapped[date] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -118,6 +120,7 @@ class PositionRow(Base):
     realized_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
     last_price: Mapped[float | None] = mapped_column(Float, nullable=True)
     entry_signal_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    strategy: Mapped[str | None] = mapped_column(String(40), nullable=True)  # as on the entry signal
 
 
 class EquityRow(Base):

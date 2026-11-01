@@ -92,7 +92,48 @@ at least 100 trades in each period, positive average gain after costs in both, a
   (the book's charts show either order); `breakout_retest` keeps the first breakout level while the
   setup is live, so the higher closes right after a breakout do not move it.
 
+- 1 Nov 2026, after the first study run (execution only, no rule changed): live entries are
+  stop-limit orders with a limit 1% above the trigger (Zerodha has no plain stop-market entry for
+  this use), so the study now skips trades whose next open gaps more than 1% above the trigger
+  instead of filling them at the open. Results before and after are in the results section.
+
 ## What would change this plan
 
 A setup that fails the evidence bar stays analysis-only unless the owner turns `require_record`
 off for that market, which the Settings page labels as trading an untested strategy.
+
+## Results (appended 1 Nov 2026; India, Nifty 500 list, data through 30 Oct 2026)
+
+Final run (with the stop-limit fill amendment). "First run" is the verdict before that amendment.
+Average gain per trade is after costs; "Nifty same days" is the index's return over each trade's
+days (before costs), the honest comparison for a setup's edge.
+
+| Setup | Book | 2010-19 trades | won | avg/trade | Nifty same days | 2020+ trades | won | avg/trade | Nifty same days | PF 2020+ | Bar | First run |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Supertrend + RSI | 4.2 | 4729 | 35% | +0.17% | +1.15% | 4591 | 39% | +1.79% | +1.38% | 1.45 | pass | pass |
+| Ichimoku cloud | 1.7 | 3989 | 31% | -0.01% | +0.81% | 3694 | 36% | +1.36% | +1.23% | 1.38 | fail | pass |
+| Sector relative strength | 4.3 | 458 | 42% | +0.10% | +0.69% | 316 | 38% | +0.20% | +0.98% | 1.08 | fail | pass |
+| Rally, quiet base, breakout | 7.2 | 306 | 45% | +0.52% | +1.72% | 382 | 47% | +3.40% | +1.73% | 1.59 | pass | pass |
+| Volatility contraction (VCP) | 7.6 | 167 | 46% | +1.83% | +1.05% | 168 | 45% | +2.51% | +1.34% | 1.49 | pass | pass |
+| Bollinger squeeze breakout | 1.6 | 3567 | 31% | -0.33% | +0.53% | 3534 | 33% | +0.55% | +0.71% | 1.20 | fail | fail |
+| Triangle breakout | 1.4 | 134 | 51% | +2.99% | +2.16% | 117 | 47% | +1.61% | +2.00% | 1.27 | pass | pass |
+| Breakout and retest | 7.4 | 2813 | 32% | -0.04% | +0.73% | 2692 | 38% | +1.78% | +1.30% | 1.45 | fail | pass |
+| Williams %R pullback | 1.2 | 3691 | 38% | +0.01% | +0.81% | 3459 | 42% | +0.99% | +1.08% | 1.25 | pass | fail |
+| MACD + Fibonacci pullback | 1.3 | 892 | 39% | +0.10% | +0.82% | 852 | 42% | +1.11% | +1.16% | 1.24 | pass | pass |
+| RSI 'W' bounce | 4.4 | 619 | 27% | -0.04% | +1.65% | 494 | 27% | +1.00% | +1.70% | 1.24 | fail | fail |
+| Pin bar at range bottom | 7.3 | 102 | 32% | -0.43% | +0.41% | 172 | 31% | -0.42% | +0.26% | 0.76 | fail | fail |
+
+What this says:
+
+- **Against the evidence bar**: 6 of 12 pass. The verdicts of four setups changed with a small
+  execution detail (how gaps above the trigger fill), so for setups near zero before 2020 the
+  pass/fail line is close to noise.
+- **Against simply holding the Nifty over the same days** (not part of the bar, shown on the
+  page): only the volatility contraction pattern (VCP) did better in both periods. The triangle
+  breakout did better in 2010-2019 only; the rally-base breakout, Supertrend + RSI and Ichimoku in
+  2020 onwards only. Every other setup earned less than the index in both periods.
+- 2020 onwards was a strong market for Indian mid-caps and the universe is today's index list, so
+  the later column flatters every setup.
+
+The bar is unchanged. Setups that pass may trade on paper if the owner turns them on; the page
+shows the Nifty comparison next to each so the choice is informed.

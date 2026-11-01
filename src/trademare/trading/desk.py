@@ -49,7 +49,15 @@ from trademare.core.models import (
 from trademare.data.service import DataService
 from trademare.data.universe import load_universe
 from trademare.execution.brokers import BrokerError, LoginRequired, OrderUpdate, create_broker
-from trademare.execution.fills import Bar, gapped_past_limit, limit_fill, slipped, stop_fill, target_fill
+from trademare.execution.fills import (
+    Bar,
+    gapped_past_limit,
+    limit_fill,
+    slipped,
+    stop_entry_fill,
+    stop_fill,
+    target_fill,
+)
 from trademare.risk.manager import Exposure, RiskManager
 from trademare.risk.pretrade import PreTradeContext
 from trademare.risk.pretrade import check as pretrade_check
@@ -63,6 +71,7 @@ from trademare.strategy.evidence import (
     risk_evidence,
 )
 from trademare.strategy.scanner import ScanContext, ScanResult, is_rebalance_day, save_scan
+from trademare.trading import setup_sleeve
 from trademare.trading.outcomes import describe as describe_order
 
 log = logging.getLogger(__name__)
@@ -238,15 +247,20 @@ class TradingDesk:
                 sign = 1 if sig.direction == Direction.LONG.value else -1
                 if qty <= 0 or stop_price is None or sign * (price - stop_price) <= 0:
                     raise DeskError("quantity must be positive and the stop on the losing side of the entry")
+                if sig.strategy:  # book setups buy on strength: a stop-limit just above the trigger
+                    limit_price = round(price * (1 + sign * self.cfg.stop_loss.limit_buffer_pct / 100), 2)
+                    order_type, trigger = OrderType.STOP_LIMIT, price
+                else:
+                    limit_price, order_type, trigger = price, OrderType.LIMIT, None
                 order = self._new_order(
                     s,
                     sig,
                     "entry",
                     _side(sig.direction, True),
                     qty,
-                    OrderType.LIMIT,
-                    price,
-                    None,
+                    order_type,
+                    limit_price,
+                    trigger,
                     valid_until,
                 )
                 sig.quantity, sig.entry_price, sig.stop_price = qty, price, stop_price
@@ -378,6 +392,11 @@ class TradingDesk:
             )  # fmt: skip
         return problems if live else []
 
+    def _order_strategy(self, s: Session, o: OrderRow) -> str | None:
+        """The strategy of the signal an order came from (None = the core strategy)."""
+        sig = s.get(SignalRow, o.signal_id) if o.signal_id else None
+        return sig.strategy if sig else None
+
     def _universe_symbols(self) -> set[str]:
         if getattr(self, "_universe_cache", None) is None:
             try:
@@ -481,7 +500,10 @@ class TradingDesk:
             if not eligible(o) or bar is None:
                 continue
             side = OrderSide(o.side)
-            price = limit_fill(side, o.limit_price, bar)
+            if o.order_type == OrderType.STOP_LIMIT.value:
+                price = stop_entry_fill(side, o.trigger_price, o.limit_price, bar)
+            else:
+                price = limit_fill(side, o.limit_price, bar)
             if price is None:
                 continue  # expires below if this was its last session
             sig = s.get(SignalRow, o.signal_id)
@@ -508,6 +530,7 @@ class TradingDesk:
                 status="open",
                 last_price=price,
                 entry_signal_id=sig.id,
+                strategy=sig.strategy,
             )
             s.add(pos)
             s.flush()
@@ -833,6 +856,7 @@ class TradingDesk:
             status="open",
             last_price=price,
             entry_signal_id=sig.id,
+            strategy=sig.strategy,
         )
         s.add(pos)
         s.flush()
@@ -1034,18 +1058,27 @@ class TradingDesk:
             if close is None:
                 continue
             pos.last_price = close
-            if not sl.trailing:
-                continue
-            if sl.trail_method is TrailMethod.ATR:
-                bars = self.service.store.read_bars(self.market, pos.symbol).loc[: pd.Timestamp(day)]
-                a = atr(bars, sl.atr_period).iloc[-1]
-                distance = None if pd.isna(a) else sl.trail_value * float(a)
-            else:
-                distance = close * sl.trail_value / 100
-            if not distance:
-                continue
+            setup = setup_sleeve.setup_of(pos.strategy)
             sign = 1 if pos.direction == Direction.LONG.value else -1
-            candidate = close - sign * distance
+            if setup is not None:  # book setups trail by their own line (Supertrend, middle band)
+                bars = self.service.store.read_bars(self.market, pos.symbol).loc[: pd.Timestamp(day)]
+                candidate = setup_sleeve.trail_level(setup, bars)
+                if candidate is None:
+                    continue
+            else:
+                if not sl.trailing:
+                    continue
+                if sl.trail_method is TrailMethod.ATR:
+                    bars = self.service.store.read_bars(self.market, pos.symbol).loc[: pd.Timestamp(day)]
+                    a = atr(bars, sl.atr_period).iloc[-1]
+                    distance = None if pd.isna(a) else sl.trail_value * float(a)
+                else:
+                    distance = close * sl.trail_value / 100
+                if not distance:
+                    continue
+                candidate = close - sign * distance
+            if sign * (candidate - close) >= 0:
+                continue  # a trail level through the price would sell at once: leave the stop
             if pos.stop_price is None or sign * (candidate - pos.stop_price) > 0:
                 pos.stop_price = round(candidate, 2)
                 for o in self._orders(s, position_id=pos.id, purpose="stop", status=OPEN):
@@ -1097,7 +1130,11 @@ class TradingDesk:
     def generate_signals(self, s: Session, day: date, report: DailyReport) -> ScanResult | None:
         exists = s.scalars(
             select(SignalRow)
-            .where(SignalRow.market == self.market.value, SignalRow.scan_date == day)
+            .where(
+                SignalRow.market == self.market.value,
+                SignalRow.scan_date == day,
+                SignalRow.strategy.is_(None),
+            )
             .limit(1)
         ).first()
         if exists:
@@ -1107,10 +1144,15 @@ class TradingDesk:
         frequency = self.config.strategy.factor_rebalance if factor_mode else Rebalance.DAILY
         report.rebalance_day = is_rebalance_day(self.clock.previous_session(day), day, frequency)
         never_signalled = (
-            s.scalars(select(SignalRow.id).where(SignalRow.market == self.market.value).limit(1)).first()
+            s.scalars(
+                select(SignalRow.id)
+                .where(SignalRow.market == self.market.value, SignalRow.strategy.is_(None))
+                .limit(1)
+            ).first()
             is None
         )
-        if not report.rebalance_day and never_signalled and not self.db.open_positions(s, self.market.value):
+        core_open = [p for p in self.db.open_positions(s, self.market.value) if not p.strategy]
+        if not report.rebalance_day and never_signalled and not core_open:
             report.rebalance_day = True  # first run of an empty account: build the initial portfolio now
             report.notes.append("initial portfolio build (first run of an empty account)")
         ctx = ScanContext(self.service, self.market)
@@ -1137,7 +1179,7 @@ class TradingDesk:
         exiting = {o.position_id for o in self._orders(s, purpose="exit", status=OPEN)}
         staying = []
         for pos in positions:
-            if pos.id in exiting:
+            if pos.id in exiting or pos.strategy:  # setup positions exit by their own rules
                 continue
             c = composites.get(pos.symbol)
             long = pos.direction == Direction.LONG.value
@@ -1166,9 +1208,11 @@ class TradingDesk:
             report.notes.append("kill switch active: entry signals suppressed")
             return scan
         exposure = self._exposure(s)
-        pending_entries = {o.symbol for o in self._orders(s, purpose="entry", status=OPEN)}
+        entry_orders = self._orders(s, purpose="entry", status=OPEN)
+        pending_entries = {o.symbol for o in entry_orders}
+        core_pending = sum(1 for o in entry_orders if not self._order_strategy(s, o))
         held = {p.symbol for p in positions}
-        slots = max_positions - len(staying) - len(pending_entries)
+        slots = max_positions - len(staying) - core_pending
         equity, cash, _ = self.equity(s)
         sentiment = self._sentiment_analyst()
         for idea in scan.ideas:
@@ -1438,6 +1482,7 @@ class TradingDesk:
                 self.check_holdings(s, day, report)
             if generate:
                 self.generate_signals(s, day, report)
+                setup_sleeve.run(self, s, day, report)
             report.kill_switch, report.kill_reason = state.kill_switch, state.kill_reason
             report.open_positions = len(self.db.open_positions(s, self.market.value))
             if report.equity is None:

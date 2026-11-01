@@ -193,3 +193,11 @@ def link_symbol(text: str, market: str, symbol: str):
 
     link = Markup('<a href="/m/{}/{}"><b>{}</b></a>').format(market, quote(symbol, safe=""), symbol)
     return Markup(str(escape(text)).replace(str(escape(symbol)), str(link), 1))
+
+
+def setup_label(strategy: str | None) -> str:
+    """'Volatility contraction (VCP) · book 7.6' for a book-setup strategy tag; '' otherwise."""
+    from trademare.trading.setup_sleeve import setup_of
+
+    setup = setup_of(strategy)
+    return f"{setup.name} · book {setup.book}" if setup else ""

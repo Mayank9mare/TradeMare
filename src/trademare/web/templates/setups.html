@@ -91,16 +91,36 @@
 </section>
 {% endif %}
 
-<section class="card">
-  <h2 style="margin-top:0">Trading these setups</h2>
-  {% if trading.enabled and trading.selected %}
-  <p>Paper signals are on for: {% for sid in trading.selected %}<b>{{ setups[sid].name }}</b>{{ ", " if not loop.last }}{% endfor %}.
-    They use up to {{ trading.budget_pct | round | int }}% of the budget and {{ trading.max_positions }} open positions, and go through the usual approval and risk checks.
-    {% if trading.require_record %}Setups that fail the evidence bar are skipped.{% endif %} Change this in <a href="/settings">Settings</a>.</p>
-  {% else %}
-  <p class="sub">Setups are analysis only on this market. To let them propose paper trades for your approval, turn them on in <a href="/settings">Settings</a>
-    (Book setups). They run as a separate share of the budget, so the tested strategy's trades are unaffected.</p>
-  {% endif %}
+<section class="card" id="trading">
+  <h2 style="margin-top:0">Paper trading with setups</h2>
+  {% include "_flash.html" %}
+  <p class="sub">When on, each daily run turns the ticked setups' matches into signals for your approval, like the main strategy's.
+    They use their own share of the budget and position limit, so the tested strategy's trades are unaffected, and every usual check still applies
+    (risk per trade, sector and cash limits, results-date and red-flag checks, kill switch). Entries are buy-stops at the signal day's high.
+    {% if market.value == "IN" %}Real orders stay blocked while this market is not validated.{% endif %}</p>
+  <form method="post" action="/setups/{{ market.value }}/trading" class="setup-trading">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="setup-choice"><input type="checkbox" name="enabled" {{ "checked" if trading.enabled }}>
+      <span><b>Let setups propose paper trades on this market</b></span></label>
+    <div class="setup-groups">
+    {% for family, items in groups %}
+      <fieldset><legend>{{ family }}</legend>
+      {% for st in items %}{% set r = records.get(st.id) %}
+        <label class="setup-choice"><input type="checkbox" name="selected" value="{{ st.id }}" {{ "checked" if st.id in trading.selected }}>
+          <span>{{ st.name }} {% if r %}<span class="pill {{ 'good' if r.passes else 'bad' }}">{{ "passes" if r.passes else "fails" }}</span>{% endif %}</span></label>
+      {% endfor %}
+      </fieldset>
+    {% endfor %}
+    </div>
+    <div class="setup-limits">
+      <label>Share of budget % <input type="number" name="budget_pct" min="1" max="100" step="1" value="{{ trading.budget_pct | round | int }}"></label>
+      <label>Max open positions <input type="number" name="max_positions" min="1" step="1" value="{{ trading.max_positions }}"></label>
+      <label class="setup-choice"><input type="checkbox" name="require_record" {{ "checked" if trading.require_record }}>
+        <span>Only setups that pass the evidence bar{{ tip("evidence_bar", "the evidence bar") }}</span></label>
+    </div>
+    <p class="sub">Unticking the evidence bar lets failing setups trade too: that is trading a strategy with no tested edge on this market.</p>
+    <button type="submit" class="primary">Save</button>
+  </form>
 </section>
 
 <script>

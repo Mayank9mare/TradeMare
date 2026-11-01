@@ -47,9 +47,11 @@ def test_buy_stop_fills_at_the_trigger_or_the_gap_open_and_stops_out():
     b = bars([[100, 101, 99, 100], [100.5, 103, 100, 102], [102, 102, 95, 96], [96, 97, 95, 96]])
     [t] = run(b, frame(b, 0, stop=97.0))
     assert t.entry == 101 and t.reason == "stop" and t.exit == 97 and t.r == pytest.approx(-1)
-    gap = bars([[100, 101, 99, 100], [104, 106, 103, 105], [105, 106, 96, 97], [97, 98, 96, 97]])
-    [g] = run(gap, frame(gap, 0, stop=97.0))
-    assert g.entry == 104  # the open gapped above the trigger
+    small = bars([[100, 101, 99, 100], [101.5, 106, 101, 105], [105, 106, 96, 97], [97, 98, 96, 97]])
+    [g] = run(small, frame(small, 0, stop=97.0))
+    assert g.entry == 101.5  # a gap within the 1% stop-limit buffer fills at the open
+    big = bars([[100, 101, 99, 100], [104, 106, 103, 105], [105, 106, 96, 97], [97, 98, 96, 97]])
+    assert run(big, frame(big, 0, stop=97.0)) == []  # a bigger gap: the stop-limit would not fill
 
 
 def test_no_fill_when_the_next_day_stays_below_the_trigger():

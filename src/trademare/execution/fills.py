@@ -53,6 +53,18 @@ def stop_fill(
     return (trigger, False) if bar.high >= trigger else None
 
 
+def stop_entry_fill(side: OrderSide, trigger: float, limit: float, bar: Bar) -> float | None:
+    """Fill of a stop-limit entry (a buy-stop above the market): triggers when the price trades
+    through ``trigger``, fills at the trigger or the gap open, but never beyond ``limit``."""
+    hit = stop_fill(side, trigger, bar)
+    if hit is None:
+        return None
+    price = hit[0]
+    if (side is OrderSide.BUY and price > limit) or (side is OrderSide.SELL and price < limit):
+        return None  # gapped past the limit: a live stop-limit order would not fill either
+    return price
+
+
 def stop_limit_price(side: OrderSide, trigger: float, buffer_pct: float) -> float:
     """Limit price of a stop that brokers only accept as a limit order (priced through the trigger)."""
     buffer = buffer_pct / 100

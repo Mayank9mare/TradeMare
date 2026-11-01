@@ -184,3 +184,22 @@ def test_decision_outcome_follows_the_order():
     assert _decision_outcome("APPROVED", "EXPIRED") == ("unfilled", "approved · not filled")
     assert _decision_outcome("REJECTED", None) == ("rejected", "rejected")
     assert _decision_outcome("EXPIRED", None) == ("lapsed", "expired")
+
+
+def test_book_setup_signal_card_and_buy_stop_order(tmp_path, monkeypatch):
+    client, db = make_app(tmp_path, monkeypatch)
+    with db.session() as s:
+        sig = s.get(SignalRow, "sig1")
+        sig.strategy = "setup:vcp"
+        sig.reasons = {"setup": ["Volatility contraction (VCP) (book 7.6): rule text", "Buys only if above."]}
+    page = client.get("/signals")
+    assert "Volatility contraction (VCP) · book 7.6" in page.text
+    assert "only if it trades above" in page.text and "Buy above" in page.text
+    assert "Book setup:" in page.text
+    r = client.post("/signals/sig1/approve", data={"csrf_token": token(page.text), "quantity": "5"})
+    assert r.status_code == 200
+    with db.session() as s:
+        order = s.query(OrderRow).one()
+        assert (
+            order.order_type == "STOP_LIMIT" and order.trigger_price == 1500.0 and order.limit_price == 1515.0
+        )

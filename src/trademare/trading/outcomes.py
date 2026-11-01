@@ -45,6 +45,22 @@ def unfilled_reason(side: str, limit: float | None, bar: pd.Series | None, marke
     return f"the highest price, {money(high, market)}, stayed below your limit {yours}"
 
 
+def untriggered_reason(trigger: float | None, limit: float | None, bar: pd.Series | None, market) -> str:
+    """Why a buy-stop (stop-limit entry) did not fill on the session of ``bar``."""
+    if bar is None:
+        return "no prices for that session"
+    if trigger is None:
+        return "it was not filled"
+    if float(bar["high"]) < trigger:
+        high = money(float(bar["high"]), market)
+        return f"the highest price, {high}, stayed below your trigger {money(trigger, market)}"
+    if limit is not None and float(bar["open"]) > limit:
+        return f"it opened at {money(float(bar['open']), market)}, above your limit {money(limit, market)}"
+    return (
+        "the price reached your trigger, but the order was closed before that session's prices were checked"
+    )
+
+
 def session_bar(store, market: Market, symbol: str, day: date | None) -> pd.Series | None:
     if day is None:
         return None
@@ -62,6 +78,12 @@ def describe(order, store=None) -> tuple[str, str]:
     what = f"{verb} {order.quantity} {order.symbol}"
     status = order.status
     if status == "OPEN":
+        if order.order_type == "STOP_LIMIT" and order.trigger_price is not None:
+            until = f" (valid until {_day(order.valid_until)})" if order.valid_until else ""
+            return "waiting", (
+                f"{what} if the price trades above {money(order.trigger_price, market)} "
+                f"(up to {money(order.limit_price, market)}){until}."
+            )
         if order.order_type == "MARKET" or order.limit_price is None:
             return "waiting", f"{what} at the next open, at market."
         until = f" (valid until {_day(order.valid_until)})" if order.valid_until else ""
@@ -72,7 +94,12 @@ def describe(order, store=None) -> tuple[str, str]:
         return "filled", f"{what}: filled at {price} on {_day(order.filled_on)}."
     if status == "EXPIRED":
         bar = session_bar(store, market, order.symbol, order.valid_until) if store is not None else None
-        why = unfilled_reason(order.side, order.limit_price, bar, market) if store is not None else ""
+        if store is None:
+            why = ""
+        elif order.order_type == "STOP_LIMIT":
+            why = untriggered_reason(order.trigger_price, order.limit_price, bar, market)
+        else:
+            why = unfilled_reason(order.side, order.limit_price, bar, market)
         tail = f": {why}" if why else ""
         return "not filled", f"{what} expired on {_day(order.valid_until)} without filling{tail}."
     if status == "CANCELLED":

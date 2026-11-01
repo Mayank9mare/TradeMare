@@ -530,3 +530,9 @@ details.data-status .card-foot { border-top: none; margin-top: 6px; padding-top:
 .record-table tr.chosen td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 .record-table .setup-rule { max-width: 34ch; white-space: normal; }
 .setup-picker .pills a { text-decoration: none; }
+.setup-trading { display: grid; gap: 12px; }
+.setup-limits { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+.setup-limits input[type=number] { width: 6em; margin-left: 6px; }
+.setup-why { margin: 10px 0 0; }
+.setup-why ul { margin: 4px 0 0; }
+.setup-trading > button { justify-self: start; min-width: 8em; }

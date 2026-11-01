@@ -72,3 +72,21 @@ def test_price_freshness_counts_only_sessions_past_their_run_time():
     )  # fmt: skip
     # Tue 20 Oct, 00:30 IST: Monday's session finished and its prices are still missing
     assert price_freshness(Market.IN, cfg, store, datetime(2026, 10, 19, 19, 0, tzinfo=UTC))[1] == 1
+
+
+def test_buy_stop_orders_are_described_as_triggers():
+    from types import SimpleNamespace
+
+    import pandas as pd
+
+    from trademare.trading.outcomes import describe, untriggered_reason
+
+    order = SimpleNamespace(
+        market="IN", side="BUY", quantity=5, symbol="VCPCO", status="OPEN",
+        order_type="STOP_LIMIT", limit_price=101.0, trigger_price=100.0, valid_until=None,
+    )  # fmt: skip
+    assert "if the price trades above ₹100.00" in describe(order)[1]
+    bar = pd.Series({"open": 98.0, "high": 99.5, "low": 97.0, "close": 99.0})
+    assert "stayed below your trigger ₹100.00" in untriggered_reason(100.0, 101.0, bar, "IN")
+    gap = pd.Series({"open": 103.0, "high": 104.0, "low": 102.5, "close": 103.5})
+    assert "above your limit ₹101.00" in untriggered_reason(100.0, 101.0, gap, "IN")

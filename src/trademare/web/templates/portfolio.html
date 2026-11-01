@@ -27,7 +27,7 @@
 <div class="table-wrap"><table class="data">
   <thead><tr><th>Symbol</th><th>Side{{ tip("long_short", "side") }}</th><th>Entered</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Last</th><th class="num">Stop{{ tip("stop", "the stop-loss") }}</th><th class="num">Target{{ tip("target") }}</th><th class="num">P&amp;L{{ tip("unrealised_pnl", "unrealised P&L") }}</th><th class="num">Return{{ tip("return") }}</th></tr></thead>
   <tbody>{% for p in positions %}
-    <tr><td><a href="/m/{{ market.value }}/{{ p.symbol | urlencode }}"><b>{{ p.symbol }}</b></a><div class="sub">{{ p.sector }}</div></td><td>{{ p.direction }}</td><td>{{ p.entry_date }}</td>
+    <tr><td><a href="/m/{{ market.value }}/{{ p.symbol | urlencode }}"><b>{{ p.symbol }}</b></a><div class="sub">{{ p.sector }}{% if p.strategy %} · <a href="/setups/{{ market.value }}">{{ p.strategy | setup_label }}</a>{% endif %}</div></td><td>{{ p.direction }}</td><td>{{ p.entry_date }}</td>
       <td class="num">{{ p.quantity }}</td><td class="num">{{ p.entry_price | num(2) }}</td><td class="num">{{ p.last_price | num(2) }}</td>
       <td class="num down">{{ p.stop_price | num(2) }}</td><td class="num">{{ p.target_price | num(2) }}</td>
       <td class="num {{ p.unrealized | tone }}">{{ p.unrealized | money(market, False) }}</td><td class="num {{ p.unrealized_pct | tone }}">{{ p.unrealized_pct | pct(1, True) }}</td></tr>

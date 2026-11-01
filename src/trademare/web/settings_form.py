@@ -213,3 +213,39 @@ def apply_form(form: dict[str, str], config_path: Path | None = None) -> tuple[d
     header = "# Personal overrides (git-ignored). Edited by the TradeMare dashboard; hand edits are kept.\n"
     local_path.write_text(header + yaml.safe_dump(merged_local, sort_keys=False, allow_unicode=True))
     return changes, []
+
+
+def save_setups(
+    market: str, form: dict[str, Any], config_path: Path | None = None
+) -> tuple[dict[str, Any], list[str]]:
+    """Save a market's book-setups trading block (``markets.<M>.setups``) to settings.local.yaml.
+
+    ``form`` holds ``enabled`` / ``require_record`` ("on" when ticked), ``budget_pct``,
+    ``max_positions`` and ``selected`` (a list of setup ids). Returns (block written, errors).
+    """
+    config_path = Path(config_path or DEFAULT_CONFIG_PATH)
+    local_path = local_override_path(config_path)
+    base = yaml.safe_load(config_path.read_text()) or {}
+    local = (yaml.safe_load(local_path.read_text()) or {}) if local_path.exists() else {}
+    if market not in base.get("markets", {}):
+        return {}, [f"unknown market {market}"]
+    try:
+        block = {
+            "enabled": form.get("enabled") in ("on", "true", "1"),
+            "selected": list(dict.fromkeys(form.get("selected") or [])),
+            "budget_pct": float(form.get("budget_pct") or 30),
+            "max_positions": int(form.get("max_positions") or 3),
+            "require_record": form.get("require_record") in ("on", "true", "1"),
+        }
+    except ValueError as e:
+        return {}, [str(e)]
+    if block["enabled"] and not block["selected"]:
+        return {}, ["choose at least one setup to trade, or leave trading off"]
+    merged_local = deep_merge(local, {"markets": {market: {"setups": block}}})
+    try:
+        AppConfig.model_validate(deep_merge(base, merged_local))
+    except ValidationError as e:
+        return {}, [f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()]
+    header = "# Personal overrides (git-ignored). Edited by the TradeMare dashboard; hand edits are kept.\n"
+    local_path.write_text(header + yaml.safe_dump(merged_local, sort_keys=False, allow_unicode=True))
+    return block, []

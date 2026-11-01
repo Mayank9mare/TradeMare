@@ -95,6 +95,7 @@ def create_app(
         factor_name=formatting.factor_name,
         stop_rule=formatting.stop_rule,
         link_symbol=formatting.link_symbol,
+        setup_label=formatting.setup_label,
     )
     # Cache-busting: static URLs carry the files' modification time, so browsers fetch new versions.
     asset_v = max(int(f.stat().st_mtime) for f in (HERE / "static").iterdir())
@@ -112,7 +113,7 @@ def create_app(
 
     register_trading_routes(app, templates, config, service, db, secrets)
     register_ipo_routes(app, templates, config, db, secrets)
-    register_setup_routes(app, templates, config, service)
+    register_setup_routes(app, templates, config, service, config_path)
     scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}
 
     def latest_scan(market: Market) -> ScanResult | None:

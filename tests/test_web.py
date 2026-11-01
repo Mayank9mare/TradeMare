@@ -202,3 +202,33 @@ def test_setups_page_shows_record_and_matches(client, monkeypatch):
     assert "No liquid stock matched" in none.text
     assert client.get("/setups/XX").status_code == 404
     assert client.get("/setups", follow_redirects=False).status_code == 307
+
+
+def test_setups_trading_form_saves_personal_settings(client, monkeypatch):
+    import re
+
+    from trademare.config import load_config
+    from trademare.web import setup_routes
+
+    monkeypatch.setattr(setup_routes, "current_record", lambda *a, **k: None)
+    page = client.get("/setups/IN")
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+    form = {
+        "csrf_token": token,
+        "enabled": "on",
+        "selected": ["vcp", "rally_base_breakout"],
+        "budget_pct": "25",
+        "max_positions": "2",
+        "require_record": "on",
+    }
+    r = client.post("/setups/IN/trading", data=form, follow_redirects=False)
+    assert r.status_code == 303 and "msg=" in r.headers["location"]
+    saved = load_config(REPO_CONFIG).markets[Market.IN].setups
+    assert saved.enabled and saved.selected == ["vcp", "rally_base_breakout"] and saved.max_positions == 2
+    assert "Let setups propose paper trades" in client.get("/setups/IN").text
+
+    nothing = client.post(
+        "/setups/IN/trading", data={"csrf_token": token, "enabled": "on"}, follow_redirects=False
+    )
+    assert "err=" in nothing.headers["location"]
+    assert client.post("/setups/IN/trading", data={**form, "csrf_token": "forged"}).status_code == 403

@@ -47,14 +47,15 @@ def check(order: Order, ctx: PreTradeContext) -> list[str]:
             )
         return problems  # closing orders protect capital: nothing else may stop them
 
-    price = order.limit_price if order.order_type is OrderType.LIMIT else ctx.last_close
+    priced = order.order_type in (OrderType.LIMIT, OrderType.STOP_LIMIT)
+    price = order.limit_price if priced else ctx.last_close
     if not ctx.in_universe:
         problems.append(f"{order.symbol} is not in the trading universe")
     if ctx.surveillance:
         problems.append(f"{order.symbol} is under exchange surveillance ({ctx.surveillance})")
     if ctx.sessions_behind > 0:
         problems.append(f"prices are {ctx.sessions_behind} session(s) behind; wait for current data")
-    if order.order_type is OrderType.LIMIT and ctx.last_close and price:
+    if priced and ctx.last_close and price:
         move = price / ctx.last_close - 1
         if abs(move) * 100 > ctx.price_band_pct:
             problems.append(

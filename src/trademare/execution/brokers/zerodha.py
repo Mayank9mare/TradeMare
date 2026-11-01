@@ -158,6 +158,11 @@ class ZerodhaBroker(BrokerAdapter):
         elif order.order_type is OrderType.MARKET:
             # Kite requires market protection for API market orders; -1 = exchange default.
             kwargs.update(order_type=kite.ORDER_TYPE_MARKET, market_protection=-1)
+        elif order.order_type is OrderType.STOP_LIMIT:
+            # SL order: rests until the price trades through the trigger, then a limit at ``price``.
+            kwargs.update(
+                order_type=kite.ORDER_TYPE_SL, trigger_price=order.trigger_price, price=order.limit_price
+            )
         else:
             raise BrokerError(f"unsupported day order type {order.order_type}")
         order_id = str(self._call(kite.place_order, **kwargs))

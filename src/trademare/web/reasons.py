@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 
 _RANK = re.compile(r"#(\d+) of (\d+)")
-SKIP_KEYS = ("events", "tax")
+SKIP_KEYS = ("events", "tax", "setup")  # setup: shown as its own block on book-setup signals
 
 # (pattern, plain-English rewrite, which way it points for a long trade: +1 for, -1 against, 0 neither)
 _PHRASES: list[tuple[re.Pattern[str], str, int]] = [
