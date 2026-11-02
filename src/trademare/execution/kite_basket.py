@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 BASKET_URL = "https://kite.zerodha.com/connect/basket"
 IST = ZoneInfo("Asia/Kolkata")
 TICK = 0.05  # NSE price step for most stocks
+TAG = "tmare"  # Kite allows at most 8 characters
 SETUP_LIMIT_BUFFER = 0.01  # a buy-stop may fill up to 1% above its trigger, as in the paper desk
 
 
@@ -46,7 +47,7 @@ def kite_basket(sig, now: datetime | None = None) -> list[dict] | None:
         "quantity": int(sig.quantity),
         "product": "CNC",
         "validity": "DAY",
-        "tag": "trademare",
+        "tag": TAG,
     }
     if (sig.strategy or "").startswith("setup:"):
         order |= {

@@ -15,7 +15,7 @@ def test_core_signal_is_a_limit_delivery_buy():
     assert kite_basket(sig(), during) == [
         {
             "variety": "regular", "tradingsymbol": "SAIL", "exchange": "NSE", "transaction_type": "BUY",
-            "quantity": 54, "product": "CNC", "validity": "DAY", "tag": "trademare",
+            "quantity": 54, "product": "CNC", "validity": "DAY", "tag": "tmare",
             "order_type": "LIMIT", "price": 165.3,
         }
     ]  # fmt: skip
