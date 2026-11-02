@@ -101,6 +101,9 @@ class DailyReport:
     rebalance_day: bool = True
     notes: list[str] = field(default_factory=list)
     orders_ended: list[str] = field(default_factory=list)  # approved orders that ended unfilled, and why
+    # trailing stops moved today: (symbol, old stop, new stop, close), so a stop kept at the broker by
+    # hand (e.g. a Zerodha GTT) can be raised to match
+    stops_raised: list[tuple[str, float, float, float]] = field(default_factory=list)
 
 
 def _side(direction: str, opening: bool) -> OrderSide:
@@ -1080,6 +1083,8 @@ class TradingDesk:
             if sign * (candidate - close) >= 0:
                 continue  # a trail level through the price would sell at once: leave the stop
             if pos.stop_price is None or sign * (candidate - pos.stop_price) > 0:
+                if pos.stop_price is not None:
+                    report.stops_raised.append((pos.symbol, pos.stop_price, round(candidate, 2), close))
                 pos.stop_price = round(candidate, 2)
                 for o in self._orders(s, position_id=pos.id, purpose="stop", status=OPEN):
                     o.trigger_price = pos.stop_price

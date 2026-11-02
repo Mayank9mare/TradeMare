@@ -147,16 +147,22 @@ def daily_block(
         urgent.insert(0, f"Kill switch tripped ({r.kill_reason}): new buys are blocked")
     results = [n.removeprefix(heads_up).strip().split(" ", 1)[0] for n in r.notes if n.startswith(heads_up)]
     signals = list(r.signals)
-    if not (urgent or results or signals or r.orders_ended or r.fills):
+    if not (urgent or results or signals or r.orders_ended or r.fills or getattr(r, "stops_raised", None)):
         return None
     block = Block(title=f"TradeMare · {NAMES.get(m, m.value)}", subtitle=f"after {_day(r.session)}")
     block.urgent = urgent
     if signals:
+        targets = any(getattr(s, "target_price", None) for s in signals if s.action != "EXIT")
+        columns = ["Stock", "Qty", "Price now", "Buy up to", "Stop-loss", "Max loss"]
+        widths = [24, 8, 17, 19, 17, 15]
+        if targets:  # e.g. US signals sell at 2x the risk; India's strategy has no target
+            columns.insert(5, "Target")
+            widths = [14, 8, 15, 16, 15, 14, 18]
         t = Table(
             f"Decide by {deadline(signals, m)}" if deadline(signals, m) else "Decide",
-            ["Stock", "Qty", "Price now", "Buy up to", "Stop-loss", "Max loss"],
-            [24, 8, 17, 19, 17, 15],
-            "lrrrrr",
+            columns,
+            widths,
+            "l" + "r" * (len(columns) - 1),
             title_color=AMBER,
         )
         notes = []
@@ -167,7 +173,10 @@ def daily_block(
             name = s.symbol + (f" · {setup.upper()}" if setup else "")
             now = price(closes.get(s.symbol), m) if closes else "—"
             if s.action == "EXIT":
-                t.rows.append([f"{name} · SELL", str(s.quantity), now, "sell at open", "—", "—"])
+                t.rows.append(
+                    [f"{name} · SELL", str(s.quantity), now, "sell at open", "—", "—"]
+                    + (["—"] if targets else [])
+                )
                 t.colors.append([RED, None, None, RED])
                 notes.append(f"{s.symbol}: {EXIT_WHY.get(s.exit_reason or '', s.exit_reason or 'rule')}")
                 continue
@@ -184,10 +193,11 @@ def daily_block(
                     now,
                     ("above " if setup else "") + price(s.entry_price, m),
                     price(s.stop_price, m),
+                    *([price(s.target_price, m) if s.target_price else "—"] if targets else []),
                     whole(risk, m),
                 ]
             )
-            t.colors.append([None, None, MUTED, GREEN, RED])
+            t.colors.append([None, None, MUTED, GREEN, RED] + ([GREEN] if targets else []))
         buys = [s for s in signals if s.action != "EXIT"]
         if buys:
             total = sum(s.entry_price * s.quantity for s in buys)
@@ -195,6 +205,7 @@ def daily_block(
             notes.append(
                 "Price now = last close · Buy up to = your limit for the next session (lapses if not "
                 "filled) · Stop-loss = sell if the price falls to it · Max loss = if the stop is hit"
+                + (" · Target = sell when the price reaches it" if targets else "")
             )
         if any((s.strategy or "").startswith("setup:") for s in signals):
             notes.append("above = a setup buy that fills only if the price rises past it")
@@ -214,6 +225,20 @@ def daily_block(
         happened.colors.append([None, AMBER])
     if happened.rows:
         block.tables.append(happened)
+    if raised := getattr(r, "stops_raised", None):
+        t = Table(
+            "Raise your stop-loss",
+            ["Stock", "Price now", "Old stop", "New stop"],
+            [31, 23, 23, 23],
+            "lrrr",
+            title_color=GREEN,
+            note="The trailing stop moved up with the price. If you hold this stock in Zerodha, raise "
+            "its GTT stop to the new level; TradeMare cannot change orders you placed in Kite",
+        )
+        for sym, old, new, close in raised:
+            t.rows.append([sym, price(close, m), price(old, m), price(new, m)])
+            t.colors.append([None, MUTED, MUTED, GREEN])
+        block.tables.append(t)
     if r.equity is not None:
         change, colour = "", INK
         if r.previous_equity:
@@ -428,6 +453,8 @@ def daily_caption(blocks: list[Block], ipos: Table | None, reports) -> str:
             bits.append(f"{len(r.fills)} trade{'s' if len(r.fills) != 1 else ''} done")
         if r.orders_ended:
             bits.append(f"{len(r.orders_ended)} not filled")
+        if raised := getattr(r, "stops_raised", None):
+            bits.append(f"raise {len(raised)} stop{'s' if len(raised) != 1 else ''}")
         urgent = sum(1 for n in r.notes if n.startswith(("ALERT", "WARNING"))) + int(r.kill_switch)
         if urgent:
             bits.insert(0, f"{urgent} urgent")

@@ -139,3 +139,21 @@ def test_daily_falls_back_to_text_when_card_refused(monkeypatch):
     monkeypatch.setattr(whatsapp, "send_text", lambda c, s, text: sent.append(text) or "whatsapp sent (1)")
     assert phone.whatsapp_daily(config, secrets, [report()]) == "whatsapp sent (1)"
     assert sent and sent[0].startswith("India, after Fri 30 Oct")
+
+
+def test_target_column_and_raised_stops():
+    r = DailyReport(market=Market.US, session=date(2026, 10, 30))
+    r.signals = [sig("MO", 10, 78.03, 74.62, target_price=84.85)]
+    r.stops_raised = [("MNST", 45.28, 46.10, 49.5)]
+    b = cards.daily_block(r, telegram.ALERT_PREFIXES, telegram.HEADS_UP, {"MO": 78.03})
+    decide, raised = b.tables
+    assert decide.columns == ["Stock", "Qty", "Price now", "Buy up to", "Stop-loss", "Target", "Max loss"]
+    assert decide.rows == [["MO", "10", "$78.03", "$78.03", "$74.62", "$84.85", "$34"]]
+    assert raised.title == "Raise your stop-loss"
+    assert raised.rows == [["MNST", "$49.50", "$45.28", "$46.10"]]
+    assert "raise 1 stop" in cards.daily_caption([b], None, [r])
+    assert "Raise your stop-loss (update a Kite GTT to match): MNST from $45.28 to $46.10" in whatsapp.digest(
+        [r], "http://x"
+    )
+    india = cards.daily_block(report(), telegram.ALERT_PREFIXES, telegram.HEADS_UP)
+    assert "Target" not in india.tables[0].columns  # India's strategy sells without a target

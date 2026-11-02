@@ -139,7 +139,8 @@ def _market_digest(r, alert_prefixes: tuple[str, ...], heads_up: str) -> list[st
     results = [n.removeprefix(heads_up).strip().split(" ", 1)[0] for n in r.notes if n.startswith(heads_up)]
     entries = [s for s in r.signals if s.action == "ENTRY"]
     exits = [s for s in r.signals if s.action == "EXIT"]
-    if not (urgent or results or entries or exits or r.orders_ended or r.fills):
+    raised = getattr(r, "stops_raised", [])
+    if not (urgent or results or entries or exits or r.orders_ended or r.fills or raised):
         return []
     out = [f"{NAMES.get(m, m.value)}, after {r.session:%a} {r.session.day} {r.session:%b}"]
     for u in urgent[:MAX_URGENT]:
@@ -166,6 +167,11 @@ def _market_digest(r, alert_prefixes: tuple[str, ...], heads_up: str) -> list[st
             f"{n} new buy idea{'s' if n != 1 else ''} to approve or skip{_deadline(entries, m)}: "
             + ", ".join(names)
             + f". Together {_whole(cost, m)}, at most {_whole(risk, m)} at risk"
+        )
+    if raised:
+        out.append(
+            "Raise your stop-loss (update a Kite GTT to match): "
+            + "; ".join(f"{sym} from {_rupees(old, m)} to {_rupees(new, m)}" for sym, old, new, _ in raised)
         )
     if exits:
         why = [f"{s.symbol} ({EXIT_WHY.get(s.exit_reason or '', s.exit_reason or 'rule')})" for s in exits]
