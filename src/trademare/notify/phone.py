@@ -22,13 +22,14 @@ def send_text(config: AppConfig, secrets: Secrets, text: str) -> str:
 
 
 def send_alerts(config: AppConfig, secrets: Secrets, reports) -> str:
-    """The daily summary: urgent alerts, then new signals (same content on both channels)."""
+    """The daily summary: urgent alerts, then new signals (WhatsApp gets a plain-sentence version)."""
     results = [telegram.send_alerts(config, secrets, reports)]
     if whatsapp.ready(config, secrets) is None:
-        text = telegram.format_alerts(reports, config.notifications.dashboard_url)
+        text = whatsapp.digest(reports, config.notifications.dashboard_url)
         if text is None and config.notifications.whatsapp.send_empty:
-            text = "No new signals or alerts today. " + ", ".join(
-                f"{r.market.value}: {r.open_positions} open" for r in reports
+            text = "Nothing new today. " + ", ".join(
+                f"{whatsapp.NAMES.get(r.market, r.market.value)}: {r.open_positions} holdings"
+                for r in reports
             )
         results.append(whatsapp.send_text(config, secrets, text) if text else "whatsapp: nothing to send")
     else:
