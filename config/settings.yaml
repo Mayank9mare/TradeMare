@@ -173,6 +173,10 @@ notifications:
     template: trademare_account_alert  # approved utility template (body in docs/whatsapp-setup.md)
     language: en
     mode: template             # "text" only reaches you within 24 h of your last message to the number
+    daily_card_template: trademare_daily_card     # daily summary as a table picture ('' = text only)
+    weekly_template: trademare_weekly_report      # Saturday PDF report ('' = off)
+    weekly_time: "10:00"       # Saturday, India time
+    include_ipos: true         # IPOs open or opening soon on the daily card and weekly report
     send_empty: false
   dashboard_url: http://127.0.0.1:8000   # for links in emails and messages
 

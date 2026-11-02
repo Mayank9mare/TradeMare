@@ -208,6 +208,78 @@ def payload(cfg, to: str, text: str) -> dict:
     }
 
 
+def upload_media(
+    config: AppConfig, secrets: Secrets, data: bytes, mime: str, filename: str, session=None
+) -> str:
+    """Upload a picture or PDF to Meta; returns the media id to put in a message (kept 30 days)."""
+    wa = config.notifications.whatsapp
+    url = API.format(version=wa.api_version, phone_number_id=wa.phone_number_id).replace(
+        "/messages", "/media"
+    )
+    headers = {"Authorization": f"Bearer {secrets.whatsapp_token.get_secret_value()}"}
+    r = (session or requests).post(
+        url,
+        headers=headers,
+        data={"messaging_product": "whatsapp", "type": mime},
+        files={"file": (filename, data, mime)},
+        timeout=60,
+    )
+    if r.status_code >= 400:
+        raise RuntimeError(f"media upload HTTP {r.status_code}: {r.text[:200]}")
+    return r.json()["id"]
+
+
+def media_payload(
+    cfg, to: str, template: str, kind: str, media_id: str, params: list[str], filename=None
+) -> dict:
+    """A template message whose header is an image or a document and whose body takes ``params``."""
+    media = {"id": media_id, **({"filename": filename} if filename and kind == "document" else {})}
+    return {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "template",
+        "template": {
+            "name": template,
+            "language": {"code": cfg.language},
+            "components": [
+                {"type": "header", "parameters": [{"type": kind, kind: media}]},
+                {"type": "body", "parameters": [{"type": "text", "text": chunks(p)[0]} for p in params]},
+            ],
+        },
+    }
+
+
+def send_media(
+    config: AppConfig,
+    secrets: Secrets,
+    template: str,
+    kind: str,
+    data: bytes,
+    mime: str,
+    filename: str,
+    params: list[str],
+    session=None,
+) -> int:
+    """Upload ``data`` and send it with ``template`` to every recipient. Raises on errors."""
+    wa = config.notifications.whatsapp
+    http = session or requests
+    media_id = upload_media(config, secrets, data, mime, filename, session=http)
+    url = API.format(version=wa.api_version, phone_number_id=wa.phone_number_id)
+    headers = {"Authorization": f"Bearer {secrets.whatsapp_token.get_secret_value()}"}
+    sent = 0
+    for to in wa.to:
+        body = media_payload(wa, to.lstrip("+"), template, kind, media_id, params, filename)
+        r = http.post(url, json=body, headers=headers, timeout=30)
+        if r.status_code >= 400:
+            try:
+                detail = r.json().get("error", {}).get("message", r.text[:200])
+            except ValueError:
+                detail = r.text[:200]
+            raise RuntimeError(f"HTTP {r.status_code}: {detail}")
+        sent += 1
+    return sent
+
+
 def ready(config: AppConfig, secrets: Secrets) -> str | None:
     """None when WhatsApp can send, else what is missing."""
     wa = config.notifications.whatsapp

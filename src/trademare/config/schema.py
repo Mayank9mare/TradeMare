@@ -312,6 +312,17 @@ class WhatsAppConfig(_Strict):
     mode: Literal["template", "text"] = Field(
         "template", description="text only reaches you within 24 hours of your last message to the number"
     )
+    daily_card_template: str | None = Field(
+        "trademare_daily_card",
+        description="Approved template with an image header: the daily summary as a table picture "
+        "(empty = plain text). Falls back to text if Meta refuses it",
+    )
+    weekly_template: str | None = Field(
+        "trademare_weekly_report",
+        description="Approved template with a document header: the weekly PDF report (empty = off)",
+    )
+    weekly_time: str = Field("10:00", description="Saturday, India time, when the weekly report is sent")
+    include_ipos: bool = Field(True, description="Show Indian IPOs open or opening soon on the daily card")
     api_version: str = "v21.0"
     send_empty: bool = Field(False, description="Also message on days with no signals or alerts")
 

@@ -87,3 +87,25 @@ This is an automatic notice about your orders and positions." Then restart `trad
   your own business number later if you want a permanent sender.
 - Replying to alerts (approve/reject by WhatsApp) is not built yet: it needs a public webhook,
   which comes with the always-on server in the automation plan.
+
+## Daily table picture and weekly PDF (optional)
+
+Two more Utility templates turn the daily summary into a table picture and add a Saturday PDF
+report. Both are submitted under the same WhatsApp account; until Meta approves them, the daily
+summary goes out as plain sentences through `trademare_account_alert` and the weekly report is
+skipped (the log says why).
+
+| Template | Header | Body |
+|---|---|---|
+| `trademare_daily_card` | image | `Daily update on your TradeMare trading account: {{1}}. The picture lists your orders, holdings and the decisions that are due.` |
+| `trademare_weekly_report` | document | `Your TradeMare trading account statement for the week ending {{1}} is attached. Summary: {{2}}. The PDF lists your holdings, this week's trades and upcoming results dates.` |
+
+Both have the footer `Automatic notice from TradeMare`. The picture shows decisions due, what
+happened since the last run, Indian IPOs open or opening within three days, and the paper
+portfolio. The PDF has the week's return against the index, holdings with stop distance and
+results dates, the week's trades, IPOs and what is coming up.
+
+Settings (`notifications.whatsapp`): `daily_card_template`, `weekly_template` (empty turns either
+off), `weekly_time` (Saturday, India time) and `include_ipos`.
+`uv run trademare notify preview` draws both into `data/previews/` from current data;
+add `--send` to send them.

@@ -312,6 +312,34 @@ def cmd_notify_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_notify_preview(args: argparse.Namespace) -> int:
+    """Draw the daily card and the weekly PDF from current data (data/previews/); --send sends them."""
+    from datetime import date
+    from pathlib import Path
+
+    from trademare.notify import cards, phone
+    from trademare.trading.desk import DailyReport
+
+    config, secrets = load_config(args.config), Secrets()
+    out = Path(config.data.cache_dir).parent / "previews"
+    out.mkdir(parents=True, exist_ok=True)
+    pdf, summary, outcome = phone.send_weekly(config, secrets, send=args.send)
+    (out / "weekly.pdf").write_bytes(pdf)
+    print(f"weekly report: {out / 'weekly.pdf'}  ({summary}) -> {outcome}")
+    today = date.today()
+    reports = [DailyReport(market=m, session=today) for m in config.enabled_markets()]
+    ipos = cards.ipo_table(phone.ipo_cards(config, today), today)
+    png = cards.render_daily([], ipos) if ipos else None
+    if png:
+        (out / "daily-ipos.png").write_bytes(png)
+        print(f"daily card (IPOs only, no run today): {out / 'daily-ipos.png'}")
+        if args.send:
+            print(phone.whatsapp_daily(config, secrets, reports))
+    else:
+        print("daily card: nothing to draw without a daily run (no IPOs open or opening soon)")
+    return 0
+
+
 def cmd_health(args: argparse.Namespace) -> int:
     from trademare.ops import alert_health, check_health
 
@@ -813,6 +841,9 @@ def build_parser() -> argparse.ArgumentParser:
         func=cmd_telegram_setup
     )
     notify.add_parser("test", help="send a test message").set_defaults(func=cmd_notify_test)
+    p = notify.add_parser("preview", help="draw the WhatsApp daily card and weekly PDF from current data")
+    p.add_argument("--send", action="store_true", help="also send them on WhatsApp")
+    p.set_defaults(func=cmd_notify_preview)
 
     health = sub.add_parser(
         "health", help="check for missed daily runs, a tripped kill switch, stale backups"

@@ -213,6 +213,17 @@ def ipo_job(config_path: str | None = None) -> list[str]:
     return sent
 
 
+def weekly_report_job(config_path: str | None = None) -> None:
+    """Saturday: the week's PDF report on WhatsApp."""
+    from trademare.notify.phone import send_weekly
+
+    config = load_config(config_path)
+    try:
+        log.info("weekly report: %s", send_weekly(config, Secrets())[2])
+    except Exception:
+        log.exception("weekly report failed")
+
+
 def build_scheduler(config: AppConfig, config_path: str | None = None) -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     for market, cfg in config.enabled_markets().items():
@@ -256,6 +267,15 @@ def build_scheduler(config: AppConfig, config_path: str | None = None) -> Backgr
         scheduler.add_job(
             backup_job, CronTrigger(hour=hour, minute=minute), args=[config_path], id="backup",
             misfire_grace_time=12 * 3600, coalesce=True, max_instances=1,
+        )  # fmt: skip
+    wa = config.notifications.whatsapp
+    if wa.enabled and wa.weekly_template:
+        hour, minute = (int(x) for x in wa.weekly_time.split(":"))
+        scheduler.add_job(
+            weekly_report_job,
+            CronTrigger(day_of_week="sat", hour=hour, minute=minute, timezone=MarketClock(Market.IN).tz),
+            args=[config_path], id="weekly-report", misfire_grace_time=12 * 3600,
+            coalesce=True, max_instances=1,
         )  # fmt: skip
     if ops.health_check:
         scheduler.add_job(
