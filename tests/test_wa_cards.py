@@ -42,16 +42,18 @@ def ipo(symbol, status, start, end, qib=None, label=None):
 
 
 def test_daily_block_tables():
-    b = cards.daily_block(report(), telegram.ALERT_PREFIXES, telegram.HEADS_UP)
+    closes = {"HSCL": 505.1, "NALCO": 262.4, "TATAPOWER": 1395.0}
+    b = cards.daily_block(report(), telegram.ALERT_PREFIXES, telegram.HEADS_UP, closes)
     assert b.title == "TradeMare · India" and b.subtitle == "after Fri 30 Oct"
     assert b.urgent == ["ITC: stop hit"]
     decide, happened = b.tables
     assert decide.title == "Decide by Mon 2 Nov, 3:30 pm"
     assert decide.rows == [
-        ["HSCL · VCP", "Buy above", "13", "₹6,620", "₹938"],
-        ["NALCO ⚠", "Buy", "30", "₹7,800", "₹660"],
-        ["TATAPOWER", "Sell", "20", "₹7,900", "—"],
+        ["HSCL · VCP", "13", "₹505.10", "above ₹509.20", "₹437.05", "₹938"],
+        ["NALCO ⚠", "30", "₹262.40", "₹260.00", "₹238.00", "₹660"],
+        ["TATAPOWER · SELL", "20", "₹1,395", "sell at open", "—", "—"],
     ]
+    assert decide.note.startswith("All buys together ₹14,420")
     assert "NALCO results Fri 6 Nov" in decide.note and "TATAPOWER: fell out of the top ranks" in decide.note
     assert happened.rows == [
         ["MCX", "Bought 2 at ₹8,120", ""],

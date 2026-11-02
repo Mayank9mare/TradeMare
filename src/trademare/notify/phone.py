@@ -62,9 +62,14 @@ def whatsapp_daily(config: AppConfig, secrets: Secrets, reports) -> str:
         ipos = cards.ipo_table(ipo_cards(config, now.date()), now.date(), after_close=now.hour >= 17)
     if wa.daily_card_template:
         try:
-            blocks = [
-                b for r in reports if (b := cards.daily_block(r, telegram.ALERT_PREFIXES, telegram.HEADS_UP))
-            ]
+            from trademare.data.store import ParquetStore
+
+            store = ParquetStore(config.data.cache_dir)
+            blocks = []
+            for r in reports:
+                closes = cards.last_closes(store, r.market, [s.symbol for s in r.signals])
+                if b := cards.daily_block(r, telegram.ALERT_PREFIXES, telegram.HEADS_UP, closes):
+                    blocks.append(b)
             if blocks or ipos:
                 png = cards.render_daily(blocks, ipos)
                 caption = cards.daily_caption(blocks, ipos, reports)

@@ -137,8 +137,10 @@ def deadline(signals, market: Market) -> str:
     return f"{_day(local.date())}, {local:%-I:%M} {local:%p}".replace("AM", "am").replace("PM", "pm")
 
 
-def daily_block(r, alert_prefixes: tuple[str, ...], heads_up: str) -> Block | None:
-    """One market's daily run as tables; None when nothing happened."""
+def daily_block(
+    r, alert_prefixes: tuple[str, ...], heads_up: str, closes: dict[str, float] | None = None
+) -> Block | None:
+    """One market's daily run as tables; None when nothing happened. ``closes``: last close per stock."""
     m = r.market
     urgent = [n.split(" ", 1)[1] if " " in n else n for n in r.notes if n.startswith(alert_prefixes)]
     if r.kill_switch:
@@ -152,9 +154,9 @@ def daily_block(r, alert_prefixes: tuple[str, ...], heads_up: str) -> Block | No
     if signals:
         t = Table(
             f"Decide by {deadline(signals, m)}" if deadline(signals, m) else "Decide",
-            ["Stock", "Action", "Qty", "Cost", "Max loss"],
-            [33, 22, 10, 17, 18],
-            "lllrr",
+            ["Stock", "Qty", "Price now", "Buy up to", "Stop-loss", "Max loss"],
+            [24, 8, 17, 19, 17, 15],
+            "lrrrrr",
             title_color=AMBER,
         )
         notes = []
@@ -163,9 +165,10 @@ def daily_block(r, alert_prefixes: tuple[str, ...], heads_up: str) -> Block | No
                 (s.strategy or "").removeprefix("setup:") if (s.strategy or "").startswith("setup:") else ""
             )
             name = s.symbol + (f" · {setup.upper()}" if setup else "")
+            now = price(closes.get(s.symbol), m) if closes else "—"
             if s.action == "EXIT":
-                t.rows.append([name, "Sell", str(s.quantity), whole(s.entry_price * s.quantity, m), "—"])
-                t.colors.append([None, RED])
+                t.rows.append([f"{name} · SELL", str(s.quantity), now, "sell at open", "—", "—"])
+                t.colors.append([RED, None, None, RED])
                 notes.append(f"{s.symbol}: {EXIT_WHY.get(s.exit_reason or '', s.exit_reason or 'rule')}")
                 continue
             soon = [w for w in (s.reasons or {}).get("events", []) if w.startswith("Results due")]
@@ -177,15 +180,24 @@ def daily_block(r, alert_prefixes: tuple[str, ...], heads_up: str) -> Block | No
             t.rows.append(
                 [
                     name,
-                    "Buy above" if setup else "Buy",
                     str(s.quantity),
-                    whole(s.entry_price * s.quantity, m),
+                    now,
+                    ("above " if setup else "") + price(s.entry_price, m),
+                    price(s.stop_price, m),
                     whole(risk, m),
                 ]
             )
-            t.colors.append([None, GREEN])
+            t.colors.append([None, None, MUTED, GREEN, RED])
+        buys = [s for s in signals if s.action != "EXIT"]
+        if buys:
+            total = sum(s.entry_price * s.quantity for s in buys)
+            notes.insert(0, f"All buys together {whole(total, m)}")
+            notes.append(
+                "Price now = last close · Buy up to = your limit for the next session (lapses if not "
+                "filled) · Stop-loss = sell if the price falls to it · Max loss = if the stop is hit"
+            )
         if any((s.strategy or "").startswith("setup:") for s in signals):
-            notes.append("Buy above = fills only if the price rises past the trigger")
+            notes.append("above = a setup buy that fills only if the price rises past it")
         t.note = "   ·   ".join(notes)
         block.tables.append(t)
     happened = Table("Since last run", ["Stock", "What happened", "P&L"], [24, 56, 20], "llr")
@@ -593,6 +605,19 @@ def weekly_data(config, db, store, events, market: Market, week_end: date, ipo_c
     if ipo_cards is not None and market is Market.IN:
         w.ipos = weekly_ipo_table(ipo_cards, week_end)
     return w
+
+
+def last_closes(store, market: Market, symbols) -> dict[str, float]:
+    """Latest cached close for each symbol (skips any without prices)."""
+    out = {}
+    for sym in set(symbols):
+        try:
+            bars = store.read_bars(market, sym)
+        except Exception:
+            bars = None
+        if bars is not None and not bars.empty:
+            out[sym] = float(bars["close"].iloc[-1])
+    return out
 
 
 def weekly_ipo_table(cards, week_end: date) -> Table | None:
