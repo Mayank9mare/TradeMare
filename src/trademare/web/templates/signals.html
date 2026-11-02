@@ -87,6 +87,19 @@
       <button type="submit" formaction="/signals/{{ s.id }}/reject">Reject</button>
       <input type="text" name="note" maxlength="200" class="reject-note" placeholder="If rejecting: why? (optional, shown in your journal)">
     </form>
+    {% if s.kite_basket %}{% set ko = s.kite_basket[0] %}
+    <form method="post" action="{{ kite_basket_url }}" target="_blank" rel="noopener" class="kite-form">
+      <input type="hidden" name="api_key" value="{{ kite_key }}">
+      <input type="hidden" name="data" value="{{ s.kite_basket | tojson | forceescape }}">
+      <button type="submit" class="kite-btn">Buy in Kite (real money)</button>
+      <span class="sub">Opens Kite with {{ ko.quantity }} {{ s.symbol }}
+        {% if ko.order_type == "SL" %}to buy if it trades above {{ ko.trigger_price | money(m, False) }} (limit {{ ko.price | money(m, False) }}){% else %}at up to {{ ko.price | money(m, False) }}{% endif %},
+        delivery{% if ko.variety == "amo" %}, as an after-market order for the next session{% endif %}.
+        Nothing is placed until you confirm in Kite. Once it fills, set a GTT stop-loss at
+        <b class="down">{{ s.stop_price | money(m, False) }}</b> in Kite (Holdings → the stock → Create GTT).
+        Approve above as well if you want the paper account to track it.</span>
+    </form>
+    {% endif %}
     {% endif %}
   </article>
 {% endfor %}

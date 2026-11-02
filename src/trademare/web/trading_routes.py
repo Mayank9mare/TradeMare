@@ -20,6 +20,7 @@ from trademare.config.secrets import Secrets
 from trademare.core.models import Direction, Market
 from trademare.data.service import DataService
 from trademare.execution import outside_holdings
+from trademare.execution.kite_basket import BASKET_URL, kite_basket
 from trademare.storage.db import Database, EquityRow, EventRow, OrderRow, PositionRow, SignalRow
 from trademare.strategy.evidence import FUND_METRICS, TECH_METRICS
 from trademare.trading.desk import DeskError, TradingDesk
@@ -130,6 +131,9 @@ def register_trading_routes(
             for ev in s.scalars(select(EventRow).where(EventRow.kind == "ask").order_by(EventRow.ts)):
                 if ev.data.get("signal") in ids:
                     asks.setdefault(ev.data["signal"], []).append(ev.data | {"ts": ev.ts})
+        kite_key = secrets.zerodha_api_key.get_secret_value() if secrets.zerodha_api_key else None
+        for sig in pending:  # a Kite basket the owner can open and confirm in Kite (never sent from here)
+            sig.kite_basket = kite_basket(sig) if kite_key else None  # type: ignore[attr-defined]
         charts = {}
         for sig in pending:  # 6-month price line up to the scan date
             bars = service.store.read_bars(Market(sig.market), sig.symbol)
@@ -150,6 +154,8 @@ def register_trading_routes(
                 "piotroski_labels": PIOTROSKI_LABELS,
                 "asks": asks,
                 "llm_missing": llm_ready(config, secrets),
+                "kite_key": kite_key,
+                "kite_basket_url": BASKET_URL,
             },
         )
 

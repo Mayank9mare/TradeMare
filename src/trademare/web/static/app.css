@@ -245,6 +245,9 @@ table.mini tr:last-child td { border-bottom: none; }
 .approve-form { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .approve-form label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: var(--fs-sm); }
 .approve-form input[type=number] { width: 8.5rem; }
+.kite-form { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 10px; }
+.kite-form .sub { flex: 1 1 22rem; }
+.kite-btn { background: #387ed1; border-color: #387ed1; color: #fff; font-weight: 600; }
 .regime-card .reasons { margin-bottom: 8px; }
 .analysis-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .components { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin: .3rem 0 .5rem; color: var(--muted); font-size: var(--fs-sm); }
