@@ -347,3 +347,21 @@ def test_stock_and_ideas_json_carry_the_template_wording(client):
     assert {"statements", "rows", "ratios", "strategy_choices", "texts"} <= set(stock)
     ideas = client.get("/m/IN/ideas", params={"format": "json"}).json()
     assert {"scan", "vs_signals", "config_min", "penalty", "texts"} <= set(ideas)
+
+
+def test_jsonable_includes_dataclass_properties_for_the_react_ui():
+    from datetime import date
+
+    from trademare.analysis.ipo import build_card
+    from trademare.data.ipo import Ipo, Subscription
+    from trademare.web.jsonable import to_jsonable
+
+    ipo = Ipo(market="IN", symbol="NEWCO", company="NewCo", start=date(2026, 11, 2), end=date(2026, 11, 4),
+              price_low=95.0, price_high=100.0, listing_date=date(2026, 11, 7))  # fmt: skip
+    ipo.subscription = Subscription(qib=60.0, nii=10.0, retail=5.0, employee=None, total=30.0, as_of=None)
+    card = build_card(
+        ipo, date(2026, 11, 9), None, listing={"close": 120.0, "last": 110.0, "last_date": "2026-11-09"}
+    )
+    d = to_jsonable(card)
+    assert d["qib"] == 60.0 and round(d["listing_gain"], 2) == 0.2 and round(d["gain_since"], 2) == 0.1
+    assert d["ipo"]["price"] == 100.0 and d["status"] == "listed"

@@ -1,6 +1,9 @@
 import { Route, Routes } from "react-router";
 
 import { GlossaryProvider } from "@/components/bits";
+import { Backtest, Backtests } from "@/pages/Backtests";
+import { Ipos } from "@/pages/Ipos";
+import { Setups } from "@/pages/Setups";
 import { ClassicOnly, Layout } from "@/components/Layout";
 import { ToastList, ToastProvider } from "@/components/wensity/toast";
 import { ChromeProvider } from "@/lib/chrome";
@@ -30,6 +33,10 @@ export default function App() {
             <Route path="/m/:code" element={<Market />} />
             <Route path="/m/:code/ideas" element={<Ideas />} />
             <Route path="/m/:code/:symbol" element={<Stock />} />
+            <Route path="/setups/:code" element={<Setups />} />
+            <Route path="/ipos" element={<Ipos />} />
+            <Route path="/backtests" element={<Backtests />} />
+            <Route path="/backtests/:id" element={<Backtest />} />
             <Route path="*" element={<ClassicOnly />} />
           </Routes>
         </Layout>

@@ -65,8 +65,17 @@ def to_jsonable(obj: Any, depth: int = 0) -> Any:
 
 
 def _with_extras(obj: Any, out: dict, depth: int) -> dict:
-    """Attributes a route set on a row or dataclass instance (e.g. ``sig.is_expired``)."""
+    """Attributes a route set on a row or dataclass instance (e.g. ``sig.is_expired``), and a
+    dataclass's read-only properties (e.g. an IPO card's ``listing_gain``) that templates read."""
     for k, v in getattr(obj, "__dict__", {}).items():
         if not k.startswith("_") and k not in out:
             out[k] = to_jsonable(v, depth)
+    if dataclasses.is_dataclass(obj):
+        for cls in type(obj).__mro__:
+            for k, attr in vars(cls).items():
+                if isinstance(attr, property) and not k.startswith("_") and k not in out:
+                    try:
+                        out[k] = to_jsonable(getattr(obj, k), depth)
+                    except Exception:  # a property that needs data we do not have: leave it out
+                        continue
     return out

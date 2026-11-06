@@ -515,6 +515,7 @@ def create_app(
         runs = list_backtests(config)
         for r in runs:
             r["current"] = matches_current(r, config)
+            r["label"] = formatting.run_label(r.get("overrides"))  # what the template's filter prints
         return templates.TemplateResponse(request, "backtests.html", {"runs": runs, "research": RESEARCH})
 
     @app.get("/backtests/{run_id}", response_class=HTMLResponse)

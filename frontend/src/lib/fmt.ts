@@ -79,3 +79,9 @@ export function metric(value: number | null | undefined, kind: string, market: M
 
 export const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 export const isoDay = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : DASH);
+
+/** "text-up" if a result beats its benchmark, "text-down" if worse (classic `vs` filter). */
+export function vs(value: number | null | undefined, other: number | null | undefined, higherBetter = true): string {
+  if (value == null || other == null || Number.isNaN(value) || Number.isNaN(other) || Math.abs(value - other) < 5e-4) return "";
+  return (value > other) === higherBetter ? "text-up" : "text-down";
+}

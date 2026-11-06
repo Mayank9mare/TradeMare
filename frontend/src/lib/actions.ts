@@ -3,10 +3,14 @@
 
 export interface ActionResult { ok: boolean; message: string }
 
-export async function postForm(url: string, csrf: string, fields: Record<string, string | number | undefined> = {}): Promise<ActionResult> {
+export async function postForm(url: string, csrf: string, fields: Record<string, string | number | boolean | string[] | undefined> = {}): Promise<ActionResult> {
   const body = new FormData();
   body.set("csrf_token", csrf);
-  for (const [k, v] of Object.entries(fields)) if (v !== undefined && v !== "") body.set(k, String(v));
+  for (const [k, v] of Object.entries(fields)) {
+    if (v === undefined || v === "" || v === false) continue; // unticked checkboxes are not sent, as in a form
+    if (Array.isArray(v)) v.forEach((x) => body.append(k, x));
+    else body.set(k, v === true ? "on" : String(v));
+  }
   try {
     const r = await fetch(url, { method: "POST", body });
     const final = new URL(r.url, location.origin);
