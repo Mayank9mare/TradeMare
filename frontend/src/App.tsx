@@ -6,6 +6,8 @@ import { ToastList, ToastProvider } from "@/components/wensity/toast";
 import { ChromeProvider } from "@/lib/chrome";
 import { Journal } from "@/pages/Journal";
 import { Overview } from "@/pages/Overview";
+import { Portfolio } from "@/pages/Portfolio";
+import { Tracking } from "@/pages/Tracking";
 import { Signals } from "@/pages/Signals";
 
 // Each route mirrors a classic page's address (/app/signals <-> /signals); pages not moved yet
@@ -20,6 +22,8 @@ export default function App() {
             <Route path="/" element={<OverviewPage />} />
             <Route path="/signals" element={<Signals />} />
             <Route path="/journal" element={<Journal />} />
+            <Route path="/portfolio/:code" element={<Portfolio />} />
+            <Route path="/portfolio/:code/tracking" element={<Tracking />} />
             <Route path="*" element={<ClassicOnly />} />
           </Routes>
         </Layout>
