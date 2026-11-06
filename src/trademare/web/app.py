@@ -563,8 +563,13 @@ def create_app(
                 "on_disk": on_disk,
                 "saved": saved,
                 "errors": [],
+                **tested_info(current_values(on_disk)),
             },
         )
+
+    def tested_info(values: dict) -> dict:
+        """What the settings template reads from globals: the tested values and what differs (for /app)."""
+        return {"tested": TESTED, "drift": sorted(drifted(values)), "untested_list": untested(values)}
 
     @app.post("/run/{code}")
     def run_now(code: str, csrf_token: str = Form(...), back: str = Form("/")):
@@ -598,6 +603,7 @@ def create_app(
                     "on_disk": on_disk,
                     "saved": None,
                     "errors": errors,
+                    **tested_info({**current_values(on_disk), **form}),
                 },
                 status_code=422,
             )

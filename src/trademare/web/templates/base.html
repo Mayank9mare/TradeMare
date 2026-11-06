@@ -67,7 +67,7 @@
       {% if ui.pending_total %}<a class="status-chip" href="/signals"><span class="dot open" style="background:var(--accent);box-shadow:none"></span><b>{{ ui.pending_total }}</b> signal{{ "s" if ui.pending_total != 1 }} awaiting you</a>{% endif %}
     </div>
     <main>{% block content %}{% endblock %}</main>
-    <footer>TradeMare {{ version }} · data from a local cache · not financial advice</footer>
+    <footer>TradeMare {{ version }} · data from a local cache · not financial advice · <a href="/app{{ path }}">open this page in the new UI</a></footer>
   </div>
 </div>
 <nav class="tabbar" aria-label="Main">

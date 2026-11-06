@@ -118,7 +118,7 @@ function MarketCard({ m, onChanged }: { m: MarketSummary; onChanged: () => void 
         </div>
       </div>
       {m.kill_switch && (
-        <Alert className="mb-3" variant="error" title="Kill switch tripped" description={<>{m.kill_reason}. New entries are blocked. <a className="text-accent" href={`/portfolio/${m.code}`}>Review and re-arm</a></>} />
+        <Alert className="mb-3" variant="error" title="Kill switch tripped" description={<>{m.kill_reason}. New entries are blocked. <Link className="text-accent" to={`/portfolio/${m.code}`}>Review and re-arm</Link></>} />
       )}
       {m.run.outcome && <p className="mt-0 mb-3 text-xs text-muted-foreground">Last manual update: {m.run.outcome}</p>}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

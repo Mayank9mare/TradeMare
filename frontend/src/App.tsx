@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router";
 import { GlossaryProvider } from "@/components/bits";
 import { Backtest, Backtests } from "@/pages/Backtests";
 import { Ipos } from "@/pages/Ipos";
+import { Settings } from "@/pages/Settings";
 import { Setups } from "@/pages/Setups";
 import { ClassicOnly, Layout } from "@/components/Layout";
 import { ToastList, ToastProvider } from "@/components/wensity/toast";
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/ipos" element={<Ipos />} />
             <Route path="/backtests" element={<Backtests />} />
             <Route path="/backtests/:id" element={<Backtest />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<ClassicOnly />} />
           </Routes>
         </Layout>
