@@ -17,6 +17,7 @@ export interface Chrome {
   pending_total: number;
   version: string;
   csrf_token: string;
+  shorts_on: boolean;
   markets: { code: "IN" | "US"; name: string; index: string; validated: boolean }[];
 }
 

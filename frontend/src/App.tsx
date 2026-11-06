@@ -1,24 +1,31 @@
 import { Route, Routes } from "react-router";
 
+import { GlossaryProvider } from "@/components/bits";
 import { ClassicOnly, Layout } from "@/components/Layout";
 import { ToastList, ToastProvider } from "@/components/wensity/toast";
 import { ChromeProvider } from "@/lib/chrome";
+import { Journal } from "@/pages/Journal";
 import { Overview } from "@/pages/Overview";
+import { Signals } from "@/pages/Signals";
 
 // Each route mirrors a classic page's address (/app/signals <-> /signals); pages not moved yet
 // say so and link to the classic one.
 export default function App() {
   return (
     <ChromeProvider>
+      <GlossaryProvider>
       <ToastProvider>
         <Layout>
           <Routes>
             <Route path="/" element={<OverviewPage />} />
+            <Route path="/signals" element={<Signals />} />
+            <Route path="/journal" element={<Journal />} />
             <Route path="*" element={<ClassicOnly />} />
           </Routes>
         </Layout>
         <ToastList placement="bottom-right" />
       </ToastProvider>
+      </GlossaryProvider>
     </ChromeProvider>
   );
 }

@@ -335,3 +335,8 @@ def test_every_classic_page_answers_json_for_the_react_app(client):
     d = client.get("/api/overview").json()
     india = next(m for m in d["markets"] if m["code"] == "IN")
     assert {"budget", "run", "vs_signals", "holdings", "data"} <= set(india)
+
+
+def test_glossary_api(client):
+    terms = client.get("/api/glossary").json()
+    assert "stop" in terms and "equity" in terms and all(isinstance(v, str) for v in terms.values())

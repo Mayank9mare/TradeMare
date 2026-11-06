@@ -203,3 +203,18 @@ def test_book_setup_signal_card_and_buy_stop_order(tmp_path, monkeypatch):
         assert (
             order.order_type == "STOP_LIMIT" and order.trigger_price == 1500.0 and order.limit_price == 1515.0
         )
+
+
+def test_signals_json_for_the_react_ui(tmp_path, monkeypatch):
+    client, db = make_app(tmp_path, monkeypatch)
+    d = client.get("/signals", params={"format": "json"}).json()
+    sig = next(s for s in d["pending"] if s["id"] == "sig1")
+    assert {"pro", "con", "neutral", "summary"} <= set(sig["split"])  # reasons as the classic card shows them
+    assert {"is_expired", "evidence", "reasons", "expires_at"} <= set(sig)
+    assert {"tech_metrics", "fund_metrics", "piotroski_labels", "asks", "recent"} <= set(d)
+    # actions from the React UI post to the same endpoints with the page's form token
+    page = client.get("/signals")
+    r = client.post("/signals/sig1/reject", data={"csrf_token": token(page.text), "note": "too risky"})
+    assert r.status_code == 200
+    with db.session() as s:
+        assert s.get(SignalRow, "sig1").status == "REJECTED"

@@ -203,6 +203,13 @@ def create_app(
     templates.env.globals["chrome"] = chrome
     register_api_routes(app, config, service, db, snapshots, run_state)
 
+    @app.get("/api/glossary")
+    def glossary_api() -> dict:
+        """The plain-English explanations behind the classic dashboard's (i) icons."""
+        from trademare.web.glossary import GLOSSARY
+
+        return GLOSSARY
+
     @app.get("/api/chrome")
     def chrome_api() -> JSONResponse:
         """What the React app shell needs: status bar, badges, markets, the form token."""
@@ -212,6 +219,7 @@ def create_app(
                     **chrome(),
                     "version": __version__,
                     "csrf_token": templates.env.globals["csrf_token"],
+                    "shorts_on": any(c.allow_short for c in config.markets.values()),
                     "markets": [
                         {
                             "code": m.value,
