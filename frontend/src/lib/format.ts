@@ -16,8 +16,8 @@ export function pct(value: number | null | undefined, digits = 1, signed = true)
   return `${signed && value > 0 ? "+" : ""}${n}%`.replace("-", "−");
 }
 
-export function tone(value: number | null | undefined): "text-up" | "text-down" | "text-muted" {
-  if (!value) return "text-muted";
+export function tone(value: number | null | undefined): "text-up" | "text-down" | "text-muted-foreground" {
+  if (!value) return "text-muted-foreground";
   return value > 0 ? "text-up" : "text-down";
 }
 

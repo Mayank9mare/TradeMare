@@ -12,13 +12,13 @@ export default function App() {
           <nav className="flex items-center gap-4 text-[13px]">
             <a href="/signals" className="text-accent">Signals</a>
             <a href="/journal" className="hidden text-accent sm:inline">Trade journal</a>
-            <a href="/" className="text-muted">Classic dashboard</a>
+            <a href="/" className="text-muted-foreground">Classic dashboard</a>
           </nav>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-7 sm:px-6">
         <h1 className="mb-1 text-[26px] font-bold tracking-tight">Overview</h1>
-        <p className="mt-0 mb-6 text-[13px] text-muted">Paper trading in 2 markets plus your Zerodha portfolio. Nothing is ordered without your approval.</p>
+        <p className="mt-0 mb-6 text-[13px] text-muted-foreground">Paper trading in 2 markets plus your Zerodha portfolio. Nothing is ordered without your approval.</p>
         <Overview />
       </main>
     </div>

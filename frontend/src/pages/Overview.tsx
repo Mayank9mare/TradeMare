@@ -1,6 +1,13 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
-import { Sparkline } from "@/components/Sparkline";
+import { Alert } from "@/components/wensity/alert";
+import { Badge, type BadgeVariant } from "@/components/wensity/badge";
+import { Card as WCard } from "@/components/wensity/card";
+import { NumberTicker } from "@/components/wensity/count-up-animation";
+import { EmptyState } from "@/components/wensity/empty-state";
+import { Marker, type MarkerTone } from "@/components/wensity/marker";
+import { SkeletonCard } from "@/components/wensity/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/wensity/table";
 import { getJSON, type MarketSummary, type Overview as Data, type Tile } from "@/lib/api";
 import { money, pct, shortDay, tone } from "@/lib/format";
 
@@ -12,15 +19,20 @@ const TILE_EDGE: Record<string, string> = {
 };
 const MOOD: Record<string, [string, string]> = {
   risk_on: ["risk-on", "text-up"],
-  neutral: ["neutral", "text-muted"],
+  neutral: ["neutral", "text-muted-foreground"],
   risk_off: ["risk-off", "text-down"],
 };
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <section className={`rounded-card border border-card-line bg-surface p-5 shadow-card ${className}`}>{children}</section>
-  );
+  return <WCard className={`p-5 ${className}`}>{children}</WCard>;
 }
+
+// Recharts is the heaviest dependency: load it after the page has painted.
+const MiniArea = lazy(() => import("@/components/MiniArea").then((m) => ({ default: m.MiniArea })));
+const chartFallback = <div className="h-[84px] rounded-tile bg-surface-2" aria-hidden />;
+
+const ORDER_BADGE: Record<string, BadgeVariant> = { filled: "success", waiting: "info" };
+const UPCOMING_TONE: Record<string, MarkerTone> = { results: "warning", deadline: "info", ipo: "neutral" };
 
 function TodayTile({ t }: { t: Tile }) {
   return (
@@ -28,34 +40,42 @@ function TodayTile({ t }: { t: Tile }) {
       href={t.href}
       className={`flex min-w-0 flex-col gap-1 rounded-tile border border-card-line border-l-4 bg-surface px-4 py-3.5 text-text no-underline shadow-card transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${TILE_EDGE[t.tone] ?? TILE_EDGE[""]}`}
     >
-      <span className="text-[11px] font-semibold tracking-wide text-muted uppercase">{t.label}</span>
+      <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t.label}</span>
       <span className="font-num text-2xl leading-tight font-bold tabular-nums">{t.value}</span>
-      {t.sub && <span className="text-[13px] break-words text-muted">{t.sub}</span>}
+      {t.sub && <span className="text-[13px] break-words text-muted-foreground">{t.sub}</span>}
     </a>
   );
 }
 
 function MoneyTile(props: {
-  label: string; badge?: string; value: string; delta: string; deltaTone: string; sub: string; href: string; real?: boolean;
+  label: string; badge?: string; amount: number; currency: "INR" | "USD"; delta: string; deltaTone: string; sub: string;
+  href: string; real?: boolean;
 }) {
   return (
     <a
       href={props.href}
       className={`flex min-w-0 flex-col gap-1 rounded-tile border bg-surface px-[18px] py-4 text-text no-underline shadow-card transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${props.real ? "border-accent/50" : "border-card-line"}`}
     >
-      <span className="text-[11px] font-semibold tracking-wide text-muted uppercase">
+      <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
         {props.label}
         {props.badge && <span className="ml-1.5 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium tracking-normal normal-case">{props.badge}</span>}
       </span>
-      <span className="font-num text-[32px] leading-tight font-bold tracking-tight tabular-nums">{props.value}</span>
+      <NumberTicker
+        className="font-num text-[32px] leading-tight font-bold tracking-tight tabular-nums"
+        value={props.amount}
+        trigger="mount"
+        locales={props.currency === "INR" ? "en-IN" : "en-US"}
+        format={{ style: "currency", currency: props.currency, maximumFractionDigits: props.currency === "INR" ? 0 : 2 }}
+        aria-label={money(props.amount, props.currency)}
+      />
       <span className={`text-[13px] font-semibold ${props.deltaTone}`}>{props.delta}</span>
-      <span className="text-[13px] text-muted">{props.sub}</span>
+      <span className="text-[13px] text-muted-foreground">{props.sub}</span>
     </a>
   );
 }
 
 function MarketCard({ m }: { m: MarketSummary }) {
-  const [mood, moodTone] = MOOD[m.mood ?? ""] ?? ["—", "text-muted"];
+  const [mood, moodTone] = MOOD[m.mood ?? ""] ?? ["—", "text-muted-foreground"];
   return (
     <Card>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -63,35 +83,45 @@ function MarketCard({ m }: { m: MarketSummary }) {
         <span className={`text-xs ${moodTone}`}>Market mood: {mood}</span>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Sparkline points={m.equity_line} label="Paper account" />
-        <Sparkline points={m.index_line} label={`${m.index_name} · 6 months`} />
+        <Suspense fallback={chartFallback}>
+          <MiniArea points={m.equity_line} label="Paper account" format={(v) => money(v, m.currency)} />
+        </Suspense>
+        <Suspense fallback={chartFallback}>
+          <MiniArea points={m.index_line} label={`${m.index_name} · 6 months`} format={(v) => v.toLocaleString("en-IN", { maximumFractionDigits: 0 })} />
+        </Suspense>
       </div>
-      <h4 className="mt-5 mb-1 text-[11px] font-semibold tracking-wide text-muted uppercase">
+      <h4 className="mt-5 mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
         Top ideas {m.scan_date && <span className="font-normal">· scan {m.scan_date}</span>}
       </h4>
       {m.ideas.length ? (
-        <table className="w-full border-collapse text-[13px]">
-          <tbody>
+        <Table density="compact" className="text-[13px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Stock</TableHead>
+              <TableHead className="text-right">Price · stop</TableHead>
+              <TableHead className="text-right">Score</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {m.ideas.map((i) => (
-              <tr key={i.symbol} className="border-t border-line first:border-t-0 hover:bg-row-hover">
-                <td className="py-2 pr-2">
+              <TableRow key={i.symbol}>
+                <TableCell>
                   <a href={`/m/${m.code}/${encodeURIComponent(i.symbol)}`} className="font-semibold text-accent">{i.symbol}</a>
-                  {i.sector && <div className="text-xs text-muted">{i.sector}</div>}
-                </td>
-                <td className="py-2 text-right tabular-nums">
+                  {i.sector && <div className="text-xs text-muted-foreground">{i.sector}</div>}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
                   {money(i.entry, m.currency, true)}
-                  <div className="text-xs text-muted">stop {pct(i.stop / i.entry - 1)}</div>
-                </td>
-                <td className="w-24 py-2 pl-3 text-right">
-                  <span className="font-num font-semibold text-up tabular-nums">{Math.round(Math.max(0, Math.min(1, i.score)) * 100)}</span>
-                  <div className="text-xs text-muted">score</div>
-                </td>
-              </tr>
+                  <div className="text-xs text-muted-foreground">stop {pct(i.stop / i.entry - 1)}</div>
+                </TableCell>
+                <TableCell className="text-right font-num font-semibold text-up tabular-nums">
+                  {Math.round(Math.max(0, Math.min(1, i.score)) * 100)}
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       ) : (
-        <p className="rounded-tile bg-surface-2 px-4 py-3 text-center text-sm text-muted">No ideas yet: they appear after the next daily run.</p>
+        <p className="rounded-tile bg-surface-2 px-4 py-3 text-center text-sm text-muted-foreground">No ideas yet: they appear after the next daily run.</p>
       )}
       <a className="mt-2 inline-block text-[13px] text-accent" href={`/m/${m.code}/ideas`}>All ideas →</a>
     </Card>
@@ -112,16 +142,17 @@ export function Overview() {
 
   if (error) {
     return (
-      <Card className="border-critical/40">
-        <h2 className="m-0 text-lg font-semibold">Could not load the overview</h2>
-        <p className="text-muted">{error}. Is <code>trademare serve</code> running? <a className="text-accent" href="/">Open the classic dashboard</a>.</p>
-      </Card>
+      <Alert
+        variant="error"
+        title="Could not load the overview"
+        description={<>{error}. Is <code>trademare serve</code> running? <a className="text-accent" href="/">Open the classic dashboard</a>.</>}
+      />
     );
   }
   if (!data) {
     return (
       <div className="space-y-4" aria-busy="true" aria-label="Loading">
-        {[120, 140, 320].map((h) => <div key={h} className="animate-pulse rounded-card bg-surface-2" style={{ height: h }} />)}
+        {[0, 1, 2].map((k) => <SkeletonCard key={k} />)}
       </div>
     );
   }
@@ -132,7 +163,7 @@ export function Overview() {
       <section aria-labelledby="today-h" className="rounded-card border border-accent/35 bg-[linear-gradient(var(--tm-accent-soft),var(--tm-accent-soft)),var(--tm-surface)] px-5 py-5">
         <div className="mb-3 flex items-baseline gap-3">
           <h2 id="today-h" className="m-0 text-xl font-semibold">Today</h2>
-          <span className="text-[13px] text-muted">{todayLabel}</span>
+          <span className="text-[13px] text-muted-foreground">{todayLabel}</span>
         </div>
         {data.tiles.length ? (
           <>
@@ -146,7 +177,7 @@ export function Overview() {
             )}
           </>
         ) : (
-          <p className="m-0 text-muted"><b className="text-text">You're all caught up.</b> New signals arrive after each market's close.</p>
+          <p className="m-0 text-muted-foreground"><b className="text-text">You're all caught up.</b> New signals arrive after each market's close.</p>
         )}
       </section>
 
@@ -156,7 +187,7 @@ export function Overview() {
           {data.zerodha && (
             <MoneyTile
               real label="Zerodha portfolio" badge="real money" href="/portfolio/IN#outside"
-              value={money(data.zerodha.value, "INR")}
+              amount={data.zerodha.value} currency="INR"
               delta={`${money(data.zerodha.pnl, "INR")} · ${pct(data.zerodha.ret)}`} deltaTone={tone(data.zerodha.ret)}
               sub={`${data.zerodha.count} stocks · invested ${money(data.zerodha.cost, "INR")} · as of ${shortDay(data.zerodha.as_of.slice(0, 10))}`}
             />
@@ -167,7 +198,7 @@ export function Overview() {
             return (
               <MoneyTile
                 key={m.code} label={`${m.code === "IN" ? "India" : "US"} paper account`} href={`/portfolio/${m.code}`}
-                value={money(m.equity, m.currency)}
+                amount={m.equity} currency={m.currency}
                 delta={`${day ? `${pct(day, 2)} today` : "no change today"} · ${pct(fromPeak, 1, false)} from peak`}
                 deltaTone={tone(day)}
                 sub={`${m.positions} of ${m.max_positions} positions · cash ${money(m.cash, m.currency)}`}
@@ -186,12 +217,13 @@ export function Overview() {
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,460px),1fr))] gap-4">
         <Card>
-          <h2 className="m-0 mb-3 text-base font-semibold">Coming up <span className="text-[13px] font-normal text-muted">· next 14 days</span></h2>
+          <h2 className="m-0 mb-3 text-base font-semibold">Coming up <span className="text-[13px] font-normal text-muted-foreground">· next 14 days</span></h2>
           {data.upcoming.length ? (
             <ul className="m-0 list-none p-0">
               {data.upcoming.map((u, i) => (
-                <li key={i} className="grid grid-cols-[6.5rem_1fr] gap-3 border-t border-line py-2.5 text-[13px] first:border-t-0">
-                  <span className={`tabular-nums ${u.kind === "results" ? "font-semibold text-warning" : u.kind === "deadline" ? "font-semibold text-accent" : "text-muted"}`}>
+                <li key={i} className="grid grid-cols-[1rem_6.5rem_1fr] items-center gap-3 border-t border-line py-2.5 text-[13px] first:border-t-0">
+                  <Marker variant="dot" size="sm" tone={UPCOMING_TONE[u.kind] ?? "neutral"} aria-hidden />
+                  <span className={`tabular-nums ${u.kind === "results" ? "font-semibold text-warning" : u.kind === "deadline" ? "font-semibold text-accent" : "text-muted-foreground"}`}>
                     {u.day === data.today ? "Today" : shortDay(u.day)}
                   </span>
                   {u.href ? <a href={u.href} className="text-accent">{u.text}</a> : <span>{u.text}</span>}
@@ -199,25 +231,25 @@ export function Overview() {
               ))}
             </ul>
           ) : (
-            <p className="rounded-tile bg-surface-2 px-4 py-3 text-center text-sm text-muted">Nothing scheduled in the next two weeks.</p>
+            <EmptyState title="Nothing scheduled" description="No results dates for your stocks, IPOs or signal deadlines in the next two weeks." />
           )}
         </Card>
         <Card>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="m-0 text-base font-semibold">Recent orders <span className="text-[13px] font-normal text-muted">· last 7 days</span></h2>
+            <h2 className="m-0 text-base font-semibold">Recent orders <span className="text-[13px] font-normal text-muted-foreground">· last 7 days</span></h2>
             <a href="/journal" className="text-[13px] text-accent">Trade journal →</a>
           </div>
           {data.orders.length ? (
             <ul className="m-0 list-none p-0">
               {data.orders.map((o, i) => (
                 <li key={i} className="flex gap-2 border-t border-line py-2.5 text-[13px] first:border-t-0">
-                  <span className={`h-fit shrink-0 rounded-full px-2 py-0.5 text-[11px] ${o.status === "filled" ? "bg-good/15 text-up" : o.status === "waiting" ? "bg-accent-soft text-accent" : "bg-warning/15 text-warning"}`}>{o.status}</span>
+                  <Badge size="sm" variant={ORDER_BADGE[o.status] ?? "warning"} className="h-fit">{o.status}</Badge>
                   <span>{o.text}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="rounded-tile bg-surface-2 px-4 py-3 text-center text-sm text-muted">No orders in the last 7 days.</p>
+            <EmptyState title="No recent orders" description="Approved orders from the last 7 days appear here." />
           )}
         </Card>
       </div>
