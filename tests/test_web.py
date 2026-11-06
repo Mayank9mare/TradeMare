@@ -249,3 +249,52 @@ def test_strategy_overlay_on_chart(client):
     core = client.get("/api/strategy/IN/M%26M", params={"id": "core"}).json()
     assert core["name"] == "Core strategy" and core["signals"] == []
     assert client.get("/api/strategy/IN/M%26M", params={"id": "nope"}).status_code == 404
+
+
+def test_overview_today_money_and_coming_up(client):
+    page = client.get("/").text
+    assert 'id="today-h"' in page and 'id="money-h"' in page and 'id="coming-h"' in page
+    assert "all caught up" in page  # no signals, stops or results due
+    assert "India paper account" in page and "Zerodha portfolio" not in page  # no snapshot yet
+    assert "Nothing scheduled" in page and "No orders in the last 7 days" in page
+
+
+def test_today_tiles_split_by_market_and_list_results(monkeypatch):
+    from datetime import UTC, date, datetime
+    from types import SimpleNamespace
+
+    from trademare.web.overview_data import today_tiles
+
+    config = load_config(REPO_CONFIG)
+    sig = lambda m, action="ENTRY": SimpleNamespace(  # noqa: E731
+        market=m, action=action, expires_at=datetime(2026, 11, 9, 10, 0, tzinfo=UTC)
+    )
+    pending = [sig("IN"), sig("IN"), sig("IN", "EXIT"), sig("US")]
+    zerodha = {"symbols": ["TATASTEEL"]}
+
+    class Events:
+        def cached(self, market, symbol):
+            return SimpleNamespace(next_results=date(2026, 11, 7)) if symbol == "TATASTEEL" else None
+
+    class Db:
+        def session(self):
+            import contextlib
+
+            @contextlib.contextmanager
+            def cm():
+                yield SimpleNamespace(scalars=lambda q: [])
+
+            return cm()
+
+    import trademare.web.overview_data as od
+
+    monkeypatch.setattr(od, "_open", lambda s, market: [])
+    monkeypatch.setattr(od, "stops_raised_recently", lambda db, days=3: [{"symbol": "GESHIP"}])
+    tiles, upcoming = today_tiles(config, Db(), pending, Events(), zerodha, [], date(2026, 11, 6))
+    labels = {t.label: t for t in tiles}
+    assert labels["India signals"].value == "3" and "2 buy · 1 sell" in labels["India signals"].sub
+    assert "decide by Mon 9 Nov, 3:30 pm" in labels["India signals"].sub
+    assert labels["US signals"].value == "1"
+    assert labels["Raise your stop-loss"].sub.startswith("GESHIP")
+    assert labels["Results this week"].sub == "TATASTEEL Sat 7 Nov"
+    assert [u.kind for u in upcoming][:1] == ["results"]

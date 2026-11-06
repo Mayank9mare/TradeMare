@@ -36,7 +36,7 @@
 {% else %}<p class="muted">No open positions.</p>{% endif %}
 
 {% if outside %}{% set o = outside %}
-<h2>Your other stocks at Zerodha{{ tip("outside_holdings", "your other stocks") }} <small class="muted">{{ o.rows | length }} · read-only</small></h2>
+<h2 id="outside">Your other stocks at Zerodha{{ tip("outside_holdings", "your other stocks") }} <small class="muted">{{ o.rows | length }} · read-only</small></h2>
 <p class="muted">Bought outside TradeMare. Shown with TradeMare's view of each stock; it never places orders or stops on these. Snapshot {{ o.fetched_at | local_time(market) }}.
   <form method="post" action="/portfolio/{{ market.value }}/outside/refresh" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="run-btn">↻ Refresh from Zerodha</button></form></p>
 <div class="ratios four">

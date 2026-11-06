@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import secrets as pysecrets
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yaml
@@ -36,10 +38,13 @@ from trademare.web.overview_data import (
     account_summary,
     holdings_today,
     ideas_vs_signals,
+    ipo_cards_cached,
     market_status,
     pending_signals,
     sparkline,
+    today_tiles,
     working_entries,
+    zerodha_summary,
 )
 from trademare.web.reasons import plain, split_reasons
 from trademare.web.settings_form import (
@@ -204,6 +209,11 @@ def create_app(
                 )
             )
         first_expiry = min((p for p in pending if p.expires_at), key=lambda p: p.expires_at, default=None)
+        today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
+        zerodha = zerodha_summary(config)
+        tiles, upcoming = today_tiles(
+            config, db, pending, service.events(), zerodha, ipo_cards_cached(config, today), today
+        )
         return templates.TemplateResponse(
             request,
             "overview.html",
@@ -212,7 +222,11 @@ def create_app(
                 "config": config,
                 "pending": pending,
                 "first_expiry": first_expiry,
-                "working": working_entries(db, service.store),
+                "tiles": tiles,
+                "upcoming": upcoming,
+                "zerodha": zerodha,
+                "today": today,
+                "working": working_entries(db, service.store, days=7),
                 "msg": msg,
                 "err": err,
             },

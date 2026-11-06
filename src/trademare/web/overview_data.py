@@ -261,3 +261,184 @@ def _open(s, market: Market) -> list[PositionRow]:
     return list(
         s.scalars(select(PositionRow).where(PositionRow.market == market.value, PositionRow.status == "open"))
     )
+
+
+# --- "Today", "Your money" and "Coming up" on the overview -----------------------------------
+
+
+@dataclass
+class Tile:
+    """One thing that needs the owner today (or a summary of their money)."""
+
+    label: str
+    value: str
+    sub: str = ""
+    href: str = ""
+    tone: str = ""  # "", "up", "down", "warn"
+
+
+@dataclass
+class Upcoming:
+    day: date
+    text: str
+    href: str = ""
+    kind: str = ""  # results | ipo | deadline
+
+
+class _NoNetwork:
+    """IPO data for the overview comes from the cache only: a page load never waits on NSE."""
+
+    def get_json(self, url: str):
+        raise RuntimeError("offline")
+
+
+def ipo_cards_cached(config, today: date):
+    try:
+        from trademare.analysis.ipo import build_cards
+        from trademare.analysis.ipo_study import load_study
+        from trademare.data.ipo import IpoService
+
+        service = IpoService(config.data.cache_dir, nse=_NoNetwork())
+        return build_cards(service.india(today), today, load_study(config.data.cache_dir))
+    except Exception:
+        return []
+
+
+def _day(d: date) -> str:
+    return f"{d:%a} {d.day} {d:%b}"
+
+
+def zerodha_summary(config) -> dict | None:
+    """The owner's own Zerodha holdings (last snapshot): value, cost, return, age."""
+    from trademare.execution.outside_holdings import load
+
+    snap = load(config)
+    if not snap or not snap.get("holdings"):
+        return None
+    rows = snap["holdings"]
+    cost = sum(r["quantity"] * r["average_price"] for r in rows)
+    value = sum(r["quantity"] * r["last_price"] for r in rows)
+    fetched = datetime.fromisoformat(snap["fetched_at"])
+    return {
+        "value": value,
+        "cost": cost,
+        "pnl": value - cost,
+        "ret": value / cost - 1 if cost else None,
+        "count": len(rows),
+        "as_of": fetched,
+        "symbols": [r["symbol"] for r in rows],
+    }
+
+
+def held_symbols(db: Database, market: Market, zerodha: dict | None) -> dict[str, str]:
+    """symbol -> where it is held ("Zerodha", "paper" or both)."""
+    out: dict[str, str] = {}
+    if market is Market.IN and zerodha:
+        for sym in zerodha["symbols"]:
+            out[sym] = "Zerodha"
+    with db.session() as s:
+        for p in _open(s, market):
+            out[p.symbol] = "Zerodha + paper" if p.symbol in out else "paper"
+    return out
+
+
+def stops_raised_recently(db: Database, days: int = 3) -> list[dict]:
+    from trademare.storage.db import EventRow
+
+    since = datetime.now(UTC).replace(tzinfo=None) - pd.Timedelta(days=days)
+    with db.session() as s:
+        rows = list(
+            s.scalars(
+                select(EventRow)
+                .where(EventRow.kind == "stop_raised", EventRow.ts >= since)
+                .order_by(EventRow.ts.desc())
+            )
+        )
+    latest: dict[tuple[str, str], dict] = {}
+    for ev in rows:
+        key = (ev.market or "", ev.data.get("symbol", ""))
+        latest.setdefault(key, {"market": ev.market, **ev.data})
+    return list(latest.values())
+
+
+def today_tiles(
+    config, db: Database, pending: list[SignalRow], events, zerodha: dict | None, ipo_cards, today: date
+) -> tuple[list[Tile], list[Upcoming]]:
+    """What needs the owner today, and the next two weeks in date order."""
+    tiles: list[Tile] = []
+    upcoming: list[Upcoming] = []
+    for market in config.enabled_markets():
+        mine = [p for p in pending if p.market == market.value]
+        if not mine:
+            continue
+        due = min((p.expires_at for p in mine if p.expires_at), default=None)
+        when = ""
+        if due is not None:
+            local = (due if due.tzinfo else due.replace(tzinfo=UTC)).astimezone(
+                ZoneInfo(MarketClock(market).tz)
+            )
+            when = f"by {_day(local.date())}, {local:%-I:%M} {local:%p}".replace("AM", "am").replace(
+                "PM", "pm"
+            )
+            upcoming.append(
+                Upcoming(local.date(), f"{len(mine)} {_name(market)} signals expire", "/signals", "deadline")
+            )
+        buys = sum(1 for p in mine if p.action == "ENTRY")
+        sells = len(mine) - buys
+        parts = [f"{buys} buy" if buys else "", f"{sells} sell" if sells else ""]
+        tiles.append(
+            Tile(
+                f"{_name(market)} signals",
+                str(len(mine)),
+                " · ".join(p for p in parts if p) + (f" · decide {when}" if when else ""),
+                "/signals",
+                "warn",
+            )
+        )
+    raised = stops_raised_recently(db)
+    if raised:
+        names = ", ".join(r.get("symbol", "") for r in raised[:3])
+        tiles.append(
+            Tile("Raise your stop-loss", str(len(raised)), names + " · update any Kite GTT", "/signals", "up")
+        )
+    results = []
+    for market in config.enabled_markets():
+        for sym, where in held_symbols(db, market, zerodha).items():
+            ev = events.cached(market, sym) if events else None
+            d = ev.next_results if ev else None
+            if d and 0 <= (d - today).days <= 14:
+                results.append((d, sym, where, market))
+                upcoming.append(
+                    Upcoming(
+                        d, f"{sym} results (you hold it: {where})", f"/m/{market.value}/{sym}", "results"
+                    )
+                )
+    soon = sorted(r for r in results if (r[0] - today).days <= 7)
+    if soon:
+        tiles.append(
+            Tile(
+                "Results this week",
+                str(len(soon)),
+                ", ".join(f"{sym} {_day(d)}" for d, sym, _, _ in soon[:3]),
+                f"/m/{soon[0][3].value}/{soon[0][1]}",
+                "warn",
+            )
+        )
+    open_ipos = []
+    for c in ipo_cards or []:
+        ipo = c.ipo
+        if c.status == "open" and ipo.end:
+            open_ipos.append(ipo.symbol)
+            upcoming.append(Upcoming(ipo.end, f"IPO {ipo.symbol} closes (5 pm)", "/ipos", "ipo"))
+        elif c.status == "upcoming" and ipo.start and 0 <= (ipo.start - today).days <= 14:
+            upcoming.append(Upcoming(ipo.start, f"IPO {ipo.symbol} opens", "/ipos", "ipo"))
+        elif c.status == "closed" and ipo.listing_date and ipo.listing_date >= today:
+            upcoming.append(Upcoming(ipo.listing_date, f"IPO {ipo.symbol} lists", "/ipos", "ipo"))
+    if open_ipos:
+        tiles.append(Tile("IPOs open", str(len(open_ipos)), ", ".join(open_ipos[:3]), "/ipos", ""))
+    upcoming = sorted((u for u in upcoming if 0 <= (u.day - today).days <= 14), key=lambda u: u.day)
+    return tiles, upcoming
+
+
+def _name(market: Market) -> str:
+    return "India" if market is Market.IN else "US"

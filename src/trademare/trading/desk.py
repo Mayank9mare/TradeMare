@@ -1085,6 +1085,11 @@ class TradingDesk:
             if pos.stop_price is None or sign * (candidate - pos.stop_price) > 0:
                 if pos.stop_price is not None:
                     report.stops_raised.append((pos.symbol, pos.stop_price, round(candidate, 2), close))
+                    self.db.log(
+                        s, "stop_raised", f"{pos.symbol}: stop {pos.stop_price:,.2f} -> {candidate:,.2f}",
+                        self.market.value, symbol=pos.symbol, old=pos.stop_price, new=round(candidate, 2),
+                        day=day.isoformat(),
+                    )  # fmt: skip
                 pos.stop_price = round(candidate, 2)
                 for o in self._orders(s, position_id=pos.id, purpose="stop", status=OPEN):
                     o.trigger_price = pos.stop_price
