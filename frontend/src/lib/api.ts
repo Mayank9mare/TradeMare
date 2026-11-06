@@ -31,6 +31,15 @@ export interface MarketSummary {
   index_line: Point[];
   scan_date: string | null;
   ideas: Idea[];
+  budget: number;
+  validated: boolean;
+  run: { running: boolean; block: string | null; next: string | null; outcome: string };
+  vs_signals: string;
+  holdings: { symbol: string; today: number | null; since_entry: number | null }[];
+  data: {
+    prices_to: string | null; universe_size: number; bars: number; fundamentals: number; source: string;
+    advancers: number; decliners: number;
+  };
 }
 
 export interface Order { status: string; text: string; symbol: string; market: string }

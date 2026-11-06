@@ -35,6 +35,7 @@ from trademare.web import formatting, strategy_overlay
 from trademare.web.api_routes import register_api_routes
 from trademare.web.glossary import tip
 from trademare.web.ipo_routes import register_ipo_routes
+from trademare.web.jsonable import to_jsonable
 from trademare.web.overview_data import (
     account_summary,
     holdings_today,
@@ -88,6 +89,17 @@ def create_app(
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     env = templates.env
+    # Both UIs read the same data: any classic page answers `?format=json` with its template context
+    # (what the React app at /app renders), so no page needs a second, hand-written API.
+    render = templates.TemplateResponse
+
+    def template_or_json(request: Request, name: str, context: dict | None = None, *args, **kwargs):
+        if request.query_params.get("format") == "json":
+            data = {k: v for k, v in (context or {}).items() if k != "request" and not callable(v)}
+            return JSONResponse(to_jsonable(data), status_code=kwargs.get("status_code", 200))
+        return render(request, name, context, *args, **kwargs)
+
+    templates.TemplateResponse = template_or_json  # type: ignore[method-assign]
     env.filters.update(
         money=formatting.money,
         pct=formatting.pct,
@@ -121,7 +133,6 @@ def create_app(
     register_trading_routes(app, templates, config, service, db, secrets)
     register_ipo_routes(app, templates, config, db, secrets)
     register_setup_routes(app, templates, config, service, config_path)
-    register_api_routes(app, config, service, db)
 
     # The React app (frontend/, built with `npm run build`) at /app; any path inside it gets index.html.
     app_dist = HERE / "app_dist"
@@ -190,6 +201,30 @@ def create_app(
         }
 
     templates.env.globals["chrome"] = chrome
+    register_api_routes(app, config, service, db, snapshots, run_state)
+
+    @app.get("/api/chrome")
+    def chrome_api() -> JSONResponse:
+        """What the React app shell needs: status bar, badges, markets, the form token."""
+        return JSONResponse(
+            to_jsonable(
+                {
+                    **chrome(),
+                    "version": __version__,
+                    "csrf_token": templates.env.globals["csrf_token"],
+                    "markets": [
+                        {
+                            "code": m.value,
+                            "name": "India" if m is Market.IN else "United States",
+                            "index": formatting.universe_name(c.universe),
+                            "validated": c.validated,
+                        }
+                        for m, c in config.markets.items()
+                        if c.enabled
+                    ],
+                }
+            )
+        )
 
     @app.get("/", response_class=HTMLResponse)
     def overview(request: Request, msg: str | None = None, err: str | None = None):

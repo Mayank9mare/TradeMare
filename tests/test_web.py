@@ -313,3 +313,25 @@ def test_overview_api_and_react_app(client):
     assert expected in page.text
     assert client.get("/app/../../../etc/passwd").status_code in (200, 404, 503)
     assert "root:" not in client.get("/app/../../../etc/passwd").text
+
+
+def test_every_classic_page_answers_json_for_the_react_app(client):
+    chrome = client.get("/api/chrome").json()
+    assert {"statuses", "pending_total", "csrf_token", "markets", "runs", "login_needed"} <= set(chrome)
+    for url in (
+        "/signals",
+        "/journal",
+        "/portfolio/IN",
+        "/m/IN",
+        "/m/IN/ideas",
+        "/ipos",
+        "/backtests",
+        "/settings",
+    ):
+        r = client.get(url, params={"format": "json"})
+        assert r.status_code == 200 and r.headers["content-type"].startswith("application/json"), url
+        assert "request" not in r.json()
+    assert client.get("/signals").headers["content-type"].startswith("text/html")  # classic unchanged
+    d = client.get("/api/overview").json()
+    india = next(m for m in d["markets"] if m["code"] == "IN")
+    assert {"budget", "run", "vs_signals", "holdings", "data"} <= set(india)

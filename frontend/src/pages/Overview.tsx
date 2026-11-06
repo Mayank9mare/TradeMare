@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { Link } from "react-router";
 
 import { Alert } from "@/components/wensity/alert";
 import { Badge, type BadgeVariant } from "@/components/wensity/badge";
@@ -8,7 +9,11 @@ import { EmptyState } from "@/components/wensity/empty-state";
 import { Marker, type MarkerTone } from "@/components/wensity/marker";
 import { SkeletonCard } from "@/components/wensity/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/wensity/table";
+import { Button } from "@/components/wensity/button";
+import { useToastManager } from "@/components/wensity/toast";
+import { postForm } from "@/lib/actions";
 import { getJSON, type MarketSummary, type Overview as Data, type Tile } from "@/lib/api";
+import { useChrome } from "@/lib/chrome";
 import { money, pct, shortDay, tone } from "@/lib/format";
 
 const TILE_EDGE: Record<string, string> = {
@@ -36,14 +41,14 @@ const UPCOMING_TONE: Record<string, MarkerTone> = { results: "warning", deadline
 
 function TodayTile({ t }: { t: Tile }) {
   return (
-    <a
-      href={t.href}
+    <Link
+      to={t.href}
       className={`flex min-w-0 flex-col gap-1 rounded-tile border border-card-line border-l-4 bg-surface px-4 py-3.5 text-text no-underline shadow-card transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${TILE_EDGE[t.tone] ?? TILE_EDGE[""]}`}
     >
       <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{t.label}</span>
       <span className="font-num text-2xl leading-tight font-bold tabular-nums">{t.value}</span>
       {t.sub && <span className="text-[13px] break-words text-muted-foreground">{t.sub}</span>}
-    </a>
+    </Link>
   );
 }
 
@@ -52,8 +57,8 @@ function MoneyTile(props: {
   href: string; real?: boolean;
 }) {
   return (
-    <a
-      href={props.href}
+    <Link
+      to={props.href}
       className={`flex min-w-0 flex-col gap-1 rounded-tile border bg-surface px-[18px] py-4 text-text no-underline shadow-card transition-colors hover:border-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${props.real ? "border-accent/50" : "border-card-line"}`}
     >
       <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -70,18 +75,52 @@ function MoneyTile(props: {
       />
       <span className={`text-[13px] font-semibold ${props.deltaTone}`}>{props.delta}</span>
       <span className="text-[13px] text-muted-foreground">{props.sub}</span>
-    </a>
+    </Link>
   );
 }
 
-function MarketCard({ m }: { m: MarketSummary }) {
+function RunButton({ m, onDone }: { m: MarketSummary; onDone: () => void }) {
+  const { chrome, refresh } = useChrome();
+  const toasts = useToastManager();
+  const [busy, setBusy] = useState(false);
+  const time = (iso: string) => new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  if (m.run.running || busy) return <Button size="sm" variant="secondary" loading disabled>Updating…</Button>;
+  if (m.run.block) {
+    return <Button size="sm" variant="ghost" disabled title={m.run.block}>✓ Up to date{m.run.next ? ` · next ${time(m.run.next)}` : ""}</Button>;
+  }
+  return (
+    <Button
+      size="sm" variant="secondary" title="Fetch the latest prices, check fills and stops, and look for new signals"
+      onClick={async () => {
+        if (!chrome) return;
+        setBusy(true);
+        const r = await postForm(`/run/${m.code}`, chrome.csrf_token, { back: "/" });
+        toasts.add({ title: r.ok ? r.message : "Could not start the update", description: r.ok ? undefined : r.message, data: { variant: r.ok ? "success" : "error" } });
+        setBusy(false);
+        refresh();
+        onDone();
+      }}
+    >↻ Update now</Button>
+  );
+}
+
+function MarketCard({ m, onChanged }: { m: MarketSummary; onChanged: () => void }) {
   const [mood, moodTone] = MOOD[m.mood ?? ""] ?? ["—", "text-muted-foreground"];
   return (
     <Card>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="m-0 text-base font-semibold">{m.name}</h3>
-        <span className={`text-xs ${moodTone}`}>Market mood: {mood}</span>
+        <h3 className="m-0 text-base font-semibold">
+          {m.name} {m.validated && <Badge size="sm" variant="success">Live</Badge>}
+        </h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`text-xs ${moodTone}`}>Market mood: {mood}</span>
+          <RunButton m={m} onDone={onChanged} />
+        </div>
       </div>
+      {m.kill_switch && (
+        <Alert className="mb-3" variant="error" title="Kill switch tripped" description={<>{m.kill_reason}. New entries are blocked. <a className="text-accent" href={`/portfolio/${m.code}`}>Review and re-arm</a></>} />
+      )}
+      {m.run.outcome && <p className="mt-0 mb-3 text-xs text-muted-foreground">Last manual update: {m.run.outcome}</p>}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Suspense fallback={chartFallback}>
           <MiniArea points={m.equity_line} label="Paper account" format={(v) => money(v, m.currency)} />
@@ -93,6 +132,7 @@ function MarketCard({ m }: { m: MarketSummary }) {
       <h4 className="mt-5 mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
         Top ideas {m.scan_date && <span className="font-normal">· scan {m.scan_date}</span>}
       </h4>
+      {m.vs_signals && m.pending === 0 && <p className="mt-0 mb-2 text-xs text-muted-foreground">{m.vs_signals}</p>}
       {m.ideas.length ? (
         <Table density="compact" className="text-[13px]">
           <TableHeader>
@@ -106,7 +146,7 @@ function MarketCard({ m }: { m: MarketSummary }) {
             {m.ideas.map((i) => (
               <TableRow key={i.symbol}>
                 <TableCell>
-                  <a href={`/m/${m.code}/${encodeURIComponent(i.symbol)}`} className="font-semibold text-accent">{i.symbol}</a>
+                  <Link to={`/m/${m.code}/${encodeURIComponent(i.symbol)}`} className="font-semibold text-accent">{i.symbol}</Link>
                   {i.sector && <div className="text-xs text-muted-foreground">{i.sector}</div>}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
@@ -123,7 +163,34 @@ function MarketCard({ m }: { m: MarketSummary }) {
       ) : (
         <p className="rounded-tile bg-surface-2 px-4 py-3 text-center text-sm text-muted-foreground">No ideas yet: they appear after the next daily run.</p>
       )}
-      <a className="mt-2 inline-block text-[13px] text-accent" href={`/m/${m.code}/ideas`}>All ideas →</a>
+      <Link className="mt-2 inline-block text-[13px] text-accent" to={`/m/${m.code}/ideas`}>All ideas →</Link>
+      {m.holdings.length > 0 && (
+        <>
+          <h4 className="mt-5 mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Your holdings today</h4>
+          <Table density="compact" className="text-[13px]">
+            <TableHeader>
+              <TableRow><TableHead>Stock</TableHead><TableHead className="text-right">Today</TableHead><TableHead className="text-right">Since you bought</TableHead></TableRow>
+            </TableHeader>
+            <TableBody>
+              {m.holdings.map((h) => (
+                <TableRow key={h.symbol}>
+                  <TableCell><Link to={`/m/${m.code}/${encodeURIComponent(h.symbol)}`} className="font-semibold text-accent">{h.symbol}</Link></TableCell>
+                  <TableCell className={`text-right tabular-nums ${tone(h.today)}`}>{pct(h.today)}</TableCell>
+                  <TableCell className={`text-right tabular-nums ${tone(h.since_entry)}`}>{pct(h.since_entry)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
+      )}
+      <details className="mt-4 border-t border-line pt-3 text-xs text-muted-foreground">
+        <summary className="cursor-pointer">Data · prices to {m.data.prices_to ?? "—"} · last processed {m.last_processed ?? "—"}</summary>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+          <span>Breadth <b className="text-up">{m.data.advancers} up</b> / <b className="text-down">{m.data.decliners} down</b></span>
+          <span>Prices <b className="text-text">{m.data.bars}/{m.data.universe_size}</b> stocks</span>
+          <span>Fundamentals <b className="text-text">{m.data.fundamentals}/{m.data.universe_size}</b> ({m.data.source})</span>
+        </div>
+      </details>
     </Card>
   );
 }
@@ -131,6 +198,7 @@ function MarketCard({ m }: { m: MarketSummary }) {
 export function Overview() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     const ctl = new AbortController();
@@ -138,7 +206,7 @@ export function Overview() {
       if (!ctl.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     });
     return () => ctl.abort();
-  }, []);
+  }, [version]);
 
   if (error) {
     return (
@@ -172,7 +240,7 @@ export function Overview() {
             </div>
             {data.pending_total > 0 && (
               <div className="mt-4 flex justify-end">
-                <a href="/signals" className="rounded-tile bg-accent px-4 py-2 font-semibold text-white no-underline hover:opacity-90 dark:text-bg">Review signals →</a>
+                <Link to="/signals" className="rounded-tile bg-accent px-4 py-2 font-semibold text-white no-underline hover:opacity-90 dark:text-bg">Review signals →</Link>
               </div>
             )}
           </>
@@ -201,7 +269,7 @@ export function Overview() {
                 amount={m.equity} currency={m.currency}
                 delta={`${day ? `${pct(day, 2)} today` : "no change today"} · ${pct(fromPeak, 1, false)} from peak`}
                 deltaTone={tone(day)}
-                sub={`${m.positions} of ${m.max_positions} positions · cash ${money(m.cash, m.currency)}`}
+                sub={`${m.positions} of ${m.max_positions} positions · cash ${money(m.cash, m.currency)} · budget ${money(m.budget, m.currency)}`}
               />
             );
           })}
@@ -211,7 +279,7 @@ export function Overview() {
       <section aria-labelledby="markets-h">
         <h2 id="markets-h" className="mb-3 text-base font-semibold">Markets</h2>
         <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,460px),1fr))] gap-4">
-          {data.markets.map((m) => <MarketCard key={m.code} m={m} />)}
+          {data.markets.map((m) => <MarketCard key={m.code} m={m} onChanged={() => setVersion((v) => v + 1)} />)}
         </div>
       </section>
 
@@ -226,7 +294,7 @@ export function Overview() {
                   <span className={`tabular-nums ${u.kind === "results" ? "font-semibold text-warning" : u.kind === "deadline" ? "font-semibold text-accent" : "text-muted-foreground"}`}>
                     {u.day === data.today ? "Today" : shortDay(u.day)}
                   </span>
-                  {u.href ? <a href={u.href} className="text-accent">{u.text}</a> : <span>{u.text}</span>}
+                  {u.href ? <Link to={u.href} className="text-accent">{u.text}</Link> : <span>{u.text}</span>}
                 </li>
               ))}
             </ul>
@@ -237,7 +305,7 @@ export function Overview() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="m-0 text-base font-semibold">Recent orders <span className="text-[13px] font-normal text-muted-foreground">· last 7 days</span></h2>
-            <a href="/journal" className="text-[13px] text-accent">Trade journal →</a>
+            <Link to="/journal" className="text-[13px] text-accent">Trade journal →</Link>
           </div>
           {data.orders.length ? (
             <ul className="m-0 list-none p-0">

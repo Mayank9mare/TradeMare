@@ -1,26 +1,44 @@
+import { Route, Routes } from "react-router";
+
+import { ClassicOnly, Layout } from "@/components/Layout";
+import { ToastList, ToastProvider } from "@/components/wensity/toast";
+import { ChromeProvider } from "@/lib/chrome";
 import { Overview } from "@/pages/Overview";
 
+// Each route mirrors a classic page's address (/app/signals <-> /signals); pages not moved yet
+// say so and link to the classic one.
 export default function App() {
   return (
-    <div className="min-h-dvh bg-bg pb-[env(safe-area-inset-bottom)]">
-      <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <a href="/app/" className="flex items-center gap-2 font-semibold text-text no-underline">
-            <span className="grid size-7 place-items-center rounded-lg bg-accent text-sm text-white dark:text-bg">T</span>
-            TradeMare <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">new UI · beta</span>
-          </a>
-          <nav className="flex items-center gap-4 text-[13px]">
-            <a href="/signals" className="text-accent">Signals</a>
-            <a href="/journal" className="hidden text-accent sm:inline">Trade journal</a>
-            <a href="/" className="text-muted-foreground">Classic dashboard</a>
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-7 sm:px-6">
-        <h1 className="mb-1 text-[26px] font-bold tracking-tight">Overview</h1>
-        <p className="mt-0 mb-6 text-[13px] text-muted-foreground">Paper trading in 2 markets plus your Zerodha portfolio. Nothing is ordered without your approval.</p>
-        <Overview />
-      </main>
-    </div>
+    <ChromeProvider>
+      <ToastProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<OverviewPage />} />
+            <Route path="*" element={<ClassicOnly />} />
+          </Routes>
+        </Layout>
+        <ToastList placement="bottom-right" />
+      </ToastProvider>
+    </ChromeProvider>
+  );
+}
+
+function OverviewPage() {
+  return (
+    <>
+      <h1 className="mb-1 text-[26px] font-bold tracking-tight">Overview</h1>
+      <p className="mt-0 mb-2 text-[13px] text-muted-foreground">Paper trading in 2 markets plus your Zerodha portfolio. Nothing is ordered without your approval.</p>
+      <details className="mb-6 text-[13px]">
+        <summary className="cursor-pointer text-accent">How this works</summary>
+        <ol className="mt-2 space-y-1 pl-5 text-muted-foreground">
+          <li><b className="text-text">Every evening</b>, after each market closes, the system downloads prices and company data and ranks the stocks.</li>
+          <li>It proposes trades as <b className="text-text">signals</b>: what to buy or sell, how many shares, and a <b className="text-text">stop-loss</b>, the price at which it would sell to cap the loss.</li>
+          <li><b className="text-text">You decide.</b> Open Signals, read the explanation, then approve or reject. Nothing is bought without you.</li>
+          <li>Approved trades fill at the next market open and appear in your Trade journal with their profit or loss.</li>
+          <li>Until a strategy is proven on history it was never tuned on, everything is <b className="text-text">paper trading</b>: real prices, pretend money.</li>
+        </ol>
+      </details>
+      <Overview />
+    </>
   );
 }

@@ -834,7 +834,6 @@ input[type="radio"][aria-hidden="true"][tabindex="-1"] {
   }
 }
 /* ── End Wensity Primitive Tokens ── */
-
 /* ── TradeMare mapping: Wensity tokens follow TradeMare's palette and its light / dim / dark
       switch (the --tm-* values above change per theme, so one block covers every theme).
       Keep this after the generated Wensity blocks. Naming: Wensity's `muted` is a background;
