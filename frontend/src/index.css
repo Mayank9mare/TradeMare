@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* TradeMare tokens, the same values as the classic dashboard (src/trademare/web/static/app.css).
+   Raw values live on :root per theme; @theme exposes them as Tailwind utilities (bg-surface,
+   text-muted, text-up, rounded-card, font-num ...). Restyle installed components with these. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="dim"], [data-theme="dim"] *));
+
+:root {
+  color-scheme: light;
+  --tm-bg: #e6e5e0; --tm-surface: #f3f2ee; --tm-surface-2: #e9e8e3; --tm-text: #1c1d20; --tm-muted: #53555b;
+  --tm-faint: #6f7177; --tm-border: #dcdbd5; --tm-border-strong: #c9c8c1; --tm-row-hover: #ecebe6;
+  --tm-accent: #3a6ea5; --tm-accent-soft: rgba(58, 110, 165, 0.10); --tm-up: #2e7d4f; --tm-down: #b4473f;
+  --tm-good: #3a9a62; --tm-warning: #d49a1f; --tm-critical: #c95a50; --tm-card-border: transparent;
+  --tm-shadow: 0 1px 2px rgba(40, 38, 30, 0.05), 0 4px 14px rgba(40, 38, 30, 0.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --tm-bg: #0e1014; --tm-surface: #15181d; --tm-surface-2: #1c2027; --tm-text: #e6e8ec; --tm-muted: #a3a8b2;
+    --tm-faint: #7b818c; --tm-border: #252a32; --tm-border-strong: #343a45; --tm-row-hover: #1a1e25;
+    --tm-accent: #8db0e0; --tm-accent-soft: rgba(141, 176, 224, 0.13); --tm-up: #62bf88; --tm-down: #ef8a80;
+    --tm-good: #47a96f; --tm-warning: #e0b05a; --tm-critical: #e06a60; --tm-card-border: #20242b; --tm-shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --tm-bg: #0e1014; --tm-surface: #15181d; --tm-surface-2: #1c2027; --tm-text: #e6e8ec; --tm-muted: #a3a8b2;
+  --tm-faint: #7b818c; --tm-border: #252a32; --tm-border-strong: #343a45; --tm-row-hover: #1a1e25;
+  --tm-accent: #8db0e0; --tm-accent-soft: rgba(141, 176, 224, 0.13); --tm-up: #62bf88; --tm-down: #ef8a80;
+  --tm-good: #47a96f; --tm-warning: #e0b05a; --tm-critical: #e06a60; --tm-card-border: #20242b; --tm-shadow: none;
+}
+:root[data-theme="dim"] {
+  color-scheme: dark;
+  --tm-bg: #2c2c2b; --tm-surface: #363635; --tm-surface-2: #41413f; --tm-text: #ecebe7; --tm-muted: #bfbcb5;
+  --tm-faint: #9a978f; --tm-border: #4a4946; --tm-border-strong: #5a5955; --tm-row-hover: #3d3d3b;
+  --tm-accent: #9dbbe0; --tm-accent-soft: rgba(157, 187, 224, 0.13); --tm-up: #86c79a; --tm-down: #e99a90;
+  --tm-good: #66b07f; --tm-warning: #e2b766; --tm-critical: #dd766c; --tm-card-border: transparent;
+  --tm-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+@theme inline {
+  --color-bg: var(--tm-bg);
+  --color-surface: var(--tm-surface);
+  --color-surface-2: var(--tm-surface-2);
+  --color-text: var(--tm-text);
+  --color-muted: var(--tm-muted);
+  --color-faint: var(--tm-faint);
+  --color-line: var(--tm-border);
+  --color-line-strong: var(--tm-border-strong);
+  --color-row-hover: var(--tm-row-hover);
+  --color-accent: var(--tm-accent);
+  --color-accent-soft: var(--tm-accent-soft);
+  --color-up: var(--tm-up);
+  --color-down: var(--tm-down);
+  --color-good: var(--tm-good);
+  --color-warning: var(--tm-warning);
+  --color-critical: var(--tm-critical);
+  --color-card-line: var(--tm-card-border);
+  --shadow-card: var(--tm-shadow);
+  --radius-card: 14px;
+  --radius-tile: 8px;
+  --font-sans: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-num: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--tm-bg); color: var(--tm-text); font-family: var(--font-sans); font-size: 14px;
+  line-height: 1.5; font-feature-settings: "tnum" 1; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

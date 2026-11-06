@@ -298,3 +298,18 @@ def test_today_tiles_split_by_market_and_list_results(monkeypatch):
     assert labels["Raise your stop-loss"].sub.startswith("GESHIP")
     assert labels["Results this week"].sub == "TATASTEEL Sat 7 Nov"
     assert [u.kind for u in upcoming][:1] == ["results"]
+
+
+def test_overview_api_and_react_app(client):
+    d = client.get("/api/overview").json()
+    assert {"today", "tiles", "upcoming", "zerodha", "markets", "orders", "pending_total"} <= set(d)
+    codes = [m["code"] for m in d["markets"]]
+    assert "IN" in codes and d["zerodha"] is None and d["tiles"] == []
+    india = next(m for m in d["markets"] if m["code"] == "IN")
+    assert {"equity", "cash", "equity_line", "index_line", "ideas", "mood"} <= set(india)
+    page = client.get("/app/")  # served from the build, or a hint to build it
+    assert page.status_code in (200, 503)
+    expected = '<div id="root">' if page.status_code == 200 else "npm run build"
+    assert expected in page.text
+    assert client.get("/app/../../../etc/passwd").status_code in (200, 404, 503)
+    assert "root:" not in client.get("/app/../../../etc/passwd").text

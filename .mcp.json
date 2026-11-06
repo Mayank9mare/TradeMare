@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "wensity": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@wensity/mcp@0.1.2"
+      ],
+      "env": {}
+    }
+  }
+}

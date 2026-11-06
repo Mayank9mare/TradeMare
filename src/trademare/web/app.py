@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import yaml
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -32,6 +32,7 @@ from trademare.storage.db import Database, OrderRow, PositionRow
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.strategy.setups import SETUPS, SetupContext
 from trademare.web import formatting, strategy_overlay
+from trademare.web.api_routes import register_api_routes
 from trademare.web.glossary import tip
 from trademare.web.ipo_routes import register_ipo_routes
 from trademare.web.overview_data import (
@@ -120,6 +121,27 @@ def create_app(
     register_trading_routes(app, templates, config, service, db, secrets)
     register_ipo_routes(app, templates, config, db, secrets)
     register_setup_routes(app, templates, config, service, config_path)
+    register_api_routes(app, config, service, db)
+
+    # The React app (frontend/, built with `npm run build`) at /app; any path inside it gets index.html.
+    app_dist = HERE / "app_dist"
+
+    @app.get("/app", include_in_schema=False)
+    @app.get("/app/{path:path}", include_in_schema=False)
+    def react_app(path: str = ""):
+        target = (app_dist / path).resolve()
+        if path and target.is_file() and app_dist.resolve() in target.parents:
+            return FileResponse(target)
+        index = app_dist / "index.html"
+        if not index.exists():
+            return HTMLResponse(
+                "<p>The new UI is not built yet. Run "
+                "<code>cd frontend && npm install && npm run build</code>, then reload. "
+                '<a href="/">Back to the dashboard</a></p>',
+                status_code=503,
+            )
+        return FileResponse(index)
+
     scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}
 
     def latest_scan(market: Market) -> ScanResult | None:
