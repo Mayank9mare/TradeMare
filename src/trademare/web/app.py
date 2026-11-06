@@ -28,7 +28,8 @@ from trademare.data.universe import load_universe
 from trademare.scheduler import is_running, manual_runs, next_available, run_block, start_run
 from trademare.storage.db import Database, OrderRow, PositionRow
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
-from trademare.web import formatting
+from trademare.strategy.setups import SETUPS, SetupContext
+from trademare.web import formatting, strategy_overlay
 from trademare.web.glossary import tip
 from trademare.web.ipo_routes import register_ipo_routes
 from trademare.web.overview_data import (
@@ -296,6 +297,7 @@ def create_app(
                 "scan": scan,
                 "score": score,
                 "idea": idea,
+                "strategy_choices": strategy_overlay.choices(),
             },
         )
 
@@ -326,6 +328,42 @@ def create_app(
                 **your_levels(market, symbol, set(times)),
             }
         )
+
+    universes: dict[Market, tuple] = {}  # market -> (data date, setup Universe), for sector-strength setups
+
+    def setup_context(market: Market, needs_universe: bool) -> SetupContext:
+        cfg = config.markets[market]
+        benchmark = service.store.read_bars(market, cfg.benchmark) if cfg.benchmark else None
+        if not needs_universe:
+            return SetupContext(benchmark=benchmark)
+        from trademare.strategy.setup_study import Universe
+
+        bench_last = None if benchmark is None else benchmark.index[-1]
+        cached = universes.get(market)
+        if cached is None or cached[0] != bench_last:
+            universes[market] = (bench_last, Universe(service, market))
+        return universes[market][1].ctx
+
+    @app.get("/api/strategy/{code}/{symbol}")
+    def strategy_api(code: str, symbol: str, id: str, years: float = 1):
+        """A strategy applied to this stock: trades as markers, stop/target and indicator lines."""
+        from trademare.strategy.setup_study import load_record
+
+        market = market_or_404(code)
+        bars = service.store.read_bars(market, symbol)
+        if bars is None or bars.empty:
+            raise HTTPException(404, f"no cached data for {market}:{symbol}")
+        window = strategy_overlay.window_mask(bars, years)
+        if id == strategy_overlay.CORE:
+            days = {d.strftime("%Y-%m-%d") for d in bars.index[window.to_numpy()]}
+            return JSONResponse(strategy_overlay.core_overlay(db, market, symbol, days))
+        if id not in SETUPS:
+            raise HTTPException(404, f"unknown strategy {id}")
+        saved = load_record(service, market) or {}
+        records = saved.get("records") or {}
+        record = records if isinstance(records, dict) else {r["setup"]: r for r in records}
+        ctx = setup_context(market, needs_universe=id == "sector_rs")
+        return JSONResponse(strategy_overlay.setup_overlay(id, symbol, market, bars, window, ctx, record))
 
     def your_levels(market: Market, symbol: str, days: set[str]) -> dict:
         """Your position's entry/stop/target, open order prices, and past fills as chart markers."""

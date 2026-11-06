@@ -261,6 +261,13 @@ table.mini tr:last-child td { border-bottom: none; }
 .chart-card { padding: 14px; }
 .chart-controls { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 .chart-controls button { padding: 4px 11px; font-size: var(--fs-sm); }
+.strategy-pick { display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.strategy-pick label { color: var(--muted); font-size: var(--fs-sm); }
+.strategy-pick select { max-width: 100%; }
+#strategy-legend .sw { margin-left: 8px; }
+#strategy-panel { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+#strategy-panel h3 { margin: 0 0 4px; }
+#strategy-panel .levels { margin: 10px 0; }
 .legend { margin-left: auto; color: var(--muted); font-size: var(--fs-sm); display: flex; align-items: center; gap: .4rem; }
 .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-left: .5rem; }
 .sw.sma50 { background: var(--sma50); } .sw.sma200 { background: var(--sma200); }
@@ -539,3 +546,4 @@ details.data-status .card-foot { border-top: none; margin-top: 6px; padding-top:
 .setup-why { margin: 10px 0 0; }
 .setup-why ul { margin: 4px 0 0; }
 .setup-trading > button { justify-self: start; min-width: 8em; }
+.callout { background: var(--surface-2, rgba(37, 99, 235, 0.08)); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 6px; }

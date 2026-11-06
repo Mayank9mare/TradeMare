@@ -232,3 +232,20 @@ def test_setups_trading_form_saves_personal_settings(client, monkeypatch):
     )
     assert "err=" in nothing.headers["location"]
     assert client.post("/setups/IN/trading", data={**form, "csrf_token": "forged"}).status_code == 403
+
+
+def test_strategy_overlay_on_chart(client):
+    page = client.get("/m/IN/M%26M").text
+    assert 'id="strategy-select"' in page and 'value="vcp"' in page and 'value="core"' in page
+    r = client.get("/api/strategy/IN/M%26M", params={"id": "supertrend_rsi", "years": 3})
+    assert r.status_code == 200
+    s = r.json()
+    names = [line["name"] for line in s["lines"]]
+    assert names[0] == "Supertrend" and "Setup stop" in names
+    assert {"trades", "closed", "wins", "avg_ret", "compounded"} <= set(s["stats"])
+    # a steady uptrend gives the trend setup at least one trade, drawn as a buy marker
+    assert s["stats"]["trades"] >= 1 and any(m["buy"] for m in s["markers"])
+    assert all(t["entry_date"] <= t["exit_date"] for t in s["trades"])
+    core = client.get("/api/strategy/IN/M%26M", params={"id": "core"}).json()
+    assert core["name"] == "Core strategy" and core["signals"] == []
+    assert client.get("/api/strategy/IN/M%26M", params={"id": "nope"}).status_code == 404
