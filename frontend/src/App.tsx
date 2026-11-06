@@ -4,11 +4,14 @@ import { GlossaryProvider } from "@/components/bits";
 import { ClassicOnly, Layout } from "@/components/Layout";
 import { ToastList, ToastProvider } from "@/components/wensity/toast";
 import { ChromeProvider } from "@/lib/chrome";
+import { Ideas } from "@/pages/Ideas";
 import { Journal } from "@/pages/Journal";
+import { Market } from "@/pages/Market";
 import { Overview } from "@/pages/Overview";
 import { Portfolio } from "@/pages/Portfolio";
 import { Tracking } from "@/pages/Tracking";
 import { Signals } from "@/pages/Signals";
+import { Stock } from "@/pages/Stock";
 
 // Each route mirrors a classic page's address (/app/signals <-> /signals); pages not moved yet
 // say so and link to the classic one.
@@ -24,6 +27,9 @@ export default function App() {
             <Route path="/journal" element={<Journal />} />
             <Route path="/portfolio/:code" element={<Portfolio />} />
             <Route path="/portfolio/:code/tracking" element={<Tracking />} />
+            <Route path="/m/:code" element={<Market />} />
+            <Route path="/m/:code/ideas" element={<Ideas />} />
+            <Route path="/m/:code/:symbol" element={<Stock />} />
             <Route path="*" element={<ClassicOnly />} />
           </Routes>
         </Layout>

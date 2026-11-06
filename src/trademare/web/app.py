@@ -337,8 +337,24 @@ def create_app(
                 "cfg": config.markets[market],
                 "config_min": config.strategy.min_composite_score,
                 "penalty": config.strategy.regime_penalty,
+                "texts": ideas_texts(scan, config.markets[market]),  # template wording, for /app
             },
         )
+
+    def ideas_texts(scan: ScanResult | None, cfg) -> dict:
+        """Wording the ideas template computes with filters, precomputed so the React page matches it."""
+        if scan is None:
+            return {}
+        splits = {}
+        for i in scan.ideas:
+            rs = split_reasons(i.reasons, i.direction.value)
+            splits[i.symbol] = {"pro": rs.pro, "con": rs.con, "neutral": rs.neutral}
+        return {
+            "regime_reasons": [plain(str(r))[0] for r in scan.regime.reasons],
+            "weights": [[formatting.factor_name(k), v] for k, v in scan.weights.items() if v > 0],
+            "stop_rule": formatting.stop_rule(cfg),
+            "splits": splits,
+        }
 
     @app.get("/m/{code}/{symbol}", response_class=HTMLResponse)
     def symbol_page(request: Request, code: str, symbol: str):
@@ -377,6 +393,14 @@ def create_app(
                 "score": score,
                 "idea": idea,
                 "strategy_choices": strategy_overlay.choices(),
+                "texts": {  # the template's filtered wording, precomputed for the React page
+                    name: {
+                        "label": formatting.factor_name(name),
+                        "details": [[formatting.factor_name(k), v] for k, v in a.details.items()],
+                        "reasons": [plain(str(r))[0] for r in a.reasons],
+                    }
+                    for name, a in (score.analysts.items() if score else [])
+                },
             },
         )
 

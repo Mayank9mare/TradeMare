@@ -340,3 +340,10 @@ def test_every_classic_page_answers_json_for_the_react_app(client):
 def test_glossary_api(client):
     terms = client.get("/api/glossary").json()
     assert "stop" in terms and "equity" in terms and all(isinstance(v, str) for v in terms.values())
+
+
+def test_stock_and_ideas_json_carry_the_template_wording(client):
+    stock = client.get("/m/IN/M%26M", params={"format": "json"}).json()
+    assert {"statements", "rows", "ratios", "strategy_choices", "texts"} <= set(stock)
+    ideas = client.get("/m/IN/ideas", params={"format": "json"}).json()
+    assert {"scan", "vs_signals", "config_min", "penalty", "texts"} <= set(ideas)
