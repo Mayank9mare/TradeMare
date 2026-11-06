@@ -44,17 +44,19 @@ def ipo(symbol, status, start, end, qib=None, label=None):
 def test_daily_block_tables():
     closes = {"HSCL": 505.1, "NALCO": 262.4, "TATAPOWER": 1395.0}
     b = cards.daily_block(report(), telegram.ALERT_PREFIXES, telegram.HEADS_UP, closes)
-    assert b.title == "TradeMare · India" and b.subtitle == "after Fri 30 Oct"
+    assert b.title == "India market" and b.subtitle == "TradeMare · after Fri 30 Oct"
     assert b.urgent == ["ITC: stop hit"]
-    decide, happened = b.tables
-    assert decide.title == "Decide by Mon 2 Nov, 3:30 pm"
+    decide, sell, happened = b.tables
+    assert decide.title == "India · BUY signals · decide by Mon 2 Nov, 3:30 pm"
     assert decide.rows == [
         ["HSCL · VCP", "13", "₹505.10", "above ₹509.20", "₹437.05", "₹938"],
         ["NALCO ⚠", "30", "₹262.40", "₹260.00", "₹238.00", "₹660"],
-        ["TATAPOWER · SELL", "20", "₹1,395", "sell at open", "—", "—"],
     ]
+    assert "No fixed target" in decide.note
+    assert sell.title == "India · SELL signals · decide by Mon 2 Nov, 3:30 pm"
+    assert sell.rows == [["TATAPOWER", "20", "₹1,395", "at open", "fell out of the top ranks"]]
     assert decide.note.startswith("All buys together ₹14,420")
-    assert "NALCO results Fri 6 Nov" in decide.note and "TATAPOWER: fell out of the top ranks" in decide.note
+    assert "NALCO results Fri 6 Nov" in decide.note
     assert happened.rows == [
         ["MCX", "Bought 2 at ₹8,120", ""],
         ["ABB", "Stop hit, sold at ₹5,010", cards.MINUS + "₹1,240"],
@@ -149,7 +151,7 @@ def test_target_column_and_raised_stops():
     decide, raised = b.tables
     assert decide.columns == ["Stock", "Qty", "Price now", "Buy up to", "Stop-loss", "Target", "Max loss"]
     assert decide.rows == [["MO", "10", "$78.03", "$78.03", "$74.62", "$84.85", "$34"]]
-    assert raised.title == "Raise your stop-loss"
+    assert raised.title == "US · raise your stop-loss"
     assert raised.rows == [["MNST", "$49.50", "$45.28", "$46.10"]]
     assert "raise 1 stop" in cards.daily_caption([b], None, [r])
     assert "Raise your stop-loss (update a Kite GTT to match): MNST from $45.28 to $46.10" in whatsapp.digest(

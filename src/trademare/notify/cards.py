@@ -31,6 +31,7 @@ INK, MUTED, LINE, BG, SHADE, BAR = "#1d2433", "#6b7280", "#e5e7eb", "#ffffff", "
 GREEN, RED, AMBER = "#15803d", "#b91c1c", "#b45309"
 MINUS, EN_DASH = "\u2212", "\u2013"  # typographic minus and range dash
 NAMES = {Market.IN: "India", Market.US: "US"}
+BADGES = {Market.IN: ("INDIA · NSE · ₹", "#ea580c"), Market.US: ("US · NYSE/NASDAQ · $", "#2563eb")}
 EXIT_WHY = {
     "signal": "fell out of the top ranks",
     "regime": "market turned weak",
@@ -94,6 +95,7 @@ class Block:
     urgent: list[str] = field(default_factory=list)
     tables: list[Table] = field(default_factory=list)
     portfolio: tuple[str, str, str, str] | None = None  # value, change, change colour, holdings
+    market: Market | None = None
 
 
 def _fill_row(text: str, market: Market) -> tuple[str, str, str, str | None]:
@@ -149,69 +151,36 @@ def daily_block(
     signals = list(r.signals)
     if not (urgent or results or signals or r.orders_ended or r.fills or getattr(r, "stops_raised", None)):
         return None
-    block = Block(title=f"TradeMare · {NAMES.get(m, m.value)}", subtitle=f"after {_day(r.session)}")
+    name = NAMES.get(m, m.value)
+    block = Block(title=f"{name} market", subtitle=f"TradeMare · after {_day(r.session)}", market=m)
     block.urgent = urgent
-    if signals:
-        targets = any(getattr(s, "target_price", None) for s in signals if s.action != "EXIT")
-        columns = ["Stock", "Qty", "Price now", "Buy up to", "Stop-loss", "Max loss"]
-        widths = [24, 8, 17, 19, 17, 15]
-        if targets:  # e.g. US signals sell at 2x the risk; India's strategy has no target
-            columns.insert(5, "Target")
-            widths = [14, 8, 15, 16, 15, 14, 18]
+    buys = [s for s in signals if s.action != "EXIT"]
+    sells = [s for s in signals if s.action == "EXIT"]
+    if buys:
+        block.tables.append(_buy_table(buys, m, closes))
+        block.tables[-1].title = f"{name} · {block.tables[-1].title}"
+    if sells:
+        due = deadline(sells, m)
         t = Table(
-            f"Decide by {deadline(signals, m)}" if deadline(signals, m) else "Decide",
-            columns,
-            widths,
-            "l" + "r" * (len(columns) - 1),
-            title_color=AMBER,
+            f"{name} · SELL signals" + (f" · decide by {due}" if due else ""),
+            ["Stock", "Qty", "Price now", "Sell", "Why"],
+            [22, 8, 17, 18, 35],
+            "lrrll",
+            title_color=RED,
+            note="Sell = a market order at the next session's open",
         )
-        notes = []
-        for s in signals:
+        for s in sells:
             setup = (
                 (s.strategy or "").removeprefix("setup:") if (s.strategy or "").startswith("setup:") else ""
             )
-            name = s.symbol + (f" · {setup.upper()}" if setup else "")
             now = price(closes.get(s.symbol), m) if closes else "—"
-            if s.action == "EXIT":
-                t.rows.append(
-                    [f"{name} · SELL", str(s.quantity), now, "sell at open", "—", "—"]
-                    + (["—"] if targets else [])
-                )
-                t.colors.append([RED, None, None, RED])
-                notes.append(f"{s.symbol}: {EXIT_WHY.get(s.exit_reason or '', s.exit_reason or 'rule')}")
-                continue
-            soon = [w for w in (s.reasons or {}).get("events", []) if w.startswith("Results due")]
-            if soon:
-                name += " ⚠"
-                when = re.search(r"\d{4}-\d{2}-\d{2}", soon[0])
-                notes.append(f"⚠ {s.symbol} results {_day(date.fromisoformat(when[0])) if when else 'soon'}")
-            risk = abs(s.entry_price - s.stop_price) * s.quantity if s.stop_price is not None else None
+            why = EXIT_WHY.get(s.exit_reason or "", s.exit_reason or "rule")
             t.rows.append(
-                [
-                    name,
-                    str(s.quantity),
-                    now,
-                    ("above " if setup else "") + price(s.entry_price, m),
-                    price(s.stop_price, m),
-                    *([price(s.target_price, m) if s.target_price else "—"] if targets else []),
-                    whole(risk, m),
-                ]
+                [s.symbol + (f" · {setup.upper()}" if setup else ""), str(s.quantity), now, "at open", why]
             )
-            t.colors.append([None, None, MUTED, GREEN, RED] + ([GREEN] if targets else []))
-        buys = [s for s in signals if s.action != "EXIT"]
-        if buys:
-            total = sum(s.entry_price * s.quantity for s in buys)
-            notes.insert(0, f"All buys together {whole(total, m)}")
-            notes.append(
-                "Price now = last close · Buy up to = your limit for the next session (lapses if not "
-                "filled) · Stop-loss = sell if the price falls to it · Max loss = if the stop is hit"
-                + (" · Target = sell when the price reaches it" if targets else "")
-            )
-        if any((s.strategy or "").startswith("setup:") for s in signals):
-            notes.append("above = a setup buy that fills only if the price rises past it")
-        t.note = "   ·   ".join(notes)
+            t.colors.append([None, None, MUTED, RED])
         block.tables.append(t)
-    happened = Table("Since last run", ["Stock", "What happened", "P&L"], [24, 56, 20], "llr")
+    happened = Table(f"{name} · since last run", ["Stock", "What happened", "P&L"], [24, 56, 20], "llr")
     for f in r.fills:
         stock, what, pnl, colour = _fill_row(f, m)
         happened.rows.append([stock, what, pnl])
@@ -227,7 +196,7 @@ def daily_block(
         block.tables.append(happened)
     if raised := getattr(r, "stops_raised", None):
         t = Table(
-            "Raise your stop-loss",
+            f"{name} · raise your stop-loss",
             ["Stock", "Price now", "Old stop", "New stop"],
             [31, 23, 23, 23],
             "lrrr",
@@ -246,6 +215,62 @@ def daily_block(
             change, colour = pct(change_pct), GREEN if change_pct >= 0 else RED
         block.portfolio = (whole(r.equity, m), change, colour, str(r.open_positions))
     return block
+
+
+def _buy_table(buys, m: Market, closes: dict[str, float] | None) -> Table:
+    """BUY signals: what to buy, at most at what price, the stop-loss, the target if the strategy has one."""
+    targets = any(getattr(s, "target_price", None) for s in buys)
+    columns = ["Stock", "Qty", "Price now", "Buy up to", "Stop-loss", "Max loss"]
+    widths = [24, 8, 17, 19, 17, 15]
+    if targets:  # e.g. US signals sell at 2x the risk
+        columns.insert(5, "Target")
+        widths = [14, 8, 15, 16, 15, 14, 18]
+    due = deadline(buys, m)
+    t = Table(
+        "BUY signals" + (f" · decide by {due}" if due else ""),
+        columns,
+        widths,
+        "l" + "r" * (len(columns) - 1),
+        title_color=GREEN,
+    )
+    notes = [f"All buys together {whole(sum(s.entry_price * s.quantity for s in buys), m)}"]
+    for s in buys:
+        strategy = s.strategy or ""
+        setup = strategy.removeprefix("setup:") if strategy.startswith("setup:") else ""
+        name = s.symbol + (f" · {setup.upper()}" if setup else "")
+        soon = [w for w in (s.reasons or {}).get("events", []) if w.startswith("Results due")]
+        if soon:
+            name += " ⚠"
+            when = re.search(r"\d{4}-\d{2}-\d{2}", soon[0])
+            notes.append(f"⚠ {s.symbol} results {_day(date.fromisoformat(when[0])) if when else 'soon'}")
+        risk = abs(s.entry_price - s.stop_price) * s.quantity if s.stop_price is not None else None
+        t.rows.append(
+            [
+                name,
+                str(s.quantity),
+                price(closes.get(s.symbol), m) if closes else "—",
+                ("above " if setup else "") + price(s.entry_price, m),
+                price(s.stop_price, m),
+                *([price(s.target_price, m) if s.target_price else "—"] if targets else []),
+                whole(risk, m),
+            ]
+        )
+        t.colors.append([None, None, MUTED, GREEN, RED] + ([GREEN] if targets else []))
+    notes.append(
+        "Price now = last close · Buy up to = your limit for the next session (lapses if not filled) · "
+        "Stop-loss = sell if the price falls to it · Max loss = if the stop is hit"
+    )
+    if targets:
+        notes.append("Target = sell when the price reaches it")
+    else:
+        notes.append(
+            "No fixed target: the strategy holds winners and sells when the stop (raised as the price rises) "
+            "is hit or the stock drops out of the top ranks"
+        )
+    if any((s.strategy or "").startswith("setup:") for s in buys):
+        notes.append("above = a setup buy that fills only if the price rises past it")
+    t.note = "   ·   ".join(notes)
+    return t
 
 
 def ipo_table(cards, today: date, horizon_days: int = 3, after_close: bool = False) -> Table | None:
@@ -287,7 +312,7 @@ def ipo_table(cards, today: date, horizon_days: int = 3, after_close: bool = Fal
     if not rows:
         return None
     return Table(
-        "IPOs",
+        "India · IPOs",
         ["Issue", "When", "Price", "Min. bid", "QIB", "Past record"],
         [17, 22, 15, 15, 12, 19],
         "llrrrl",
@@ -338,11 +363,19 @@ class Canvas:
                 line = trial
         return [*lines, line] if line else lines
 
-    def header(self, title: str, subtitle: str) -> None:
+    def header(self, title: str, subtitle: str, market: Market | None = None) -> None:
         h = self.px(130)
         self.d.rectangle([0, self.y, self.w, self.y + h], fill=BAR)
         self.text(self.m, title, 44, "white", dy=24)
         self.text(self.m, subtitle, 26, "#cbd5e1", dy=80)
+        if market in BADGES:  # a coloured market badge on the right
+            label, colour = BADGES[market]
+            font = self.f(26)
+            bw = self.d.textlength(label, font=font) + self.px(36)
+            x1 = self.w - self.m
+            top = self.y + self.px(40)
+            self.d.rounded_rectangle([x1 - bw, top, x1, top + self.px(50)], self.px(25), fill=colour)
+            self.d.text((x1 - bw + self.px(18), top + self.px(10)), label, fill="white", font=font)
         self.y += h + self.px(30)
 
     def heading(self, s: str, color: str = INK, size: int = 34) -> None:
@@ -419,7 +452,7 @@ class Canvas:
 def render_daily(blocks: list[Block], ipos: Table | None) -> bytes:
     c = Canvas(1080, 40)
     for b in blocks:
-        c.header(b.title, b.subtitle)
+        c.header(b.title, b.subtitle, b.market)
         if b.urgent:
             c.urgent(b.urgent)
         for t in b.tables:
@@ -435,7 +468,7 @@ def render_daily(blocks: list[Block], ipos: Table | None) -> bytes:
             )
     if ipos:
         if not blocks:
-            c.header("TradeMare · IPOs", _day(date.today()))
+            c.header("India IPOs", f"TradeMare · {_day(date.today())}", Market.IN)
         c.table(ipos, size=26)
     return c.png()
 
