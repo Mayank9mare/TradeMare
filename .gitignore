@@ -32,3 +32,4 @@ config/*.local.yaml
 src/trademare/web/app_dist/
 frontend/node_modules/
 .wensity-tmp/
+frontend/*.tsbuildinfo
