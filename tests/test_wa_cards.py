@@ -159,3 +159,14 @@ def test_target_column_and_raised_stops():
     )
     india = cards.daily_block(report(), telegram.ALERT_PREFIXES, telegram.HEADS_UP)
     assert "Target" not in india.tables[0].columns  # India's strategy sells without a target
+
+
+def test_strength_table_grades_evidence():
+    evidence = {
+        "technical": {"score": -0.4926, "confidence": 0.74},
+        "fundamental": {"score": 0.4994, "confidence": 0.5},
+    }
+    t = cards.strength_table([sig("NATIONALUM", 30, 326.5, 293.5, score=0.96, evidence=evidence)])
+    assert t.rows == [["NATIONALUM", "96", "25 weak", "75 good*"]]
+    assert "* = partial data" in t.note and "not the chance of a profit" in t.note
+    assert cards.strength_table([sig("X", 1, 10.0, 9.0, score=0.5, evidence={})]) is None

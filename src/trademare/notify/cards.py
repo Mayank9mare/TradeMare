@@ -159,6 +159,9 @@ def daily_block(
     if buys:
         block.tables.append(_buy_table(buys, m, closes))
         block.tables[-1].title = f"{name} · {block.tables[-1].title}"
+        if strength := strength_table(buys):
+            strength.title = f"{name} · {strength.title}"
+            block.tables.append(strength)
     if sells:
         due = deadline(sells, m)
         t = Table(
@@ -270,6 +273,47 @@ def _buy_table(buys, m: Market, closes: dict[str, float] | None) -> Table:
     if any((s.strategy or "").startswith("setup:") for s in buys):
         notes.append("above = a setup buy that fills only if the price rises past it")
     t.note = "   ·   ".join(notes)
+    return t
+
+
+def _grade(x: float | None, conf: float | None = None) -> tuple[str, str | None]:
+    """A -1..+1 evidence score as '72 good' on a 0-100 scale (50 = neutral); * when data is partial."""
+    if x is None:
+        return "—", MUTED
+    n = round((max(-1.0, min(1.0, x)) + 1) * 50)
+    word, colour = ("good", GREEN) if n >= 60 else ("weak", RED) if n < 40 else ("mixed", AMBER)
+    return f"{n} {word}" + ("*" if conf is not None and conf < 0.6 else ""), colour
+
+
+def strength_table(buys) -> Table | None:
+    """Per buy signal: the strategy's own score, and the technical and fundamental checks behind it."""
+    t = Table(
+        "signal strength",
+        ["Stock", "Strategy score", "Technicals", "Fundamentals"],
+        [28, 24, 24, 24],
+        "lrrr",
+        title_color=INK,
+    )
+    partial = False
+    for s in buys:
+        ev = getattr(s, "evidence", None) or {}
+        tech, fund = ev.get("technical") or {}, ev.get("fundamental") or {}
+        tech_txt, tech_col = _grade(tech.get("score"), tech.get("confidence"))
+        fund_txt, fund_col = _grade(fund.get("score"), fund.get("confidence"))
+        partial |= "*" in tech_txt + fund_txt
+        score = getattr(s, "score", None)
+        strat = "—" if score is None else f"{round(max(0.0, min(1.0, score)) * 100)}"
+        t.rows.append([s.symbol, strat, tech_txt, fund_txt])
+        t.colors.append([None, INK, tech_col, fund_col])
+    if not any(r[2] != "—" or r[3] != "—" for r in t.rows):
+        return None
+    t.note = (
+        "Strategy score = how the tested rule ranks the stock (100 = top); this is what picked it · "
+        "Technicals = trend, short-term momentum, chart setup and volume · Fundamentals = quality, "
+        "balance sheet, growth and value · scale 0 to 100, 50 = neutral. "
+        "These two are background checks, not the chance of a profit"
+        + (" · * = partial data" if partial else "")
+    )
     return t
 
 
