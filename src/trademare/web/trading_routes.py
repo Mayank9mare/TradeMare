@@ -27,7 +27,6 @@ from trademare.trading.desk import DeskError, TradingDesk
 from trademare.trading.journal import build_journal
 from trademare.trading.tracking import MIN_SESSIONS, Tracking, compare_with_backtest
 from trademare.web.overview_data import sparkline, working_entries
-from trademare.web.reasons import split_reasons
 
 
 def _decision_outcome(signal_status: str, order_status: str | None) -> tuple[str, str]:
@@ -132,9 +131,6 @@ def register_trading_routes(
             for ev in s.scalars(select(EventRow).where(EventRow.kind == "ask").order_by(EventRow.ts)):
                 if ev.data.get("signal") in ids:
                     asks.setdefault(ev.data["signal"], []).append(ev.data | {"ts": ev.ts})
-        for sig in pending:  # for/against reasons, split as the classic card shows them (React reads it)
-            rs = split_reasons(sig.reasons, sig.direction)
-            sig.split = {"pro": rs.pro, "con": rs.con, "neutral": rs.neutral, "summary": rs.summary}  # type: ignore[attr-defined]
         kite_key = secrets.zerodha_api_key.get_secret_value() if secrets.zerodha_api_key else None
         for sig in pending:  # a Kite basket the owner can open and confirm in Kite (never sent from here)
             sig.kite_basket = kite_basket(sig) if kite_key else None  # type: ignore[attr-defined]

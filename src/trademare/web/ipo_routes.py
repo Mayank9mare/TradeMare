@@ -71,8 +71,6 @@ def register_ipo_routes(
                 "llm_missing": llm_ready(config, secrets),
                 "msg": msg,
                 "err": err,
-                # for /app: the labels the template looks up per bucket
-                "bucket_labels": {b[0]: study.bucket_label(b[0]) for b in BUCKETS} if study else {},
             },
         )
 

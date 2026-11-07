@@ -27,9 +27,3 @@ config/*.local.yaml
 
 # Agent worktrees
 /.claude/worktrees/
-
-# React app build output (frontend/ -> npm run build)
-src/trademare/web/app_dist/
-frontend/node_modules/
-.wensity-tmp/
-frontend/*.tsbuildinfo

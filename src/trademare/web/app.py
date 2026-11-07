@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import yaml
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -32,10 +32,8 @@ from trademare.storage.db import Database, OrderRow, PositionRow
 from trademare.strategy.scanner import ScanResult, load_latest_scan, scan_dir
 from trademare.strategy.setups import SETUPS, SetupContext
 from trademare.web import formatting, strategy_overlay
-from trademare.web.api_routes import register_api_routes
 from trademare.web.glossary import tip
 from trademare.web.ipo_routes import register_ipo_routes
-from trademare.web.jsonable import to_jsonable
 from trademare.web.overview_data import (
     account_summary,
     holdings_today,
@@ -89,17 +87,6 @@ def create_app(
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=HERE / "templates")
     env = templates.env
-    # Both UIs read the same data: any classic page answers `?format=json` with its template context
-    # (what the React app at /app renders), so no page needs a second, hand-written API.
-    render = templates.TemplateResponse
-
-    def template_or_json(request: Request, name: str, context: dict | None = None, *args, **kwargs):
-        if request.query_params.get("format") == "json":
-            data = {k: v for k, v in (context or {}).items() if k != "request" and not callable(v)}
-            return JSONResponse(to_jsonable(data), status_code=kwargs.get("status_code", 200))
-        return render(request, name, context, *args, **kwargs)
-
-    templates.TemplateResponse = template_or_json  # type: ignore[method-assign]
     env.filters.update(
         money=formatting.money,
         pct=formatting.pct,
@@ -133,26 +120,6 @@ def create_app(
     register_trading_routes(app, templates, config, service, db, secrets)
     register_ipo_routes(app, templates, config, db, secrets)
     register_setup_routes(app, templates, config, service, config_path)
-
-    # The React app (frontend/, built with `npm run build`) at /app; any path inside it gets index.html.
-    app_dist = HERE / "app_dist"
-
-    @app.get("/app", include_in_schema=False)
-    @app.get("/app/{path:path}", include_in_schema=False)
-    def react_app(path: str = ""):
-        target = (app_dist / path).resolve()
-        if path and target.is_file() and app_dist.resolve() in target.parents:
-            return FileResponse(target)
-        index = app_dist / "index.html"
-        if not index.exists():
-            return HTMLResponse(
-                "<p>The new UI is not built yet. Run "
-                "<code>cd frontend && npm install && npm run build</code>, then reload. "
-                '<a href="/">Back to the dashboard</a></p>',
-                status_code=503,
-            )
-        return FileResponse(index)
-
     scan_cache: dict[Market, tuple[float, ScanResult | None]] = {}
 
     def latest_scan(market: Market) -> ScanResult | None:
@@ -201,38 +168,6 @@ def create_app(
         }
 
     templates.env.globals["chrome"] = chrome
-    register_api_routes(app, config, service, db, snapshots, run_state)
-
-    @app.get("/api/glossary")
-    def glossary_api() -> dict:
-        """The plain-English explanations behind the classic dashboard's (i) icons."""
-        from trademare.web.glossary import GLOSSARY
-
-        return GLOSSARY
-
-    @app.get("/api/chrome")
-    def chrome_api() -> JSONResponse:
-        """What the React app shell needs: status bar, badges, markets, the form token."""
-        return JSONResponse(
-            to_jsonable(
-                {
-                    **chrome(),
-                    "version": __version__,
-                    "csrf_token": templates.env.globals["csrf_token"],
-                    "shorts_on": any(c.allow_short for c in config.markets.values()),
-                    "markets": [
-                        {
-                            "code": m.value,
-                            "name": "India" if m is Market.IN else "United States",
-                            "index": formatting.universe_name(c.universe),
-                            "validated": c.validated,
-                        }
-                        for m, c in config.markets.items()
-                        if c.enabled
-                    ],
-                }
-            )
-        )
 
     @app.get("/", response_class=HTMLResponse)
     def overview(request: Request, msg: str | None = None, err: str | None = None):
@@ -337,24 +272,8 @@ def create_app(
                 "cfg": config.markets[market],
                 "config_min": config.strategy.min_composite_score,
                 "penalty": config.strategy.regime_penalty,
-                "texts": ideas_texts(scan, config.markets[market]),  # template wording, for /app
             },
         )
-
-    def ideas_texts(scan: ScanResult | None, cfg) -> dict:
-        """Wording the ideas template computes with filters, precomputed so the React page matches it."""
-        if scan is None:
-            return {}
-        splits = {}
-        for i in scan.ideas:
-            rs = split_reasons(i.reasons, i.direction.value)
-            splits[i.symbol] = {"pro": rs.pro, "con": rs.con, "neutral": rs.neutral}
-        return {
-            "regime_reasons": [plain(str(r))[0] for r in scan.regime.reasons],
-            "weights": [[formatting.factor_name(k), v] for k, v in scan.weights.items() if v > 0],
-            "stop_rule": formatting.stop_rule(cfg),
-            "splits": splits,
-        }
 
     @app.get("/m/{code}/{symbol}", response_class=HTMLResponse)
     def symbol_page(request: Request, code: str, symbol: str):
@@ -393,14 +312,6 @@ def create_app(
                 "score": score,
                 "idea": idea,
                 "strategy_choices": strategy_overlay.choices(),
-                "texts": {  # the template's filtered wording, precomputed for the React page
-                    name: {
-                        "label": formatting.factor_name(name),
-                        "details": [[formatting.factor_name(k), v] for k, v in a.details.items()],
-                        "reasons": [plain(str(r))[0] for r in a.reasons],
-                    }
-                    for name, a in (score.analysts.items() if score else [])
-                },
             },
         )
 
@@ -515,7 +426,6 @@ def create_app(
         runs = list_backtests(config)
         for r in runs:
             r["current"] = matches_current(r, config)
-            r["label"] = formatting.run_label(r.get("overrides"))  # what the template's filter prints
         return templates.TemplateResponse(request, "backtests.html", {"runs": runs, "research": RESEARCH})
 
     @app.get("/backtests/{run_id}", response_class=HTMLResponse)
@@ -563,13 +473,8 @@ def create_app(
                 "on_disk": on_disk,
                 "saved": saved,
                 "errors": [],
-                **tested_info(current_values(on_disk)),
             },
         )
-
-    def tested_info(values: dict) -> dict:
-        """What the settings template reads from globals: the tested values and what differs (for /app)."""
-        return {"tested": TESTED, "drift": sorted(drifted(values)), "untested_list": untested(values)}
 
     @app.post("/run/{code}")
     def run_now(code: str, csrf_token: str = Form(...), back: str = Form("/")):
@@ -603,7 +508,6 @@ def create_app(
                     "on_disk": on_disk,
                     "saved": None,
                     "errors": errors,
-                    **tested_info({**current_values(on_disk), **form}),
                 },
                 status_code=422,
             )

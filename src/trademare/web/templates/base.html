@@ -35,7 +35,6 @@
     {{ nav("/", "Overview", i_home, path == "/") }}
     {{ nav("/signals", "Signals", i_bell, path.startswith("/signals"), ui.pending_total) }}
     {{ nav("/journal", "Trade journal", i_book, path == "/journal") }}
-    {{ nav("/app/", "New UI (beta)", i_rocket, false) }}
     {% for m in markets %}{% set c = m.value %}
     <div class="nav-label market-label">{{ "India" if c == "IN" else "United States" }}</div>
     {{ nav("/portfolio/" ~ c, "Portfolio", i_brief, path == "/portfolio/" ~ c) }}
@@ -67,7 +66,7 @@
       {% if ui.pending_total %}<a class="status-chip" href="/signals"><span class="dot open" style="background:var(--accent);box-shadow:none"></span><b>{{ ui.pending_total }}</b> signal{{ "s" if ui.pending_total != 1 }} awaiting you</a>{% endif %}
     </div>
     <main>{% block content %}{% endblock %}</main>
-    <footer>TradeMare {{ version }} · data from a local cache · not financial advice · <a href="/app{{ path }}">open this page in the new UI</a></footer>
+    <footer>TradeMare {{ version }} · data from a local cache · not financial advice</footer>
   </div>
 </div>
 <nav class="tabbar" aria-label="Main">

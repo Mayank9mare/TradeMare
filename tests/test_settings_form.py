@@ -105,16 +105,6 @@ def test_settings_page_saves_via_form(config_copy, tmp_path, monkeypatch):
     bad = client.post("/settings", data=form | {"IN.max_open_positions": "zero"})
     assert bad.status_code == 422 and "Not saved" in bad.text
     assert client.post("/settings", data=form | {"csrf_token": "forged"}).status_code == 403
-    # the React UI reads the same page as JSON and posts the same form with ?format=json
-    d = client.get("/settings", params={"format": "json"}).json()
-    assert {"values", "market_fields", "global_fields", "tested", "drift", "untested_list"} <= set(d)
-    bad_json = client.post("/settings?format=json", data=form | {"IN.max_open_positions": "zero"})
-    assert bad_json.status_code == 422 and bad_json.json()["errors"]
-    ok = client.post(
-        "/settings?format=json", data=form | {"IN.max_open_positions": "11"}, follow_redirects=False
-    )
-    assert ok.status_code == 303 and "saved=" in ok.headers["location"]
-    assert load_config(config_copy).markets["IN"].max_open_positions == 11
 
 
 def test_tested_values_flag_drift():
